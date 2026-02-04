@@ -11,7 +11,7 @@ interface ChatInputProps {
 }
 
 /**
- * ChatInput - Clean, expansive input area like v0
+ * ChatInput - Premium expandable input with keyboard hints
  */
 export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -25,6 +25,11 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
     }
   }, [input])
 
+  // Focus on mount
+  useEffect(() => {
+    textareaRef.current?.focus()
+  }, [])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -33,70 +38,66 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
   }
 
   return (
-    <motion.form
-      onSubmit={onSubmit}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="p-4 border-t border-[#1f1f1f]"
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      className="p-4 border-t border-[#1f1f1f] bg-[#0a0a0a]"
     >
-      <div className="relative bg-[#141414] border border-[#262626] rounded-xl focus-within:border-[#404040] transition-colors">
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask anything..."
-          rows={1}
-          disabled={isLoading}
-          className="w-full bg-transparent px-4 py-3 pr-12 text-[14px] text-[#fafafa] 
-            placeholder:text-[#525252] resize-none focus:outline-none
-            disabled:opacity-50 disabled:cursor-not-allowed
-            min-h-[48px] max-h-[200px]"
-        />
-        
-        <button
-          type="submit"
-          disabled={!input.trim() || isLoading}
-          className={`absolute right-2 bottom-2 w-8 h-8 rounded-lg flex items-center justify-center 
-            transition-all duration-200 ${
-            input.trim() && !isLoading
-              ? 'bg-[#fafafa] text-[#0a0a0a] hover:bg-[#e5e5e5]'
-              : 'bg-[#1f1f1f] text-[#525252] cursor-not-allowed'
-          }`}
-        >
-          {isLoading ? (
-            <motion.svg 
-              className="w-4 h-4"
-              viewBox="0 0 24 24"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            >
-              <circle 
-                cx="12" cy="12" r="10" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                fill="none"
-                strokeDasharray="32"
-                strokeLinecap="round"
+      <form onSubmit={onSubmit} className="relative">
+        <div className="relative rounded-xl bg-[#141414] border border-[#262626] focus-within:border-[#333] focus-within:bg-[#1a1a1a] transition-all overflow-hidden shadow-lg shadow-black/20">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Describe what you want to build..."
+            disabled={isLoading}
+            rows={1}
+            className="w-full px-4 py-3.5 pr-14 bg-transparent text-[14px] text-[#fafafa] placeholder:text-[#525252] resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
+            style={{ minHeight: '52px', maxHeight: '200px' }}
+          />
+          
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={isLoading || !input.trim()}
+            className="absolute right-3 bottom-3 w-8 h-8 flex items-center justify-center rounded-lg bg-[#fafafa] text-[#0a0a0a] disabled:bg-[#262626] disabled:text-[#525252] disabled:cursor-not-allowed hover:bg-white transition-all shadow-sm"
+          >
+            {isLoading ? (
+              <motion.div
+                className="w-4 h-4 border-2 border-[#525252] border-t-[#0a0a0a] rounded-full"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
               />
-            </motion.svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-            </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+              </svg>
+            )}
+          </button>
+        </div>
+        
+        {/* Keyboard hints */}
+        <div className="mt-2.5 flex items-center justify-between px-1">
+          <div className="flex items-center gap-4">
+            <span className="text-[11px] text-[#404040] flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#262626] rounded text-[10px] text-[#525252] font-mono">Enter</kbd>
+              <span>send</span>
+            </span>
+            <span className="text-[11px] text-[#404040] flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#262626] rounded text-[10px] text-[#525252] font-mono">Shift+Enter</kbd>
+              <span>new line</span>
+            </span>
+          </div>
+          
+          {input.length > 0 && (
+            <span className="text-[11px] text-[#404040]">
+              {input.length} chars
+            </span>
           )}
-        </button>
-      </div>
-      
-      <div className="flex items-center justify-between mt-2 px-1">
-        <p className="text-[11px] text-[#404040]">
-          Press Enter to send
-        </p>
-        <p className="text-[11px] text-[#404040]">
-          Shift + Enter for new line
-        </p>
-      </div>
-    </motion.form>
+        </div>
+      </form>
+    </motion.div>
   )
 }
