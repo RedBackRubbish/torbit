@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useFuelStore } from '@/store/fuel'
 import RefuelModal from './RefuelModal'
@@ -26,6 +26,12 @@ export default function FuelGauge() {
 
   const [showDetails, setShowDetails] = useState(false)
   const [showRefuelModal, setShowRefuelModal] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Prevent hydration mismatch - only render dynamic values after mount
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const percentage = getFuelPercentage()
   const status = getFuelStatus()
@@ -37,8 +43,14 @@ export default function FuelGauge() {
     critical: { color: 'text-red-400', bg: 'bg-red-500', label: 'Critical' },
   }[status]
 
-  const ghostPercentage = ghostUsage > 0 ? (ghostUsage / maxFuel) * 100 : 0
-  const afterGhostPercentage = Math.max(0, percentage - ghostPercentage)
+  // Use consistent initial values for SSR
+  const displayConfig = isMounted ? statusConfig : { color: 'text-[#808080]', bg: 'bg-[#808080]', label: 'Loading' }
+  const displayFuel = isMounted ? currentFuel : 0
+  const displayPercentage = isMounted ? percentage : 0
+  const displayGhostUsage = isMounted ? ghostUsage : 0
+
+  const ghostPercentage = displayGhostUsage > 0 ? (displayGhostUsage / maxFuel) * 100 : 0
+  const afterGhostPercentage = Math.max(0, displayPercentage - ghostPercentage)
 
   return (
     <>
@@ -55,21 +67,21 @@ export default function FuelGauge() {
           >
             {/* Progress bar */}
             <div className="relative w-16 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
-              {ghostUsage > 0 && (
+              {displayGhostUsage > 0 && (
                 <motion.div
                   className="absolute inset-y-0 left-0 bg-red-500/30"
-                  style={{ width: `${percentage}%` }}
+                  style={{ width: `${displayPercentage}%` }}
                   animate={{ opacity: [0.3, 0.6, 0.3] }}
                   transition={{ duration: 1, repeat: Infinity }}
                 />
               )}
               <motion.div
-                className={`absolute inset-y-0 left-0 ${statusConfig.bg} rounded-full`}
+                className={`absolute inset-y-0 left-0 ${displayConfig.bg} rounded-full`}
                 initial={{ width: 0 }}
-                animate={{ width: `${ghostUsage > 0 ? afterGhostPercentage : percentage}%` }}
+                animate={{ width: `${displayGhostUsage > 0 ? afterGhostPercentage : displayPercentage}%` }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
               />
-              {isAuditorChecking && (
+              {isAuditorChecking && isMounted && (
                 <motion.div
                   className="absolute inset-0 bg-amber-400/30"
                   animate={{ opacity: [0.3, 0.6, 0.3] }}
@@ -79,20 +91,20 @@ export default function FuelGauge() {
             </div>
 
             {/* Amount */}
-            <span className={`text-[13px] font-medium ${statusConfig.color}`}>
-              {currentFuel.toLocaleString()}
+            <span className={`text-[13px] font-medium ${displayConfig.color}`}>
+              {displayFuel.toLocaleString()}
             </span>
 
             {/* Ghost preview */}
             <AnimatePresence>
-              {ghostUsage > 0 && (
+              {displayGhostUsage > 0 && (
                 <motion.span
                   initial={{ opacity: 0, x: -4 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -4 }}
                   className="text-[12px] text-red-400/70"
                 >
-                  -{ghostUsage}
+                  -{displayGhostUsage}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -100,7 +112,7 @@ export default function FuelGauge() {
 
           {/* Details Popover */}
           <AnimatePresence>
-            {showDetails && (
+            {showDetails && isMounted && (
               <motion.div
                 initial={{ opacity: 0, y: 4, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}

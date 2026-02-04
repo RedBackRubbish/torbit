@@ -86,6 +86,9 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
 /**
  * Default model for each agent - optimized for their specialty
  * 
+ * NOTE: Using Gemini as primary while Anthropic credits are low
+ * Switch back to claude-opus for architect when credits are topped up
+ * 
  * OPUS 4.5 = The Boss (plans everything)
  * SONNET 4.5 = The Executor (builds what Opus plans)
  * GEMINI PRO = Big brain (large context, full codebase analysis)
@@ -93,9 +96,9 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * KIMI K2.5 = Multilingual powerhouse (complex reasoning, internationalization)
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  architect: 'claude-opus',      // OPUS plans the build
-  planner: 'claude-opus',        // OPUS for strategic planning
-  frontend: 'claude-sonnet',     // SONNET executes frontend code
+  architect: 'gemini-pro',       // Using Gemini while Anthropic credits low
+  planner: 'gemini-pro',         // Using Gemini while Anthropic credits low
+  frontend: 'gemini-pro',        // Gemini executes frontend code
   backend: 'kimi',               // KIMI handles backend logic
   database: 'gemini-pro',        // PRO handles large schema context
   devops: 'gemini-flash',        // FLASH handles config cleanup

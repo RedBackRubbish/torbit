@@ -96,6 +96,15 @@ function classifyError(error: unknown): TorbitError {
   
   const msg = error.message.toLowerCase()
   
+  // Credit balance / billing errors
+  if (msg.includes('credit balance') || msg.includes('billing') || msg.includes('purchase credits')) {
+    return {
+      type: 'auth',
+      message: 'API credits exhausted. The system is falling back to Gemini.',
+      retryable: false,
+    }
+  }
+  
   if (msg.includes('api key') || msg.includes('authentication') || msg.includes('unauthorized')) {
     return {
       type: 'auth',
