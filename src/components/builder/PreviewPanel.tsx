@@ -60,36 +60,36 @@ export default function PreviewPanel() {
   }, [terminalLines.length, isBooting])
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0a0a0a] overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[#080808] overflow-hidden">
       {previewTab === 'preview' ? (
         <>
-          {/* Controls Bar */}
-          <div className="h-11 border-b border-[#1f1f1f] flex items-center justify-between px-4 bg-[#0a0a0a]">
+          {/* Controls Bar - Emergent style: minimal */}
+          <div className="h-10 border-b border-[#1a1a1a] flex items-center justify-between px-3 bg-[#0a0a0a]">
             {/* Device Switcher */}
-            <div className="flex items-center gap-1 p-1 bg-[#141414] rounded-lg border border-[#1f1f1f]">
+            <div className="flex items-center gap-0.5 p-0.5 bg-[#0f0f0f] rounded-md border border-[#1a1a1a]">
               {(['desktop', 'tablet', 'mobile'] as const).map((device) => (
                 <button
                   key={device}
                   onClick={() => setPreviewDevice(device)}
-                  className={`p-1.5 rounded-md transition-all ${
+                  className={`p-1.5 rounded transition-all ${
                     previewDevice === device
-                      ? 'bg-[#1f1f1f] text-[#fafafa]'
-                      : 'text-[#525252] hover:text-[#a1a1a1]'
+                      ? 'bg-[#1a1a1a] text-[#e5e5e5]'
+                      : 'text-[#404040] hover:text-[#737373]'
                   }`}
                   title={device.charAt(0).toUpperCase() + device.slice(1)}
                 >
                   {device === 'desktop' && (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
                     </svg>
                   )}
                   {device === 'tablet' && (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5h3m-6.75 2.25h10.5a2.25 2.25 0 002.25-2.25v-15a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 4.5v15a2.25 2.25 0 002.25 2.25z" />
                     </svg>
                   )}
                   {device === 'mobile' && (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
                     </svg>
                   )}
@@ -98,17 +98,17 @@ export default function PreviewPanel() {
             </div>
 
             {/* Right Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {/* Terminal toggle */}
               <button
                 onClick={() => setShowTerminal(!showTerminal)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all border ${
+                className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-all ${
                   showTerminal
-                    ? 'bg-[#1f1f1f] border-[#262626] text-[#fafafa]'
-                    : 'border-transparent text-[#525252] hover:text-[#a1a1a1]'
+                    ? 'bg-[#1a1a1a] text-[#e5e5e5]'
+                    : 'text-[#404040] hover:text-[#737373]'
                 }`}
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                 </svg>
                 Terminal
@@ -121,30 +121,30 @@ export default function PreviewPanel() {
                     const iframe = document.getElementById('webcontainer-preview') as HTMLIFrameElement
                     if (iframe) iframe.src = iframe.src
                   }}
-                  className="p-1.5 rounded-lg text-[#525252] hover:text-[#fafafa] hover:bg-[#1f1f1f] transition-all"
+                  className="w-6 h-6 flex items-center justify-center rounded text-[#404040] hover:text-[#737373] hover:bg-[#141414] transition-all"
                   title="Refresh"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                   </svg>
                 </button>
               )}
 
-              {/* Status */}
-              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[#141414] border border-[#1f1f1f]">
-                <div className={`w-2 h-2 rounded-full ${
-                  !isMounted ? 'bg-[#525252]' :
-                  isBooting ? 'bg-amber-500 animate-pulse-subtle' :
-                  serverUrl ? 'bg-emerald-500' :
-                  error ? 'bg-red-500' :
-                  'bg-[#525252]'
+              {/* Status pill */}
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#0f0f0f] border border-[#1a1a1a]">
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  !isMounted ? 'bg-[#333]' :
+                  isBooting ? 'bg-amber-400 animate-pulse' :
+                  serverUrl ? 'bg-emerald-400' :
+                  error ? 'bg-red-400' :
+                  'bg-[#333]'
                 }`} />
-                <span className="text-[12px] text-[#a1a1a1]">
-                  {!isMounted ? 'Ready' :
-                   isBooting ? 'Starting...' :
+                <span className="text-[10px] text-[#666]">
+                  {!isMounted ? 'Idle' :
+                   isBooting ? 'Starting' :
                    serverUrl ? 'Live' :
                    error ? 'Error' :
-                   'Ready'}
+                   'Idle'}
                 </span>
               </div>
             </div>
@@ -152,7 +152,7 @@ export default function PreviewPanel() {
           
           {/* Preview Area */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className={`flex-1 flex items-center justify-center p-6 overflow-auto bg-[#0a0a0a] ${showTerminal ? 'h-1/2' : ''}`}>
+            <div className={`flex-1 flex items-center justify-center p-4 overflow-auto bg-[#080808] ${showTerminal ? 'h-1/2' : ''}`}>
               <PreviewContent
                 isBooting={isBooting}
                 isReady={isReady}
@@ -173,7 +173,7 @@ export default function PreviewPanel() {
                   animate={{ height: '40%', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                  className="border-t border-[#1f1f1f] bg-[#000000] overflow-hidden"
+                  className="border-t border-[#1a1a1a] bg-[#000000] overflow-hidden"
                 >
                   <TerminalOutput />
                 </motion.div>

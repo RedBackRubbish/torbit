@@ -27,10 +27,10 @@ function ToolCallsGroup({ toolCalls }: { toolCalls: ToolCall[] }) {
   // If 4+ files, show grouped summary
   if (fileOps.length >= 4) {
     return (
-      <div className="mb-3 space-y-2">
+      <div className="space-y-2">
         {/* Other ops shown inline */}
         {otherOps.length > 0 && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
+          <div className="flex flex-wrap gap-x-2.5 gap-y-1">
             {otherOps.map(tc => (
               <ToolCallDisplay key={tc.id} toolCall={tc} />
             ))}
@@ -40,16 +40,16 @@ function ToolCallsGroup({ toolCalls }: { toolCalls: ToolCall[] }) {
         {/* Grouped file summary */}
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 text-[12px] group"
+          className="flex items-center gap-2 text-[11px] group"
         >
           <span className={`w-1.5 h-1.5 rounded-full ${
             allComplete ? 'bg-emerald-400' : 'bg-blue-400 animate-pulse'
           }`} />
-          <span className="text-[#737373] group-hover:text-[#a1a1a1] transition-colors">
+          <span className="text-[#666] group-hover:text-[#999] transition-colors">
             {allComplete ? 'Created' : 'Creating'} {totalFiles} files
           </span>
           <svg 
-            className={`w-3 h-3 text-[#525252] transition-transform ${expanded ? 'rotate-180' : ''}`}
+            className={`w-2.5 h-2.5 text-[#404040] transition-transform ${expanded ? 'rotate-180' : ''}`}
             fill="none" 
             viewBox="0 0 24 24" 
             stroke="currentColor" 
@@ -68,17 +68,17 @@ function ToolCallsGroup({ toolCalls }: { toolCalls: ToolCall[] }) {
               transition={{ duration: 0.15 }}
               className="overflow-hidden"
             >
-              <div className="pl-3 border-l border-[#1f1f1f] space-y-0.5 py-1">
+              <div className="pl-3 border-l border-[#1a1a1a] space-y-0.5 py-1">
                 {fileOps.map(tc => {
                   const path = (tc.args.path || tc.args.filePath || '') as string
                   const fileName = path.split('/').pop() || ''
                   return (
-                    <div key={tc.id} className="flex items-center gap-2 text-[11px]">
+                    <div key={tc.id} className="flex items-center gap-2 text-[10px]">
                       <span className={`w-1 h-1 rounded-full ${
                         tc.status === 'complete' ? 'bg-emerald-400' :
                         tc.status === 'running' ? 'bg-blue-400' : 'bg-red-400'
                       }`} />
-                      <span className="text-[#525252] font-mono">{fileName}</span>
+                      <span className="text-[#404040] font-mono">{fileName}</span>
                     </div>
                   )
                 })}
@@ -92,7 +92,7 @@ function ToolCallsGroup({ toolCalls }: { toolCalls: ToolCall[] }) {
   
   // Otherwise show all inline
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
+    <div className="flex flex-wrap gap-x-2.5 gap-y-1">
       {toolCalls.map(tc => (
         <ToolCallDisplay key={tc.id} toolCall={tc} />
       ))}
@@ -135,7 +135,7 @@ function stripAllCode(content: string): string {
 }
 
 /**
- * MessageBubble - Clean v0-style message
+ * MessageBubble - Emergent-style clean message display
  */
 export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps) {
   const displayContent = useMemo(() => {
@@ -143,28 +143,24 @@ export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps
     return stripAllCode(message.content || '')
   }, [message.content, message.role])
 
-  // User message
+  // User message - Emergent style: bordered box
   if (message.role === 'user') {
     return (
       <motion.div
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
-        className="py-4 border-b border-[#1a1a1a] flex gap-3"
+        className="py-3"
       >
-        {/* User avatar */}
-        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
-          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-          </svg>
+        <div className="p-3.5 rounded-xl bg-[#0f0f0f] border border-[#1f1f1f] hover:border-[#2a2a2a] transition-colors">
+          <p className="text-[14px] text-[#e5e5e5] leading-relaxed whitespace-pre-wrap">
+            {message.content}
+          </p>
         </div>
-        <p className="text-[14px] text-[#fafafa] leading-relaxed whitespace-pre-wrap flex-1">
-          {message.content}
-        </p>
       </motion.div>
     )
   }
 
-  // Assistant message
+  // Assistant message - Emergent style: clean without avatar
   const hasContent = displayContent || message.toolCalls?.length
   const showTyping = isLoading && isLast && !hasContent
 
@@ -172,57 +168,49 @@ export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className="py-4 flex gap-3"
+      className="py-3"
     >
-      {/* AI avatar */}
-      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shrink-0">
-        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-        </svg>
-      </div>
-      
-      <div className="flex-1 min-w-0">
-      {/* Typing indicator */}
-      {showTyping && (
-        <div className="flex items-center gap-2 text-[13px] text-[#525252]">
-          <motion.div
-            className="w-4 h-4 rounded-full border-2 border-[#262626] border-t-[#525252]"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-          />
-        </div>
-      )}
+      <div className="space-y-3">
+        {/* Typing indicator */}
+        {showTyping && (
+          <div className="flex items-center gap-2.5 text-[13px] text-[#666]">
+            <motion.div
+              className="w-3.5 h-3.5 rounded-full border-2 border-[#333] border-t-[#666]"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+            />
+            <span>Processing next step...</span>
+          </div>
+        )}
 
-      {/* Error state */}
-      {message.error && (
-        <div className="flex items-start gap-2 p-3 bg-red-500/5 border border-red-500/10 rounded-lg">
-          <svg className="w-4 h-4 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
-          <div>
+        {/* Error state */}
+        {message.error && (
+          <div className="flex items-start gap-2.5 p-3 bg-red-500/5 border border-red-500/10 rounded-lg">
+            <svg className="w-4 h-4 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
             <p className="text-[13px] text-red-400">{message.error.message}</p>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Tool calls - grouped when many, inline when few */}
-      {message.toolCalls && message.toolCalls.length > 0 && !message.error && (
-        <ToolCallsGroup toolCalls={message.toolCalls} />
-      )}
-      
-      {/* Text content */}
-      {displayContent && !message.error && (
-        <div className="text-[14px] text-[#d4d4d4] leading-[1.6]">
-          <MarkdownRenderer content={displayContent} />
-        </div>
-      )}
+        {/* Tool calls - grouped when many, inline when few */}
+        {message.toolCalls && message.toolCalls.length > 0 && !message.error && (
+          <ToolCallsGroup toolCalls={message.toolCalls} />
+        )}
+        
+        {/* Text content */}
+        {displayContent && !message.error && (
+          <div className="text-[14px] text-[#b3b3b3] leading-[1.7]">
+            <MarkdownRenderer content={displayContent} />
+          </div>
+        )}
 
-      {/* Token usage - very subtle */}
-      {message.usage && !isLoading && (
-        <div className="mt-3 pt-3 border-t border-[#1a1a1a] text-[11px] text-[#404040]">
-          {(message.usage.inputTokens + message.usage.outputTokens).toLocaleString()} tokens · ${message.usage.estimatedCost.toFixed(4)}
-        </div>
-      )}
+        {/* Token usage - very subtle */}
+        {message.usage && !isLoading && (
+          <div className="pt-2 text-[10px] text-[#333]">
+            {(message.usage.inputTokens + message.usage.outputTokens).toLocaleString()} tokens
+          </div>
+        )}
       </div>
     </motion.div>
   )

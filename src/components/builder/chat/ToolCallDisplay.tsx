@@ -42,7 +42,7 @@ function getLabel(name: string, args: Record<string, unknown>): { verb: string; 
 }
 
 /**
- * ToolCallDisplay - Ultra minimal v0-style indicator
+ * ToolCallDisplay - Emergent-style minimal indicator
  * Just shows: [dot] Created filename.tsx
  */
 export function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
@@ -52,7 +52,7 @@ export function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
     <motion.span
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="inline-flex items-center gap-1.5 text-[12px]"
+      className="inline-flex items-center gap-1.5 text-[11px]"
     >
       {/* Status dot */}
       <span className={`w-1.5 h-1.5 rounded-full ${
@@ -62,11 +62,11 @@ export function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
       }`} />
       
       {/* Verb */}
-      <span className="text-[#525252]">{verb}</span>
+      <span className="text-[#404040]">{verb}</span>
       
       {/* Target */}
       {target && (
-        <span className="text-[#737373] font-mono">{target}</span>
+        <span className="text-[#666] font-mono">{target}</span>
       )}
     </motion.span>
   )

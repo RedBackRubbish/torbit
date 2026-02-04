@@ -12,10 +12,10 @@ interface FileNode {
   children?: FileNode[]
 }
 
-// Premium file icons matching v0's style
+// Emergent-style file icons
 function getFileIcon(filename: string): React.ReactNode {
   const ext = filename.split('.').pop()?.toLowerCase() || ''
-  const iconClass = 'w-4 h-4'
+  const iconClass = 'w-3.5 h-3.5'
   
   switch (ext) {
     case 'tsx':
@@ -127,19 +127,19 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
     <div>
       <motion.button
         onClick={handleClick}
-        className={`w-full flex items-center gap-2 px-2 py-[6px] text-left transition-all duration-150 rounded-md group ${
+        className={`w-full flex items-center gap-1.5 px-2 py-[5px] text-left transition-all rounded group ${
           isSelected
-            ? 'bg-blue-500/10 text-blue-400'
-            : 'text-[#a1a1a1] hover:bg-[#1a1a1a] hover:text-[#fafafa]'
+            ? 'bg-[#1a1a1a] text-[#e5e5e5]'
+            : 'text-[#737373] hover:bg-[#111] hover:text-[#b3b3b3]'
         }`}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        style={{ paddingLeft: `${depth * 10 + 6}px` }}
         whileTap={{ scale: 0.98 }}
       >
         {/* Folder chevron or file icon */}
-        <span className="shrink-0 w-4 flex items-center justify-center">
+        <span className="shrink-0 w-3.5 flex items-center justify-center">
           {node.type === 'folder' ? (
             <motion.svg 
-              className="w-3 h-3 text-[#525252]"
+              className="w-2.5 h-2.5 text-[#404040]"
               animate={{ rotate: expanded ? 90 : 0 }}
               transition={{ duration: 0.15 }}
               fill="none" 
@@ -155,17 +155,15 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
         </span>
         
         {/* Name */}
-        <span className="flex-1 truncate text-[13px] font-normal">{node.name}</span>
+        <span className="flex-1 truncate text-[11px] font-normal">{node.name}</span>
         
-        {/* NEW badge - exactly like v0 */}
+        {/* NEW badge - minimal */}
         {isNew && (
           <motion.span 
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-          >
-            NEW
-          </motion.span>
+            className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+          />
         )}
       </motion.button>
       
@@ -193,7 +191,7 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
 }
 
 /**
- * FileExplorer - Premium file tree with v0-style NEW badges
+ * FileExplorer - Emergent-style minimal file tree
  */
 export default function FileExplorer() {
   const { files } = useBuilderStore()
@@ -202,22 +200,21 @@ export default function FileExplorer() {
 
   if (files.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center p-6">
+      <div className="h-full flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border border-[#262626] flex items-center justify-center">
-            <svg className="w-5 h-5 text-[#404040]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <div className="w-9 h-9 mx-auto mb-3 rounded-lg bg-[#0f0f0f] border border-[#1a1a1a] flex items-center justify-center">
+            <svg className="w-4 h-4 text-[#333]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
             </svg>
           </div>
-          <p className="text-[13px] text-[#737373] mb-1">No files yet</p>
-          <p className="text-[11px] text-[#404040]">Files will appear as code is generated</p>
+          <p className="text-[11px] text-[#525252]">No files yet</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="h-full overflow-y-auto py-1 px-1 custom-scrollbar">
+    <div className="h-full overflow-y-auto py-1 custom-scrollbar">
       {fileTree.map((node) => (
         <FileTreeItem
           key={node.path}

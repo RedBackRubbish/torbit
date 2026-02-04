@@ -10,7 +10,7 @@ import { ChatInput } from './chat/ChatInput'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
- * ChatPanel - Clean v0-style chat interface
+ * ChatPanel - Emergent-style chat interface
  */
 export default function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -276,53 +276,31 @@ export default function ChatPanel() {
 
   return (
     <motion.div
-      className="h-full bg-[#0a0a0a] border-l border-[#1f1f1f] flex flex-col"
-      animate={{ width: chatCollapsed ? 48 : 420 }}
+      className="h-full bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col"
+      animate={{ width: chatCollapsed ? 48 : 440 }}
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
     >
-      {/* Header */}
-      <div className="h-12 border-b border-[#1f1f1f] flex items-center justify-between px-3 shrink-0">
+      {/* Header - Minimal */}
+      <div className="h-11 border-b border-[#1a1a1a] flex items-center justify-between px-4 shrink-0">
         <AnimatePresence mode="wait">
           {!chatCollapsed && (
-            <motion.div
+            <motion.span
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-2"
+              className="text-[13px] font-medium text-[#fafafa]"
             >
-              {/* Status indicator - v0 style */}
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <div className="flex items-center gap-1.5">
-                    <svg className="w-3 h-3 text-[#525252]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                    </svg>
-                    <span className="text-[12px] text-[#a1a1a1]">Reasoning</span>
-                    {currentTask && currentTask !== 'Thinking...' && currentTask !== 'Reasoning' && (
-                      <>
-                        <span className="text-[#333]">·</span>
-                        <span className="text-[12px] text-[#525252] font-mono">{currentTask}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-[12px] text-[#a1a1a1]">Ready</span>
-                </div>
-              )}
-            </motion.div>
+              Chat
+            </motion.span>
           )}
         </AnimatePresence>
         
         <button
           onClick={toggleChat}
-          className="w-7 h-7 flex items-center justify-center text-[#525252] hover:text-[#a1a1a1] hover:bg-[#1a1a1a] rounded-md transition-all"
+          className="w-6 h-6 flex items-center justify-center text-[#525252] hover:text-[#a1a1a1] hover:bg-[#141414] rounded transition-all"
         >
           <svg 
-            className={`w-3.5 h-3.5 transition-transform ${chatCollapsed ? 'rotate-180' : ''}`}
+            className={`w-3.5 h-3.5 transition-transform ${chatCollapsed ? '' : 'rotate-180'}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -344,7 +322,7 @@ export default function ChatPanel() {
                 setInput(prompt)
               }} />
             ) : (
-              <div className="p-4 space-y-1">
+              <div className="p-4 space-y-0">
                 {messages.map((message, i) => (
                   <MessageBubble 
                     key={message.id}
@@ -354,20 +332,33 @@ export default function ChatPanel() {
                     index={i}
                   />
                 ))}
-                
-                {files.length > 0 && !isLoading && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex items-center justify-center py-4 text-[11px] text-[#333]"
-                  >
-                    {files.length} file{files.length !== 1 ? 's' : ''} ready
-                  </motion.div>
-                )}
-                
                 <div ref={messagesEndRef} />
               </div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Agent Status Bar - Emergent style */}
+      <AnimatePresence mode="wait">
+        {!chatCollapsed && isLoading && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-4 py-2.5 border-t border-[#1a1a1a] bg-[#0c0c0c]"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[12px] text-[#737373]">
+                Agent is running...
+              </span>
+              {currentTask && currentTask !== 'Thinking...' && (
+                <span className="text-[11px] text-[#525252] font-mono ml-auto">
+                  {currentTask}
+                </span>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -381,6 +372,68 @@ export default function ChatPanel() {
             onInputChange={setInput}
             onSubmit={handleSubmit}
           />
+        )}
+      </AnimatePresence>
+      
+      {/* Bottom Action Bar - Emergent style */}
+      <AnimatePresence mode="wait">
+        {!chatCollapsed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="h-11 border-t border-[#1a1a1a] flex items-center justify-between px-3 bg-[#0a0a0a] shrink-0"
+          >
+            {/* Left: Attachment */}
+            <button className="w-7 h-7 flex items-center justify-center text-[#525252] hover:text-[#a1a1a1] hover:bg-[#141414] rounded-lg transition-all">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+              </svg>
+            </button>
+            
+            {/* Center: Actions */}
+            <div className="flex items-center gap-1">
+              <button className="h-7 px-2.5 flex items-center gap-1.5 text-[11px] text-[#525252] hover:text-[#a1a1a1] hover:bg-[#141414] rounded-lg transition-all">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3v11.25" />
+                </svg>
+                Save to GitHub
+              </button>
+              
+              <button className="h-7 px-2.5 flex items-center gap-1.5 text-[11px] text-[#525252] hover:text-[#a1a1a1] hover:bg-[#141414] rounded-lg transition-all">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                </svg>
+                Fork
+              </button>
+              
+              {/* Ultra toggle */}
+              <button className="h-7 px-2.5 flex items-center gap-1.5 text-[11px] text-[#525252] hover:text-[#a1a1a1] hover:bg-[#141414] rounded-lg transition-all">
+                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 opacity-50" />
+                Ultra
+              </button>
+            </div>
+            
+            {/* Right: Mic / Stop */}
+            <div className="flex items-center gap-1">
+              {isLoading ? (
+                <button 
+                  onClick={() => setIsLoading(false)}
+                  className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="1" />
+                  </svg>
+                </button>
+              ) : (
+                <button className="w-7 h-7 flex items-center justify-center text-[#525252] hover:text-[#a1a1a1] hover:bg-[#141414] rounded-lg transition-all">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
@@ -429,31 +482,31 @@ const STARTER_TEMPLATES = [
 function EmptyState({ onSelectTemplate }: { onSelectTemplate?: (prompt: string) => void }) {
   return (
     <div className="h-full flex flex-col items-center justify-center p-6">
-      <div className="text-center max-w-[320px]">
-        {/* Logo/Icon */}
-        <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border border-[#262626] flex items-center justify-center shadow-lg">
-          <svg className="w-6 h-6 text-[#525252]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <div className="text-center max-w-[340px]">
+        {/* Logo/Icon - Emergent style */}
+        <div className="w-10 h-10 mx-auto mb-4 rounded-xl bg-[#111] border border-[#1f1f1f] flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#404040]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
           </svg>
         </div>
         
-        <h3 className="text-[15px] font-medium text-[#fafafa] mb-1">What do you want to build?</h3>
-        <p className="text-[13px] text-[#525252] mb-6">
+        <h3 className="text-[14px] font-medium text-[#e5e5e5] mb-1">What do you want to build?</h3>
+        <p className="text-[12px] text-[#525252] mb-5">
           Describe your idea or pick a template
         </p>
         
-        {/* Template Grid */}
+        {/* Template Grid - Emergent style */}
         <div className="grid grid-cols-2 gap-2">
           {STARTER_TEMPLATES.map((template) => (
             <button
               key={template.label}
               onClick={() => onSelectTemplate?.(template.prompt)}
-              className="flex items-center gap-2.5 p-3 rounded-xl bg-[#141414] border border-[#1f1f1f] hover:border-[#333] hover:bg-[#1a1a1a] transition-all text-left group"
+              className="flex items-center gap-2 p-2.5 rounded-lg bg-[#0f0f0f] border border-[#1a1a1a] hover:border-[#2a2a2a] hover:bg-[#111] transition-all text-left group"
             >
-              <div className="w-8 h-8 rounded-lg bg-[#1a1a1a] border border-[#262626] flex items-center justify-center text-[#525252] group-hover:text-[#737373] group-hover:border-[#333] transition-all">
+              <div className="w-7 h-7 rounded-lg bg-[#141414] border border-[#1f1f1f] flex items-center justify-center text-[#404040] group-hover:text-[#666] group-hover:border-[#2a2a2a] transition-all">
                 {template.icon}
               </div>
-              <span className="text-[12px] font-medium text-[#a1a1a1] group-hover:text-[#fafafa] transition-colors">
+              <span className="text-[11px] font-medium text-[#737373] group-hover:text-[#a1a1a1] transition-colors">
                 {template.label}
               </span>
             </button>
