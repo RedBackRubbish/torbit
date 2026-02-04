@@ -1,10 +1,104 @@
 'use client'
 
-import { useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { useMemo, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ToolCallDisplay } from './ToolCallDisplay'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import type { Message } from './types'
+import type { Message, ToolCall } from './types'
+
+/**
+ * Groups tool calls intelligently - shows summary for many files, inline for few
+ */
+function ToolCallsGroup({ toolCalls }: { toolCalls: ToolCall[] }) {
+  const [expanded, setExpanded] = useState(false)
+  
+  // Separate file operations from other tools
+  const fileOps = toolCalls.filter(tc => 
+    ['createFile', 'editFile', 'deleteFile'].includes(tc.name)
+  )
+  const otherOps = toolCalls.filter(tc => 
+    !['createFile', 'editFile', 'deleteFile'].includes(tc.name)
+  )
+  
+  const completedFiles = fileOps.filter(tc => tc.status === 'complete').length
+  const totalFiles = fileOps.length
+  const allComplete = completedFiles === totalFiles && totalFiles > 0
+
+  // If 4+ files, show grouped summary
+  if (fileOps.length >= 4) {
+    return (
+      <div className="mb-3 space-y-2">
+        {/* Other ops shown inline */}
+        {otherOps.length > 0 && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {otherOps.map(tc => (
+              <ToolCallDisplay key={tc.id} toolCall={tc} />
+            ))}
+          </div>
+        )}
+        
+        {/* Grouped file summary */}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-2 text-[12px] group"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${
+            allComplete ? 'bg-emerald-400' : 'bg-blue-400 animate-pulse'
+          }`} />
+          <span className="text-[#737373] group-hover:text-[#a1a1a1] transition-colors">
+            {allComplete ? 'Created' : 'Creating'} {totalFiles} files
+          </span>
+          <svg 
+            className={`w-3 h-3 text-[#525252] transition-transform ${expanded ? 'rotate-180' : ''}`}
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor" 
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="pl-3 border-l border-[#1f1f1f] space-y-0.5 py-1">
+                {fileOps.map(tc => {
+                  const path = (tc.args.path || tc.args.filePath || '') as string
+                  const fileName = path.split('/').pop() || ''
+                  return (
+                    <div key={tc.id} className="flex items-center gap-2 text-[11px]">
+                      <span className={`w-1 h-1 rounded-full ${
+                        tc.status === 'complete' ? 'bg-emerald-400' :
+                        tc.status === 'running' ? 'bg-blue-400' : 'bg-red-400'
+                      }`} />
+                      <span className="text-[#525252] font-mono">{fileName}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    )
+  }
+  
+  // Otherwise show all inline
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
+      {toolCalls.map(tc => (
+        <ToolCallDisplay key={tc.id} toolCall={tc} />
+      ))}
+    </div>
+  )
+}
 
 interface MessageBubbleProps {
   message: Message
@@ -97,13 +191,9 @@ export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps
         </div>
       )}
 
-      {/* Tool calls - compact inline */}
+      {/* Tool calls - grouped when many, inline when few */}
       {message.toolCalls && message.toolCalls.length > 0 && !message.error && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
-          {message.toolCalls.map(tc => (
-            <ToolCallDisplay key={tc.id} toolCall={tc} />
-          ))}
-        </div>
+        <ToolCallsGroup toolCalls={message.toolCalls} />
       )}
       
       {/* Text content */}

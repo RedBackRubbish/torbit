@@ -340,7 +340,9 @@ export default function ChatPanel() {
             className="flex-1 overflow-y-auto custom-scrollbar"
           >
             {messages.length === 0 ? (
-              <EmptyState />
+              <EmptyState onSelectTemplate={(prompt) => {
+                setInput(prompt)
+              }} />
             ) : (
               <div className="p-4 space-y-1">
                 {messages.map((message, i) => (
@@ -385,18 +387,78 @@ export default function ChatPanel() {
   )
 }
 
-function EmptyState() {
+const STARTER_TEMPLATES = [
+  { 
+    label: 'Dashboard', 
+    prompt: 'Build a modern analytics dashboard with charts, stats cards, and a sidebar navigation',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+      </svg>
+    )
+  },
+  { 
+    label: 'Landing Page', 
+    prompt: 'Create a beautiful SaaS landing page with hero, features, pricing, and footer sections',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+      </svg>
+    )
+  },
+  { 
+    label: 'E-commerce', 
+    prompt: 'Build a product catalog page with filters, search, and a shopping cart',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+      </svg>
+    )
+  },
+  { 
+    label: 'Blog', 
+    prompt: 'Create a minimal blog with article cards, tags, and a featured post section',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+      </svg>
+    )
+  },
+]
+
+function EmptyState({ onSelectTemplate }: { onSelectTemplate?: (prompt: string) => void }) {
   return (
-    <div className="h-full flex items-center justify-center p-6">
-      <div className="text-center max-w-[260px]">
-        <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#141414] border border-[#1f1f1f] flex items-center justify-center">
-          <svg className="w-5 h-5 text-[#404040]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <div className="h-full flex flex-col items-center justify-center p-6">
+      <div className="text-center max-w-[320px]">
+        {/* Logo/Icon */}
+        <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border border-[#262626] flex items-center justify-center shadow-lg">
+          <svg className="w-6 h-6 text-[#525252]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
           </svg>
         </div>
-        <p className="text-[13px] text-[#737373]">
-          Describe what you want to build
+        
+        <h3 className="text-[15px] font-medium text-[#fafafa] mb-1">What do you want to build?</h3>
+        <p className="text-[13px] text-[#525252] mb-6">
+          Describe your idea or pick a template
         </p>
+        
+        {/* Template Grid */}
+        <div className="grid grid-cols-2 gap-2">
+          {STARTER_TEMPLATES.map((template) => (
+            <button
+              key={template.label}
+              onClick={() => onSelectTemplate?.(template.prompt)}
+              className="flex items-center gap-2.5 p-3 rounded-xl bg-[#141414] border border-[#1f1f1f] hover:border-[#333] hover:bg-[#1a1a1a] transition-all text-left group"
+            >
+              <div className="w-8 h-8 rounded-lg bg-[#1a1a1a] border border-[#262626] flex items-center justify-center text-[#525252] group-hover:text-[#737373] group-hover:border-[#333] transition-all">
+                {template.icon}
+              </div>
+              <span className="text-[12px] font-medium text-[#a1a1a1] group-hover:text-[#fafafa] transition-colors">
+                {template.label}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )
