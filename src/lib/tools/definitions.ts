@@ -711,8 +711,18 @@ export const TOOL_DEFINITIONS = {
 // Agent-specific tool access
 export const AGENT_TOOLS = {
   architect: {
-    // Only think tool - files are output in text response for speed
+    // Core reasoning
     think: TOOL_DEFINITIONS.think,
+    // File operations - architect needs these to create files
+    createFile: TOOL_DEFINITIONS.createFile,
+    editFile: TOOL_DEFINITIONS.editFile,
+    readFile: TOOL_DEFINITIONS.readFile,
+    listFiles: TOOL_DEFINITIONS.listFiles,
+    searchCode: TOOL_DEFINITIONS.searchCode,
+    getFileTree: TOOL_DEFINITIONS.getFileTree,
+    // Terminal for running commands
+    runCommand: TOOL_DEFINITIONS.runCommand,
+    installPackage: TOOL_DEFINITIONS.installPackage,
   },
   frontend: {
     // Reasoning
