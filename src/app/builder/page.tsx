@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useBuilderStore } from '@/store/builder'
 import { WebContainerProvider } from '@/providers/WebContainerProvider'
+import { ErrorBoundary, ChatErrorFallback, PreviewErrorFallback } from '@/components/ErrorBoundary'
 import BuilderLayout from '@/components/builder/BuilderLayout'
 import Sidebar from '@/components/builder/Sidebar'
 import ChatPanel from '@/components/builder/ChatPanel'
@@ -22,6 +23,8 @@ export default function BuilderPage() {
 
 function BuilderPageContent() {
   const [showTasks, setShowTasks] = useState(false)
+  const [chatKey, setChatKey] = useState(0)
+  const [previewKey, setPreviewKey] = useState(0)
   const { 
     initProject, 
     prompt,
@@ -30,6 +33,10 @@ function BuilderPageContent() {
     sidebarCollapsed,
     toggleSidebar,
   } = useBuilderStore()
+
+  // Retry handlers for error boundaries
+  const handleChatRetry = useCallback(() => setChatKey(k => k + 1), [])
+  const handlePreviewRetry = useCallback(() => setPreviewKey(k => k + 1), [])
 
   // Initialize project from session storage (from landing page)
   useEffect(() => {
@@ -105,7 +112,12 @@ function BuilderPageContent() {
         </header>
         
         {/* Preview/Code Panel */}
-        <PreviewPanel />
+        <ErrorBoundary 
+          name="PreviewPanel" 
+          fallback={<PreviewErrorFallback onRetry={handlePreviewRetry} />}
+        >
+          <PreviewPanel key={previewKey} />
+        </ErrorBoundary>
         
         {/* Tasks Slide-out Panel */}
         {showTasks && (
@@ -131,7 +143,12 @@ function BuilderPageContent() {
       </div>
       
       {/* Right Panel - Chat */}
-      <ChatPanel />
+      <ErrorBoundary 
+        name="ChatPanel" 
+        fallback={<ChatErrorFallback onRetry={handleChatRetry} />}
+      >
+        <ChatPanel key={chatKey} />
+      </ErrorBoundary>
     </BuilderLayout>
   )
 }
