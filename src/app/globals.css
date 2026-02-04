@@ -1,0 +1,245 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ========================================
+   TORBIT - Premium Design System
+   ======================================== */
+
+@theme inline {
+  /* Matrix Green Palette */
+  --color-matrix-50: #e8ffe8;
+  --color-matrix-100: #c1ffc1;
+  --color-matrix-200: #8aff8a;
+  --color-matrix-300: #4dff4d;
+  --color-matrix-400: #00ff41;
+  --color-matrix-500: #00d835;
+  --color-matrix-600: #00b32b;
+  --color-matrix-700: #008f22;
+  --color-matrix-800: #006b1a;
+  --color-matrix-900: #004711;
+  --color-matrix-950: #002208;
+
+  /* Void Black Palette */
+  --color-void-50: #1a1a1a;
+  --color-void-100: #141414;
+  --color-void-200: #0f0f0f;
+  --color-void-300: #0a0a0a;
+  --color-void-400: #080808;
+  --color-void-500: #050505;
+  --color-void-600: #030303;
+  --color-void-700: #020202;
+  --color-void-800: #010101;
+  --color-void-900: #000000;
+  --color-void-950: #000000;
+
+  /* Cyber Cyan */
+  --color-cyber-400: #00f5ff;
+  --color-cyber-500: #00d4dd;
+  --color-cyber-600: #00b3bb;
+
+  /* Glitch Red */
+  --color-glitch-400: #ff0040;
+  --color-glitch-500: #cc0033;
+  --color-glitch-600: #990026;
+
+  /* Semantic */
+  --color-success: #00ff41;
+  --color-warning: #ffff00;
+  --color-error: #ff0040;
+
+  /* Typography */
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+  --font-display: 'Orbitron', 'Share Tech Mono', monospace;
+  --font-sans: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
+}
+
+/* ========================================
+   Base Styles
+   ======================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-matrix-700) var(--color-void-900);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--color-void-900);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-matrix-700);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-matrix-500);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-void-900);
+  color: var(--color-matrix-400);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--color-matrix-400);
+  color: var(--color-void-900);
+}
+
+/* ========================================
+   Glitch Text Effect
+   ======================================== */
+
+.glitch-text {
+  position: relative;
+}
+
+.glitch-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.glitch-text.glitching .glitch-layer-1 {
+  animation: glitch-1 0.2s ease-in-out;
+  color: var(--color-cyber-400);
+  opacity: 0.8;
+}
+
+.glitch-text.glitching .glitch-layer-2 {
+  animation: glitch-2 0.2s ease-in-out;
+  color: var(--color-glitch-400);
+  opacity: 0.8;
+}
+
+@keyframes glitch-1 {
+  0%, 100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0);
+  }
+  20% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translate(-5px, -3px);
+  }
+  40% {
+    clip-path: inset(40% 0 40% 0);
+    transform: translate(5px, 3px);
+  }
+  60% {
+    clip-path: inset(60% 0 20% 0);
+    transform: translate(-3px, 5px);
+  }
+  80% {
+    clip-path: inset(80% 0 5% 0);
+    transform: translate(3px, -5px);
+  }
+}
+
+@keyframes glitch-2 {
+  0%, 100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0);
+  }
+  20% {
+    clip-path: inset(60% 0 20% 0);
+    transform: translate(5px, 3px);
+  }
+  40% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translate(-5px, -3px);
+  }
+  60% {
+    clip-path: inset(80% 0 5% 0);
+    transform: translate(3px, -5px);
+  }
+  80% {
+    clip-path: inset(40% 0 40% 0);
+    transform: translate(-3px, 5px);
+  }
+}
+
+/* ========================================
+   Blink Animation
+   ======================================== */
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* ========================================
+   Glow Effects
+   ======================================== */
+
+.text-glow-sm {
+  text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+}
+
+.text-glow-md {
+  text-shadow: 
+    0 0 10px rgba(0, 255, 65, 0.5),
+    0 0 20px rgba(0, 255, 65, 0.3),
+    0 0 40px rgba(0, 255, 65, 0.2);
+}
+
+.text-glow-lg {
+  text-shadow: 
+    0 0 10px rgba(0, 255, 65, 0.6),
+    0 0 30px rgba(0, 255, 65, 0.4),
+    0 0 60px rgba(0, 255, 65, 0.3),
+    0 0 100px rgba(0, 255, 65, 0.2);
+}
+
+/* ========================================
+   Page Transitions
+   ======================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* ========================================
+   Shimmer Effect
+   ======================================== */
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
