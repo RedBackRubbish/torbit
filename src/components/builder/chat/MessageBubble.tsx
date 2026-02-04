@@ -151,9 +151,20 @@ export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps
         animate={{ opacity: 1, y: 0 }}
         className="py-4 border-b border-[#1a1a1a]"
       >
-        <p className="text-[14px] text-[#fafafa] leading-relaxed whitespace-pre-wrap">
-          {message.content}
-        </p>
+        <div className="flex items-start gap-3">
+          {/* User avatar */}
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
+            <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0 pt-0.5">
+            <p className="text-[13px] font-medium text-[#737373] mb-1">You</p>
+            <p className="text-[14px] text-[#fafafa] leading-relaxed whitespace-pre-wrap">
+              {message.content}
+            </p>
+          </div>
+        </div>
       </motion.div>
     )
   }
