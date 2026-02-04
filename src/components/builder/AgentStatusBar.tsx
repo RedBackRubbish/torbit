@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
 
 /**
- * AgentStatusBar - Clean, minimal status indicator
+ * AgentStatusBar - v0-style premium status indicator
  */
 export default function AgentStatusBar() {
   const { agents, isGenerating } = useBuilderStore()
@@ -14,36 +14,33 @@ export default function AgentStatusBar() {
   const activeAgent = workingAgent || thinkingAgent
 
   return (
-    <div className="flex items-center gap-3">
-      {/* Status Indicator */}
-      <div className="flex items-center gap-2.5">
-        {isGenerating ? (
+    <div className="flex items-center gap-2.5">
+      {/* Animated status dot */}
+      <motion.div
+        className={`w-2 h-2 rounded-full ${isGenerating ? 'bg-emerald-400' : 'bg-emerald-400'}`}
+        animate={isGenerating ? { 
+          scale: [1, 1.3, 1],
+          opacity: [1, 0.6, 1]
+        } : {}}
+        transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      
+      {/* Status text */}
+      <div className="flex items-center gap-1.5 text-[13px]">
+        {isGenerating && activeAgent ? (
           <>
-            <motion.div
-              className="w-2 h-2 rounded-full bg-blue-500"
-              animate={{ opacity: [1, 0.4, 1] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <span className="text-[13px] text-[#a1a1a1]">
-              {activeAgent ? (
-                <>
-                  <span className="text-[#fafafa] font-medium">{activeAgent.name}</span>
-                  {activeAgent.currentTask && (
-                    <span className="text-[#525252] ml-1.5">
-                      {activeAgent.currentTask}
-                    </span>
-                  )}
-                </>
-              ) : (
-                'Processing...'
-              )}
-            </span>
+            <span className="font-medium text-[#fafafa]">{activeAgent.name}</span>
+            {activeAgent.currentTask && (
+              <>
+                <span className="text-[#333]">·</span>
+                <span className="text-[#737373] truncate max-w-[180px]">
+                  {activeAgent.currentTask}
+                </span>
+              </>
+            )}
           </>
         ) : (
-          <>
-            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-[13px] text-[#737373]">Ready</span>
-          </>
+          <span className="font-medium text-[#fafafa]">Ready</span>
         )}
       </div>
     </div>

@@ -7,76 +7,180 @@ interface MarkdownRendererProps {
   className?: string
 }
 
-interface ParsedBlock {
-  type: 'paragraph' | 'heading' | 'list' | 'blockquote'
-  content: string
-  level?: number
-  items?: string[]
-}
-
 /**
- * Lightweight markdown renderer for AI chat output
+ * MarkdownRenderer - Premium v0-style markdown
  * 
- * NOTE: Code blocks are NOT rendered here - they belong in the Code panel.
- * This only renders conversational elements: text, headings, lists, quotes.
+ * Features:
+ * - Checkmark lists (like v0's feature summaries)
+ * - Bold section headers
+ * - Clean bullet points
+ * - Inline code styling
+ * 
+ * Does NOT render code blocks - those go to the Code panel
  */
 export function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
-  const blocks = useMemo(() => parseMarkdown(content), [content])
-
-  if (blocks.length === 0) return null
-
-  return (
-    <div className={`space-y-2 ${className}`}>
-      {blocks.map((block, i) => (
-        <BlockRenderer key={i} block={block} />
-      ))}
-    </div>
-  )
+  const rendered = useMemo(() => parseAndRender(content), [content])
+  
+  if (!rendered) return null
+  
+  return <div className={className}>{rendered}</div>
 }
 
-function BlockRenderer({ block }: { block: ParsedBlock }) {
-  switch (block.type) {
-    case 'heading':
-      const HeadingTag = `h${block.level || 3}` as keyof JSX.IntrinsicElements
-      const headingStyles = {
-        1: 'text-[14px] font-semibold text-[#fafafa] mt-3 first:mt-0',
-        2: 'text-[13px] font-semibold text-[#fafafa] mt-2 first:mt-0',
-        3: 'text-[13px] font-medium text-[#e5e5e5] mt-2 first:mt-0',
-        4: 'text-[13px] font-medium text-[#a1a1a1] mt-1 first:mt-0',
-      }[block.level || 3]
-      return (
-        <HeadingTag className={headingStyles}>
-          {renderInline(block.content)}
-        </HeadingTag>
-      )
-
-    case 'list':
-      return (
-        <ul className="space-y-1 pl-3">
-          {block.items?.map((item, i) => (
-            <li key={i} className="text-[13px] text-[#e5e5e5] leading-relaxed relative before:absolute before:left-[-10px] before:top-[8px] before:w-1 before:h-1 before:rounded-full before:bg-[#525252]">
-              {renderInline(item)}
-            </li>
-          ))}
+function parseAndRender(content: string): React.ReactNode {
+  if (!content?.trim()) return null
+  
+  const lines = content.split('\n')
+  const elements: React.ReactNode[] = []
+  let listItems: React.ReactNode[] = []
+  let listType: 'check' | 'bullet' | null = null
+  let key = 0
+  let inCodeBlock = false
+  
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`list-${key++}`} className="space-y-1 my-2">
+          {listItems}
         </ul>
       )
-
-    case 'blockquote':
-      return (
-        <blockquote className="border-l-2 border-[#333] pl-3 text-[13px] text-[#a1a1a1] italic">
-          {renderInline(block.content)}
+      listItems = []
+      listType = null
+    }
+  }
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+    
+    // Skip code blocks entirely
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock
+      continue
+    }
+    if (inCodeBlock) continue
+    
+    // Empty line
+    if (!trimmed) {
+      flushList()
+      continue
+    }
+    
+    // H2 - Section header (bold title style like v0)
+    if (trimmed.startsWith('## ')) {
+      flushList()
+      elements.push(
+        <h2 key={`h2-${key++}`} className="text-[14px] font-semibold text-[#fafafa] mt-4 mb-2 first:mt-0">
+          {renderInline(trimmed.slice(3))}
+        </h2>
+      )
+      continue
+    }
+    
+    // H3 - Subsection
+    if (trimmed.startsWith('### ')) {
+      flushList()
+      elements.push(
+        <h3 key={`h3-${key++}`} className="text-[13px] font-semibold text-[#e5e5e5] mt-3 mb-1.5 first:mt-0">
+          {renderInline(trimmed.slice(4))}
+        </h3>
+      )
+      continue
+    }
+    
+    // Bold line acting as header (common in v0: **Core Features:**)
+    if (trimmed.startsWith('**') && trimmed.endsWith(':**')) {
+      flushList()
+      const headerText = trimmed.slice(2, -3)
+      elements.push(
+        <h3 key={`bh-${key++}`} className="text-[13px] font-semibold text-[#fafafa] mt-3 mb-1.5 first:mt-0">
+          {headerText}:
+        </h3>
+      )
+      continue
+    }
+    
+    // Checkmark list item (v0 style: - ✓ Feature or * [x] Feature)
+    const checkPatterns = [
+      /^[-*]\s*[✓✔☑️⚡]\s*(.+)$/,
+      /^[-*]\s*\[x\]\s*(.+)$/i,
+      /^[-*]\s*:white_check_mark:\s*(.+)$/,
+    ]
+    
+    let checkMatch = null
+    for (const pattern of checkPatterns) {
+      checkMatch = trimmed.match(pattern)
+      if (checkMatch) break
+    }
+    
+    if (checkMatch) {
+      if (listType !== 'check') flushList()
+      listType = 'check'
+      listItems.push(
+        <li key={`cli-${key++}`} className="flex items-start gap-2.5">
+          <span className="text-emerald-400 mt-[3px] shrink-0">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </span>
+          <span className="text-[13px] text-[#e5e5e5] leading-relaxed">{renderInline(checkMatch[1])}</span>
+        </li>
+      )
+      continue
+    }
+    
+    // Regular bullet list
+    const bulletMatch = trimmed.match(/^[-*•]\s+(.+)$/)
+    if (bulletMatch) {
+      if (listType !== 'bullet') flushList()
+      listType = 'bullet'
+      listItems.push(
+        <li key={`bli-${key++}`} className="flex items-start gap-2.5">
+          <span className="text-[#404040] mt-[9px] shrink-0">
+            <svg className="w-1 h-1" fill="currentColor" viewBox="0 0 8 8">
+              <circle cx="4" cy="4" r="4" />
+            </svg>
+          </span>
+          <span className="text-[13px] text-[#e5e5e5] leading-relaxed">{renderInline(bulletMatch[1])}</span>
+        </li>
+      )
+      continue
+    }
+    
+    // Numbered list
+    const numberedMatch = trimmed.match(/^(\d+)[.)]\s+(.+)$/)
+    if (numberedMatch) {
+      flushList()
+      elements.push(
+        <div key={`num-${key++}`} className="flex items-start gap-2 my-1">
+          <span className="text-[#525252] font-mono text-[12px] w-4 shrink-0 text-right">{numberedMatch[1]}.</span>
+          <span className="text-[13px] text-[#e5e5e5] leading-relaxed">{renderInline(numberedMatch[2])}</span>
+        </div>
+      )
+      continue
+    }
+    
+    // Blockquote
+    if (trimmed.startsWith('> ')) {
+      flushList()
+      elements.push(
+        <blockquote key={`bq-${key++}`} className="border-l-2 border-[#333] pl-3 my-2 text-[13px] text-[#a1a1a1] italic">
+          {renderInline(trimmed.slice(2))}
         </blockquote>
       )
-
-    case 'paragraph':
-    default:
-      if (!block.content.trim()) return null
-      return (
-        <p className="text-[13px] text-[#e5e5e5] leading-relaxed">
-          {renderInline(block.content)}
-        </p>
-      )
+      continue
+    }
+    
+    // Regular paragraph
+    flushList()
+    elements.push(
+      <p key={`p-${key++}`} className="text-[13px] text-[#e5e5e5] leading-relaxed my-2 first:mt-0 last:mb-0">
+        {renderInline(trimmed)}
+      </p>
+    )
   }
+  
+  flushList()
+  return elements.length > 0 ? <>{elements}</> : null
 }
 
 function renderInline(text: string): React.ReactNode {
@@ -88,24 +192,24 @@ function renderInline(text: string): React.ReactNode {
     // Bold **text**
     const boldMatch = remaining.match(/^\*\*(.+?)\*\*/)
     if (boldMatch) {
-      parts.push(<strong key={key++} className="font-semibold text-[#fafafa]">{boldMatch[1]}</strong>)
+      parts.push(<strong key={`b-${key++}`} className="font-semibold text-[#fafafa]">{boldMatch[1]}</strong>)
       remaining = remaining.slice(boldMatch[0].length)
       continue
     }
 
-    // Italic *text*
-    const italicMatch = remaining.match(/^\*(.+?)\*/)
+    // Italic *text* (single asterisk, not followed by another)
+    const italicMatch = remaining.match(/^\*([^*]+)\*(?!\*)/)
     if (italicMatch) {
-      parts.push(<em key={key++} className="italic">{italicMatch[1]}</em>)
+      parts.push(<em key={`i-${key++}`} className="italic text-[#a1a1a1]">{italicMatch[1]}</em>)
       remaining = remaining.slice(italicMatch[0].length)
       continue
     }
 
-    // Inline code `code` - render as subtle inline element
+    // Inline code `code`
     const codeMatch = remaining.match(/^`([^`]+)`/)
     if (codeMatch) {
       parts.push(
-        <code key={key++} className="px-1 py-0.5 bg-[#1a1a1a] rounded text-[12px] text-[#a1a1a1] font-mono">
+        <code key={`c-${key++}`} className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#262626] rounded text-[12px] text-[#a1a1a1] font-mono">
           {codeMatch[1]}
         </code>
       )
@@ -118,11 +222,11 @@ function renderInline(text: string): React.ReactNode {
     if (linkMatch) {
       parts.push(
         <a 
-          key={key++} 
+          key={`l-${key++}`} 
           href={linkMatch[2]} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+          className="text-blue-400 hover:text-blue-300 underline underline-offset-2 decoration-blue-400/50"
         >
           {linkMatch[1]}
         </a>
@@ -132,123 +236,18 @@ function renderInline(text: string): React.ReactNode {
     }
 
     // Plain text until next special character
-    const plainMatch = remaining.match(/^[^*`\[]+/)
-    if (plainMatch) {
-      parts.push(plainMatch[0])
-      remaining = remaining.slice(plainMatch[0].length)
-      continue
+    const nextSpecial = remaining.search(/\*|`|\[/)
+    if (nextSpecial === -1) {
+      parts.push(remaining)
+      break
+    } else if (nextSpecial === 0) {
+      parts.push(remaining[0])
+      remaining = remaining.slice(1)
+    } else {
+      parts.push(remaining.slice(0, nextSpecial))
+      remaining = remaining.slice(nextSpecial)
     }
-
-    // If nothing matches, consume one character
-    parts.push(remaining[0])
-    remaining = remaining.slice(1)
   }
 
   return parts.length === 1 ? parts[0] : <>{parts}</>
-}
-
-function parseMarkdown(content: string): ParsedBlock[] {
-  const blocks: ParsedBlock[] = []
-  const lines = content.split('\n')
-  let i = 0
-
-  while (i < lines.length) {
-    const line = lines[i]
-
-    // SKIP code blocks entirely - they don't belong in chat
-    if (line.startsWith('```')) {
-      i++
-      while (i < lines.length && !lines[i].startsWith('```')) {
-        i++
-      }
-      i++ // skip closing ```
-      continue
-    }
-
-    // Heading # ## ### ####
-    const headingMatch = line.match(/^(#{1,4})\s+(.+)$/)
-    if (headingMatch) {
-      blocks.push({
-        type: 'heading',
-        content: headingMatch[2],
-        level: headingMatch[1].length,
-      })
-      i++
-      continue
-    }
-
-    // List item - or *
-    if (line.match(/^[-*]\s+/)) {
-      const items: string[] = []
-      while (i < lines.length && lines[i].match(/^[-*]\s+/)) {
-        items.push(lines[i].replace(/^[-*]\s+/, ''))
-        i++
-      }
-      blocks.push({
-        type: 'list',
-        content: '',
-        items,
-      })
-      continue
-    }
-
-    // Numbered list 1. 2. etc
-    if (line.match(/^\d+\.\s+/)) {
-      const items: string[] = []
-      while (i < lines.length && lines[i].match(/^\d+\.\s+/)) {
-        items.push(lines[i].replace(/^\d+\.\s+/, ''))
-        i++
-      }
-      blocks.push({
-        type: 'list',
-        content: '',
-        items,
-      })
-      continue
-    }
-
-    // Blockquote >
-    if (line.startsWith('> ')) {
-      const quoteLines: string[] = []
-      while (i < lines.length && lines[i].startsWith('> ')) {
-        quoteLines.push(lines[i].slice(2))
-        i++
-      }
-      blocks.push({
-        type: 'blockquote',
-        content: quoteLines.join(' '),
-      })
-      continue
-    }
-
-    // Empty line - skip
-    if (!line.trim()) {
-      i++
-      continue
-    }
-
-    // Paragraph - collect consecutive non-empty lines
-    const paraLines: string[] = []
-    while (
-      i < lines.length && 
-      lines[i].trim() && 
-      !lines[i].startsWith('#') && 
-      !lines[i].startsWith('```') && 
-      !lines[i].startsWith('- ') && 
-      !lines[i].startsWith('* ') && 
-      !lines[i].startsWith('> ') &&
-      !lines[i].match(/^\d+\.\s+/)
-    ) {
-      paraLines.push(lines[i])
-      i++
-    }
-    if (paraLines.length > 0) {
-      blocks.push({
-        type: 'paragraph',
-        content: paraLines.join(' '),
-      })
-    }
-  }
-
-  return blocks
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
 import { WebContainerProvider } from '@/providers/WebContainerProvider'
 import { ErrorBoundary, ChatErrorFallback, PreviewErrorFallback } from '@/components/ErrorBoundary'
@@ -55,41 +56,49 @@ function BuilderPageContent() {
       
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Header */}
-        <header className="h-14 bg-[#0a0a0a] border-b border-[#1f1f1f] flex items-center justify-between px-4">
+        {/* Premium Header */}
+        <header className="h-12 bg-[#0a0a0a] border-b border-[#1a1a1a] flex items-center justify-between px-4">
           {/* Left: Agent Status */}
           <AgentStatusBar />
           
-          {/* Center: Tab Switcher */}
-          <div className="flex items-center gap-1 p-1 bg-[#141414] rounded-lg border border-[#1f1f1f]">
-            <TabButton 
-              active={previewTab === 'preview'} 
-              onClick={() => setPreviewTab('preview')}
-            >
-              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Preview
-            </TabButton>
-            <TabButton 
-              active={previewTab === 'code'} 
-              onClick={() => setPreviewTab('code')}
-            >
-              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-              </svg>
-              Code
-            </TabButton>
-            <TabButton 
-              active={showTasks} 
-              onClick={() => setShowTasks(!showTasks)}
-            >
-              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Tasks
-            </TabButton>
+          {/* Center: Tab Switcher - v0 style */}
+          <div className="flex items-center">
+            <div className="flex items-center bg-[#141414] rounded-lg p-0.5 border border-[#1f1f1f]">
+              <TabButton 
+                active={previewTab === 'preview'} 
+                onClick={() => setPreviewTab('preview')}
+                icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                }
+              >
+                Preview
+              </TabButton>
+              <TabButton 
+                active={previewTab === 'code'} 
+                onClick={() => setPreviewTab('code')}
+                icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                  </svg>
+                }
+              >
+                Code
+              </TabButton>
+              <TabButton 
+                active={showTasks} 
+                onClick={() => setShowTasks(!showTasks)}
+                icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                }
+              >
+                Tasks
+              </TabButton>
+            </div>
           </div>
           
           {/* Right: Actions */}
@@ -109,13 +118,19 @@ function BuilderPageContent() {
         
         {/* Tasks Slide-out */}
         {showTasks && (
-          <div className="absolute top-14 right-0 bottom-0 w-96 z-40 border-l border-[#1f1f1f] bg-[#0a0a0a] shadow-2xl">
+          <motion.div 
+            initial={{ x: 20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 20, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-12 right-0 bottom-0 w-96 z-40 border-l border-[#1a1a1a] bg-[#0a0a0a] shadow-2xl"
+          >
             <div className="h-full flex flex-col">
-              <div className="h-12 border-b border-[#1f1f1f] flex items-center justify-between px-4">
+              <div className="h-11 border-b border-[#1a1a1a] flex items-center justify-between px-4">
                 <span className="text-[13px] font-medium text-[#fafafa]">Tasks</span>
                 <button
                   onClick={() => setShowTasks(false)}
-                  className="w-7 h-7 flex items-center justify-center text-[#737373] hover:text-[#fafafa] hover:bg-[#1f1f1f] rounded-md transition-colors"
+                  className="w-6 h-6 flex items-center justify-center text-[#525252] hover:text-[#fafafa] hover:bg-[#1f1f1f] rounded transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -126,7 +141,7 @@ function BuilderPageContent() {
                 <TasksPanel />
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
       
@@ -141,25 +156,28 @@ function BuilderPageContent() {
   )
 }
 
-// Tab button component
+// Premium tab button component
 function TabButton({ 
   children, 
   active, 
-  onClick 
+  onClick,
+  icon 
 }: { 
   children: React.ReactNode
   active: boolean
-  onClick: () => void 
+  onClick: () => void
+  icon: React.ReactNode
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center px-3 py-1.5 text-[13px] font-medium rounded-md transition-all duration-200 ${
+      className={`flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md transition-all duration-150 ${
         active
-          ? 'bg-[#1f1f1f] text-[#fafafa]'
-          : 'text-[#737373] hover:text-[#a1a1a1]'
+          ? 'bg-[#1f1f1f] text-[#fafafa] shadow-sm'
+          : 'text-[#525252] hover:text-[#a1a1a1]'
       }`}
     >
+      <span className={active ? 'text-[#fafafa]' : 'text-[#404040]'}>{icon}</span>
       {children}
     </button>
   )
