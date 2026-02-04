@@ -136,18 +136,22 @@ export function PageErrorFallback({
  */
 export function ChatErrorFallback({ onRetry }: { onRetry?: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-      <div className="text-4xl mb-4">🤖❌</div>
-      <h2 className="text-lg font-semibold text-white mb-2">
+    <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-[#0a0a0a]">
+      <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+        </svg>
+      </div>
+      <h2 className="text-[15px] font-medium text-[#fafafa] mb-2">
         Chat encountered an error
       </h2>
-      <p className="text-neutral-400 text-sm mb-6 max-w-sm">
+      <p className="text-[13px] text-[#737373] mb-6 max-w-sm leading-relaxed">
         The AI chat system ran into a problem. Your conversation history is safe.
       </p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="px-4 py-2 bg-matrix-600/20 hover:bg-matrix-600/30 text-matrix-400 rounded-md text-sm transition-colors border border-matrix-700/50"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[13px] font-medium transition-colors"
         >
           Reload Chat
         </button>
@@ -161,18 +165,23 @@ export function ChatErrorFallback({ onRetry }: { onRetry?: () => void }) {
  */
 export function PreviewErrorFallback({ onRetry }: { onRetry?: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-neutral-900">
-      <div className="text-4xl mb-4">🖼️❌</div>
-      <h2 className="text-lg font-semibold text-white mb-2">
+    <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-[#0a0a0a]">
+      <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      </div>
+      <h2 className="text-[15px] font-medium text-[#fafafa] mb-2">
         Preview failed to load
       </h2>
-      <p className="text-neutral-400 text-sm mb-6 max-w-sm">
+      <p className="text-[13px] text-[#737373] mb-6 max-w-sm leading-relaxed">
         The preview panel encountered an error. This might be due to a code issue.
       </p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-md text-sm transition-colors border border-blue-700/50"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[13px] font-medium transition-colors"
         >
           Retry Preview
         </button>

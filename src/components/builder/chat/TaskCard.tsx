@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 
 interface FileTask {
   path: string
-  status: 'pending' | 'creating' | 'complete'
+  status?: 'pending' | 'creating' | 'complete'
 }
 
 interface TaskCardProps {
@@ -18,7 +18,7 @@ interface TaskCardProps {
 export function TaskCard({ tasks, isComplete }: TaskCardProps) {
   if (tasks.length === 0) return null
 
-  const completedCount = tasks.filter(t => t.status === 'complete').length
+  const completedCount = tasks.filter(t => t.status === 'complete' || !t.status).length
   const progress = (completedCount / tasks.length) * 100
 
   return (
@@ -76,7 +76,7 @@ export function TaskCard({ tasks, isComplete }: TaskCardProps) {
             className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[#1a1a1a] transition-colors"
           >
             <div className="w-4 h-4 flex items-center justify-center shrink-0">
-              {task.status === 'complete' ? (
+              {(task.status === 'complete' || !task.status) ? (
                 <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                 </svg>
