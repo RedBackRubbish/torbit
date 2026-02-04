@@ -31,8 +31,8 @@ export default function FuelGauge() {
   const status = getFuelStatus()
 
   const statusConfig = {
-    full: { color: 'text-emerald-400', bg: 'bg-emerald-500', label: 'Good' },
-    good: { color: 'text-emerald-400', bg: 'bg-emerald-500', label: 'Good' },
+    full: { color: 'text-[#c0c0c0]', bg: 'bg-[#c0c0c0]', label: 'Full' },
+    good: { color: 'text-[#a8a8a8]', bg: 'bg-[#a8a8a8]', label: 'Good' },
     low: { color: 'text-amber-400', bg: 'bg-amber-500', label: 'Low' },
     critical: { color: 'text-red-400', bg: 'bg-red-500', label: 'Critical' },
   }[status]
@@ -50,11 +50,11 @@ export default function FuelGauge() {
           onMouseLeave={() => setShowDetails(false)}
         >
           <motion.div
-            className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#141414] border border-[#1f1f1f] cursor-pointer hover:border-[#262626] transition-colors"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0a0a0a] border border-[#1a1a1a] cursor-pointer hover:border-[#333] transition-colors"
             whileHover={{ scale: 1.01 }}
           >
             {/* Progress bar */}
-            <div className="relative w-16 h-1.5 bg-[#262626] rounded-full overflow-hidden">
+            <div className="relative w-16 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
               {ghostUsage > 0 && (
                 <motion.div
                   className="absolute inset-y-0 left-0 bg-red-500/30"
@@ -106,18 +106,18 @@ export default function FuelGauge() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 4, scale: 0.98 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full right-0 mt-2 w-64 p-4 bg-[#141414] border border-[#262626] rounded-xl shadow-xl z-50"
+                className="absolute top-full right-0 mt-2 w-64 p-4 bg-[#050505] border border-[#1a1a1a] rounded-xl shadow-xl z-50"
               >
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
                   <span className={`text-[12px] font-medium ${statusConfig.color}`}>
                     {statusConfig.label}
                   </span>
-                  <span className="text-[12px] text-[#525252]">{percentage}%</span>
+                  <span className="text-[12px] text-[#505050]">{percentage}%</span>
                 </div>
 
                 {/* Full bar */}
-                <div className="relative h-2 bg-[#1f1f1f] rounded-full overflow-hidden mb-4">
+                <div className="relative h-2 bg-[#151515] rounded-full overflow-hidden mb-4">
                   <motion.div
                     className={`absolute inset-y-0 left-0 ${statusConfig.bg}`}
                     style={{ width: `${percentage}%` }}
@@ -138,12 +138,12 @@ export default function FuelGauge() {
                 {/* Stats */}
                 <div className="space-y-2 text-[12px]">
                   <div className="flex justify-between">
-                    <span className="text-[#525252]">Current</span>
-                    <span className="text-[#a1a1a1]">{currentFuel.toLocaleString()} tokens</span>
+                    <span className="text-[#505050]">Current</span>
+                    <span className="text-[#a8a8a8]">{currentFuel.toLocaleString()} tokens</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#525252]">Capacity</span>
-                    <span className="text-[#a1a1a1]">{maxFuel.toLocaleString()} tokens</span>
+                    <span className="text-[#505050]">Capacity</span>
+                    <span className="text-[#a8a8a8]">{maxFuel.toLocaleString()} tokens</span>
                   </div>
                   {pendingBuilderCost > 0 && (
                     <div className="flex justify-between text-amber-400">
@@ -160,14 +160,14 @@ export default function FuelGauge() {
                 </div>
 
                 {/* Guarantee */}
-                <div className="mt-4 p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <div className="mt-4 p-2.5 bg-[#0f0f0f] border border-[#1a1a1a] rounded-lg">
                   <div className="flex items-center gap-2">
-                    <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg className="w-3.5 h-3.5 text-[#808080]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                     </svg>
-                    <span className="text-[11px] text-blue-400 font-medium">Auditor Guarantee</span>
+                    <span className="text-[11px] text-[#808080] font-medium">Auditor Guarantee</span>
                   </div>
-                  <p className="text-[10px] text-[#525252] mt-1">
+                  <p className="text-[10px] text-[#505050] mt-1">
                     Refund if code fails quality checks
                   </p>
                 </div>
@@ -186,7 +186,7 @@ export default function FuelGauge() {
               ? 'bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white' 
               : status === 'low'
               ? 'bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-black'
-              : 'bg-[#1f1f1f] border border-[#262626] text-[#737373] hover:text-[#fafafa] hover:border-[#404040]'
+              : 'bg-[#0a0a0a] border border-[#1a1a1a] text-[#606060] hover:text-[#c0c0c0] hover:border-[#333]'
           }`}
           title="Add tokens"
         >
@@ -213,55 +213,55 @@ export default function FuelGauge() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#141414] border border-[#262626] rounded-2xl p-6 max-w-md mx-4 shadow-2xl"
+              className="bg-[#050505] border border-[#1a1a1a] rounded-2xl p-6 max-w-md mx-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <div className="w-10 h-10 rounded-xl bg-[#0f0f0f] border border-[#1a1a1a] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-[#808080]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-[15px] font-medium text-[#fafafa]">Authorize Usage</h3>
-                  <p className="text-[12px] text-[#525252]">Review estimated cost</p>
+                  <h3 className="text-[15px] font-medium text-[#ffffff]">Authorize Usage</h3>
+                  <p className="text-[12px] text-[#505050]">Review estimated cost</p>
                 </div>
               </div>
 
               {/* Task */}
               {pendingTaskDescription && (
-                <div className="p-3 bg-[#1a1a1a] border border-[#262626] rounded-lg mb-4">
-                  <p className="text-[13px] text-[#a1a1a1]">{pendingTaskDescription}</p>
+                <div className="p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg mb-4">
+                  <p className="text-[13px] text-[#a8a8a8]">{pendingTaskDescription}</p>
                 </div>
               )}
 
               {/* Breakdown */}
               <div className="space-y-3 mb-6 text-[13px]">
                 <div className="flex justify-between items-center">
-                  <span className="text-[#737373]">Estimated</span>
-                  <span className="text-[#fafafa] font-medium">
+                  <span className="text-[#606060]">Estimated</span>
+                  <span className="text-[#ffffff] font-medium">
                     {estimatedRange ? `${estimatedRange.min} - ${estimatedRange.max}` : ghostUsage} tokens
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[#737373]">Current</span>
-                  <span className="text-[#a1a1a1]">{currentFuel.toLocaleString()} tokens</span>
+                  <span className="text-[#606060]">Current</span>
+                  <span className="text-[#a8a8a8]">{currentFuel.toLocaleString()} tokens</span>
                 </div>
-                <div className="flex justify-between items-center pt-3 border-t border-[#262626]">
-                  <span className="text-[#737373]">After</span>
-                  <span className={currentFuel - ghostUsage < 0 ? 'text-red-400' : 'text-emerald-400'}>
+                <div className="flex justify-between items-center pt-3 border-t border-[#1a1a1a]">
+                  <span className="text-[#606060]">After</span>
+                  <span className={currentFuel - ghostUsage < 0 ? 'text-red-400' : 'text-[#c0c0c0]'}>
                     ~{Math.max(0, currentFuel - ghostUsage).toLocaleString()} tokens
                   </span>
                 </div>
               </div>
 
               {/* Guarantee */}
-              <div className="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg mb-6">
-                <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="flex items-center gap-2 p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg mb-6">
+                <svg className="w-4 h-4 text-[#808080] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                 </svg>
-                <span className="text-[12px] text-blue-400">
+                <span className="text-[12px] text-[#808080]">
                   Protected by Auditor Guarantee
                 </span>
               </div>
@@ -270,13 +270,13 @@ export default function FuelGauge() {
               <div className="flex gap-3">
                 <button
                   onClick={cancelBurn}
-                  className="flex-1 px-4 py-2.5 text-[13px] text-[#737373] border border-[#262626] hover:border-[#404040] rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 text-[13px] text-[#606060] border border-[#1a1a1a] hover:border-[#333] hover:text-[#a8a8a8] rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={authorizeBurn}
-                  className="flex-1 px-4 py-2.5 text-[13px] font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 text-[13px] font-medium text-[#000] bg-[#c0c0c0] hover:bg-[#d4d4d4] rounded-lg transition-colors"
                 >
                   Authorize
                 </button>
