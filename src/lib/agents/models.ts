@@ -7,14 +7,20 @@
 
 import { anthropic } from '@ai-sdk/anthropic'
 import { google } from '@ai-sdk/google'
+import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import type { LanguageModel } from 'ai'
 import type { AgentId } from '../tools/definitions'
+
+// OpenRouter client for Kimi
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY,
+})
 
 // ============================================
 // MODEL TYPES
 // ============================================
 
-export type ModelProvider = 'claude-opus' | 'claude-sonnet' | 'gemini-pro' | 'gemini-flash'
+export type ModelProvider = 'claude-opus' | 'claude-sonnet' | 'gemini-pro' | 'gemini-flash' | 'kimi'
 export type TaskComplexity = 'high' | 'medium' | 'low'
 
 export interface ModelConfig {
@@ -63,6 +69,14 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
     inputCostPer1k: 0.000075,
     outputCostPer1k: 0.0003,
   },
+  'kimi': {
+    provider: 'kimi',
+    model: 'moonshotai/kimi-k2-instruct',
+    description: 'Kimi K2.5 - multilingual powerhouse, complex reasoning',
+    costTier: 'standard',
+    inputCostPer1k: 0.0014,
+    outputCostPer1k: 0.0055,
+  },
 }
 
 // ============================================
@@ -76,12 +90,13 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * SONNET 4.5 = The Executor (builds what Opus plans)
  * GEMINI PRO = Big brain (large context, full codebase analysis)
  * GEMINI FLASH = The Rabbit (cleanup, small fixes, dirty work)
+ * KIMI K2.5 = Multilingual powerhouse (complex reasoning, internationalization)
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
   architect: 'claude-opus',      // OPUS plans the build
   planner: 'claude-opus',        // OPUS for strategic planning
   frontend: 'claude-sonnet',     // SONNET executes frontend code
-  backend: 'claude-sonnet',      // SONNET executes backend code
+  backend: 'kimi',               // KIMI handles backend logic
   database: 'gemini-pro',        // PRO handles large schema context
   devops: 'gemini-flash',        // FLASH handles config cleanup
   qa: 'gemini-flash',            // FLASH writes quick tests
@@ -105,6 +120,8 @@ export function getModel(provider: ModelProvider): LanguageModel {
     case 'gemini-pro':
     case 'gemini-flash':
       return google(config.model)
+    case 'kimi':
+      return openrouter(config.model)
     default:
       return anthropic('claude-sonnet-4-20250514')
   }

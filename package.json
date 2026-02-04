@@ -23,6 +23,7 @@
     "@ai-sdk/react": "^3.0.71",
     "@fontsource/space-grotesk": "^5.2.10",
     "@monaco-editor/react": "^4.7.0",
+    "@openrouter/ai-sdk-provider": "^2.1.1",
     "@sentry/nextjs": "^10.38.0",
     "@webcontainer/api": "^1.6.1",
     "ai": "^6.0.69",
