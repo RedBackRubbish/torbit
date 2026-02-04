@@ -50,7 +50,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'gemini-pro': {
     provider: 'gemini-pro',
     model: 'gemini-2.5-pro-preview-06-05',
-    description: 'Analytical - schema design, data processing',
+    description: 'Big brain - handles large context windows, full codebase analysis',
     costTier: 'standard',
     inputCostPer1k: 0.00125,
     outputCostPer1k: 0.005,
@@ -58,7 +58,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'gemini-flash': {
     provider: 'gemini-flash',
     model: 'gemini-2.0-flash',
-    description: 'Fast & cheap - config files, test generation',
+    description: 'The rabbit - cleanup, small fixes, dirty work',
     costTier: 'economy',
     inputCostPer1k: 0.000075,
     outputCostPer1k: 0.0003,
@@ -74,16 +74,18 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * 
  * OPUS 4.5 = The Boss (plans everything)
  * SONNET 4.5 = The Executor (builds what Opus plans)
+ * GEMINI PRO = Big brain (large context, full codebase analysis)
+ * GEMINI FLASH = The Rabbit (cleanup, small fixes, dirty work)
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
   architect: 'claude-opus',      // OPUS plans the build
   planner: 'claude-opus',        // OPUS for strategic planning
   frontend: 'claude-sonnet',     // SONNET executes frontend code
   backend: 'claude-sonnet',      // SONNET executes backend code
-  database: 'claude-sonnet',     // SONNET executes database work
-  devops: 'claude-sonnet',       // SONNET handles devops
-  qa: 'claude-sonnet',           // SONNET writes tests
-  auditor: 'claude-sonnet',      // SONNET reviews code
+  database: 'gemini-pro',        // PRO handles large schema context
+  devops: 'gemini-flash',        // FLASH handles config cleanup
+  qa: 'gemini-flash',            // FLASH writes quick tests
+  auditor: 'gemini-pro',         // PRO reviews full codebase
 }
 
 // ============================================
