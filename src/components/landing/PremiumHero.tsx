@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion'
 
 const PLACEHOLDER_EXAMPLES = [
@@ -24,6 +25,7 @@ const COMPANIES = [
  * PremiumHero - Enterprise-grade hero with premium interactions
  */
 export default function PremiumHero() {
+  const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const [isFocused, setIsFocused] = useState(false)
   const [showContent, setShowContent] = useState(false)
@@ -94,7 +96,9 @@ export default function PremiumHero() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (prompt.trim()) {
-      console.log('Building:', prompt)
+      // Store prompt and navigate to builder
+      sessionStorage.setItem('torbit_prompt', prompt)
+      router.push('/builder')
     }
   }
 
