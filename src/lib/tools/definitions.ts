@@ -172,6 +172,197 @@ export const applyPatchSchema = z.object({
 })
 
 // ============================================
+// PHASE 2: MOAT TOOLS - Connectivity, Consistency, Secrets, Reliability
+// ============================================
+
+// MCP CONNECTIVITY (Skeleton Key - Infinite extensibility)
+export const connectMcpServerSchema = z.object({
+  serverUrl: z.string().url().describe('URL of the MCP server to connect to'),
+  serverName: z.string().describe('Human-readable name for this server (e.g., "Stripe MCP", "Supabase MCP")'),
+  authToken: z.string().optional().describe('Authentication token if required'),
+})
+
+export const listMcpToolsSchema = z.object({
+  serverName: z.string().describe('Name of connected MCP server'),
+})
+
+export const invokeMcpToolSchema = z.object({
+  serverName: z.string().describe('Name of the MCP server'),
+  toolName: z.string().describe('Name of the tool to invoke'),
+  arguments: z.record(z.string(), z.unknown()).describe('Arguments to pass to the MCP tool'),
+})
+
+// DESIGN CONSISTENCY (Vibe Guard - Prevent drift)
+export const consultDesignTokensSchema = z.object({
+  category: z.enum(['colors', 'typography', 'spacing', 'borders', 'shadows', 'animations', 'all']).default('all'),
+  query: z.string().optional().describe('Search for specific token (e.g., "primary", "heading")'),
+})
+
+export const validateStyleSchema = z.object({
+  proposedStyles: z.string().describe('The CSS/Tailwind classes being proposed'),
+  component: z.string().describe('Component name for context'),
+})
+
+// SECRET MANAGEMENT (Secret Keeper - Secure environment)
+export const listSecretsSchema = z.object({
+  showValues: z.boolean().default(false).describe('Show masked values (never shows full secrets)'),
+})
+
+export const getSecretSchema = z.object({
+  key: z.string().describe('The secret key to retrieve (e.g., "STRIPE_SECRET_KEY")'),
+})
+
+export const requireSecretSchema = z.object({
+  key: z.string().describe('The secret key that is required'),
+  description: z.string().describe('Human-readable description of what this secret is for'),
+  example: z.string().optional().describe('Example format (e.g., "sk_live_...")'),
+})
+
+// PACKAGE VALIDATION (Dependency Sherlock - Prevent module not found)
+export const verifyPackageSchema = z.object({
+  packageName: z.string().describe('Package name to verify'),
+  version: z.string().optional().describe('Specific version to check'),
+})
+
+export const checkPeerDependenciesSchema = z.object({
+  packageName: z.string().describe('Package to check peer dependencies for'),
+})
+
+// SELF-REPAIR (Error Recovery Loop)
+export const parseErrorSchema = z.object({
+  errorOutput: z.string().describe('The error output from terminal or browser'),
+  source: z.enum(['terminal', 'browser', 'build', 'runtime']).describe('Where the error came from'),
+})
+
+export const suggestFixSchema = z.object({
+  errorId: z.string().describe('ID of the parsed error'),
+  autoApply: z.boolean().default(false).describe('Automatically apply the suggested fix'),
+})
+
+// CONTEXT CACHING (Prompt Caching for "infinite memory")
+export const cacheContextSchema = z.object({
+  key: z.string().describe('Cache key (e.g., "design-system", "schema", "package-json")'),
+  content: z.string().describe('Content to cache'),
+  ttl: z.number().default(3600).describe('Time-to-live in seconds'),
+})
+
+export const getCachedContextSchema = z.object({
+  key: z.string().describe('Cache key to retrieve'),
+})
+
+// ============================================
+// PHASE 3: GOD-MODE TOOLS (Production Reality)
+// ============================================
+
+// VISUAL REGRESSION (Reality Check - catch the "uncanny valley")
+export const verifyVisualMatchSchema = z.object({
+  url: z.string().default('http://localhost:3000').describe('URL to capture'),
+  selector: z.string().optional().describe('CSS selector to focus on (e.g., ".hero-section")'),
+  compareWith: z.enum(['design-tokens', 'previous-snapshot', 'figma-export']).default('design-tokens'),
+  strict: z.boolean().default(false).describe('Fail on any deviation'),
+})
+
+// DOCS HUNTER (RAG on Demand - real-time library learning)
+export const scrapeAndIndexDocsSchema = z.object({
+  url: z.string().describe('Documentation URL to scrape and index'),
+  selector: z.string().optional().describe('CSS selector to extract content (default: main content)'),
+  maxDepth: z.number().default(2).describe('How many links deep to follow'),
+  indexName: z.string().describe('Name for the index (e.g., "shadcn-sidebar", "next16-app-router")'),
+})
+
+export const queryIndexedDocsSchema = z.object({
+  indexName: z.string().describe('Name of the indexed docs'),
+  query: z.string().describe('Natural language query'),
+  topK: z.number().default(5).describe('Number of results to return'),
+})
+
+// SECURE ENVIRONMENT (Runtime-only injection - bypasses file system)
+export const injectSecureEnvSchema = z.object({
+  key: z.string().describe('Environment variable name (e.g., "SUPABASE_KEY")'),
+  value: z.string().describe('The secret value (NEVER logged or stored in files)'),
+  scope: z.enum(['runtime', 'build', 'both']).default('runtime'),
+})
+
+export const listEnvVarsSchema = z.object({
+  showValues: z.boolean().default(false).describe('Show masked values'),
+})
+
+// LOCALHOST TUNNEL (Instant sharing - "Check out what I built")
+export const openTunnelUrlSchema = z.object({
+  port: z.number().default(3000).describe('Local port to expose'),
+  subdomain: z.string().optional().describe('Preferred subdomain (e.g., "my-app" → my-app.torbit.dev)'),
+  expiry: z.number().default(3600).describe('Tunnel lifetime in seconds'),
+})
+
+export const closeTunnelSchema = z.object({
+  tunnelId: z.string().describe('ID of the tunnel to close'),
+})
+
+// HUMAN HANDSHAKE (Permission Gate - high agency requires high trust)
+export const requestUserDecisionSchema = z.object({
+  action: z.string().describe('What the agent wants to do'),
+  reason: z.string().describe('Why this action is necessary'),
+  severity: z.enum(['info', 'warning', 'danger']).default('warning'),
+  options: z.array(z.object({
+    label: z.string(),
+    value: z.string(),
+    isDefault: z.boolean().optional(),
+  })).describe('Choices for the user'),
+  timeout: z.number().default(60).describe('Seconds to wait for response'),
+})
+
+// ============================================
+// FINAL 5: LAST MILE TOOLS (Senior Engineer Replacement)
+// ============================================
+
+// SELF-HEALING TESTER (Playwright Agent Trio: Planner → Generator → Healer)
+export const runE2eCycleSchema = z.object({
+  feature: z.string().describe('Feature to test (e.g., "login flow", "checkout process")'),
+  testPath: z.string().optional().describe('Path for test file (default: tests/e2e/{feature}.spec.ts)'),
+  healOnFailure: z.boolean().default(true).describe('Attempt to fix the test or code if it fails'),
+  maxHealAttempts: z.number().default(3).describe('Maximum heal attempts before giving up'),
+  takeScreenshots: z.boolean().default(true).describe('Capture screenshots on each step'),
+})
+
+export const generateTestSchema = z.object({
+  feature: z.string().describe('Feature to generate test for'),
+  testType: z.enum(['e2e', 'unit', 'integration']).default('e2e'),
+  framework: z.enum(['playwright', 'vitest', 'jest']).default('playwright'),
+})
+
+// TICKET MASTER (Project Management Sync via MCP)
+export const syncExternalTicketSchema = z.object({
+  action: z.enum(['read', 'update', 'create', 'list']),
+  ticketId: z.string().optional().describe('Ticket ID (e.g., "TOR-102", "PROJ-45")'),
+  status: z.string().optional().describe('New status (e.g., "in-progress", "done", "blocked")'),
+  comment: z.string().optional().describe('Comment to add to ticket'),
+  assignee: z.string().optional().describe('Assign ticket to user'),
+  title: z.string().optional().describe('Ticket title (for create)'),
+  description: z.string().optional().describe('Ticket description (for create)'),
+  labels: z.array(z.string()).optional().describe('Labels/tags for the ticket'),
+})
+
+export const listTicketsSchema = z.object({
+  status: z.enum(['backlog', 'todo', 'in-progress', 'review', 'done', 'all']).default('in-progress'),
+  assignee: z.string().optional().describe('Filter by assignee'),
+  limit: z.number().default(10),
+})
+
+// DEPENDENCY TIME-MACHINE (Simulate before install)
+export const verifyDependencyGraphSchema = z.object({
+  packages: z.array(z.string()).describe('Packages to verify (e.g., ["react@19", "framer-motion@12"])'),
+  checkPeers: z.boolean().default(true).describe('Verify peer dependency compatibility'),
+  simulateInstall: z.boolean().default(true).describe('Dry-run npm install to detect conflicts'),
+  suggestFixes: z.boolean().default(true).describe('Suggest version adjustments for conflicts'),
+})
+
+export const resolveConflictSchema = z.object({
+  packageName: z.string().describe('Package with conflict'),
+  strategy: z.enum(['downgrade', 'upgrade', 'override', 'skip']),
+  targetVersion: z.string().optional().describe('Specific version to use'),
+})
+
+// ============================================
 // TOOL DEFINITIONS (for AI SDK v6)
 // ============================================
 
@@ -296,6 +487,158 @@ export const TOOL_DEFINITIONS = {
     description: 'Apply a unified diff patch to a file. More surgical than editFile - only changes specific lines. Preferred for editing large files.',
     inputSchema: applyPatchSchema,
   },
+  
+  // ============================================
+  // PHASE 2: MOAT TOOLS
+  // ============================================
+  
+  // MCP CONNECTIVITY (Skeleton Key)
+  connectMcpServer: {
+    description: 'Connect to an external MCP server to dynamically load tools. Enables infinite extensibility (Stripe, Supabase, GitHub, etc.).',
+    inputSchema: connectMcpServerSchema,
+  },
+  listMcpTools: {
+    description: 'List available tools from a connected MCP server.',
+    inputSchema: listMcpToolsSchema,
+  },
+  invokeMcpTool: {
+    description: 'Invoke a tool from a connected MCP server.',
+    inputSchema: invokeMcpToolSchema,
+  },
+  
+  // DESIGN CONSISTENCY (Vibe Guard)
+  consultDesignTokens: {
+    description: 'Consult the design system tokens. ALWAYS check this before using colors, fonts, or spacing. Prevents "vibe drift" where standard Bootstrap styles creep in.',
+    inputSchema: consultDesignTokensSchema,
+  },
+  validateStyle: {
+    description: 'Validate proposed CSS/Tailwind classes against the design system. Rejects off-brand styles and suggests correct alternatives.',
+    inputSchema: validateStyleSchema,
+  },
+  
+  // SECRET MANAGEMENT (Secret Keeper)
+  listSecrets: {
+    description: 'List available secrets (keys only, values masked). Use to see what API keys are configured.',
+    inputSchema: listSecretsSchema,
+  },
+  getSecret: {
+    description: 'Get a secret value for use in code. NEVER write secrets to files - inject at runtime only.',
+    inputSchema: getSecretSchema,
+  },
+  requireSecret: {
+    description: 'Declare that a secret is required. Prompts user to provide it via secure UI if not configured.',
+    inputSchema: requireSecretSchema,
+  },
+  
+  // PACKAGE VALIDATION (Dependency Sherlock)
+  verifyPackage: {
+    description: 'Verify a package exists on NPM before installing. Checks for deprecated warnings, latest version, and basic metadata.',
+    inputSchema: verifyPackageSchema,
+  },
+  checkPeerDependencies: {
+    description: 'Check peer dependency requirements for a package. Prevents peer dependency conflicts that cause build failures.',
+    inputSchema: checkPeerDependenciesSchema,
+  },
+  
+  // SELF-REPAIR (Error Recovery Loop)
+  parseError: {
+    description: 'Parse an error message to understand the root cause. Extracts file, line number, error type, and suggested fixes.',
+    inputSchema: parseErrorSchema,
+  },
+  suggestFix: {
+    description: 'Get suggested fixes for a parsed error. Can auto-apply if confident.',
+    inputSchema: suggestFixSchema,
+  },
+  
+  // CONTEXT CACHING (Infinite Memory)
+  cacheContext: {
+    description: 'Cache important context for prompt caching. Design tokens, schema, and package.json should be cached for 90% latency reduction.',
+    inputSchema: cacheContextSchema,
+  },
+  getCachedContext: {
+    description: 'Retrieve cached context. Faster than re-reading files.',
+    inputSchema: getCachedContextSchema,
+  },
+  
+  // ============================================
+  // PHASE 3: GOD-MODE TOOLS (Production Reality)
+  // ============================================
+  
+  // VISUAL REGRESSION (Reality Check)
+  verifyVisualMatch: {
+    description: 'Take a screenshot and compare against design tokens. Catches the "uncanny valley" of UI - pixel-perfect enforcement of Matrix vibe.',
+    inputSchema: verifyVisualMatchSchema,
+  },
+  
+  // DOCS HUNTER (RAG on Demand)
+  scrapeAndIndexDocs: {
+    description: 'Scrape and index documentation in real-time. Use when referencing a library released after training cutoff. NEVER hallucinate APIs - fetch the truth.',
+    inputSchema: scrapeAndIndexDocsSchema,
+  },
+  queryIndexedDocs: {
+    description: 'Query previously indexed documentation. Returns relevant snippets for accurate code generation.',
+    inputSchema: queryIndexedDocsSchema,
+  },
+  
+  // SECURE ENVIRONMENT (Runtime Injection)
+  injectSecureEnv: {
+    description: 'Inject a secret into the runtime environment ONLY. Bypasses file system - secrets NEVER appear in code window or git.',
+    inputSchema: injectSecureEnvSchema,
+  },
+  listEnvVars: {
+    description: 'List environment variables (values masked). Shows what\'s available at runtime.',
+    inputSchema: listEnvVarsSchema,
+  },
+  
+  // LOCALHOST TUNNEL (Instant Sharing)
+  openTunnelUrl: {
+    description: 'Create a public URL for localhost. Enables instant "Check out what I built" sharing. Returns a torbit.dev subdomain.',
+    inputSchema: openTunnelUrlSchema,
+  },
+  closeTunnel: {
+    description: 'Close an open tunnel.',
+    inputSchema: closeTunnelSchema,
+  },
+  
+  // HUMAN HANDSHAKE (Permission Gate)
+  requestUserDecision: {
+    description: 'REQUIRED before ANY destructive action. Pauses execution and asks user for confirmation. Use for database drops, file deletions, or irreversible operations.',
+    inputSchema: requestUserDecisionSchema,
+  },
+  
+  // ============================================
+  // FINAL 5: LAST MILE TOOLS (Senior Engineer Replacement)
+  // ============================================
+  
+  // SELF-HEALING TESTER (Playwright Agent Pattern)
+  runE2eCycle: {
+    description: 'Run a complete E2E test cycle: Plan → Generate → Execute → Heal. Writes Playwright tests, runs them, and auto-fixes failures. Says "I built it, tested it, and verified it passes."',
+    inputSchema: runE2eCycleSchema,
+  },
+  generateTest: {
+    description: 'Generate a test file for a feature. Supports Playwright (e2e), Vitest (unit), or Jest (integration).',
+    inputSchema: generateTestSchema,
+  },
+  
+  // TICKET MASTER (Project Management Sync)
+  syncExternalTicket: {
+    description: 'Sync with external project management (Linear, Jira, GitHub Issues) via MCP. Read tickets, update status, add comments. Creates a paper trail for the work.',
+    inputSchema: syncExternalTicketSchema,
+  },
+  listTickets: {
+    description: 'List tickets from connected project management tool. Filter by status or assignee.',
+    inputSchema: listTicketsSchema,
+  },
+  
+  // DEPENDENCY TIME-MACHINE (Conflict Prevention)
+  verifyDependencyGraph: {
+    description: 'Simulate npm install BEFORE running it. Detects version conflicts, peer dependency issues, and suggests fixes. Prevents "White Screen of Death" from package mismatches.',
+    inputSchema: verifyDependencyGraphSchema,
+  },
+  resolveConflict: {
+    description: 'Resolve a detected dependency conflict using a specified strategy (downgrade, upgrade, override, skip).',
+    inputSchema: resolveConflictSchema,
+  },
 } as const
 
 // ============================================
@@ -321,6 +664,16 @@ export const AGENT_TOOLS = {
     createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
     rollbackToCheckpoint: TOOL_DEFINITIONS.rollbackToCheckpoint,
     listCheckpoints: TOOL_DEFINITIONS.listCheckpoints,
+    // PHASE 2: MCP Connectivity (Skeleton Key)
+    connectMcpServer: TOOL_DEFINITIONS.connectMcpServer,
+    listMcpTools: TOOL_DEFINITIONS.listMcpTools,
+    invokeMcpTool: TOOL_DEFINITIONS.invokeMcpTool,
+    // PHASE 2: Package Validation (Dependency Sherlock)
+    verifyPackage: TOOL_DEFINITIONS.verifyPackage,
+    checkPeerDependencies: TOOL_DEFINITIONS.checkPeerDependencies,
+    // PHASE 2: Context Caching (Infinite Memory)
+    cacheContext: TOOL_DEFINITIONS.cacheContext,
+    getCachedContext: TOOL_DEFINITIONS.getCachedContext,
   },
   frontend: {
     // Reasoning
@@ -343,6 +696,14 @@ export const AGENT_TOOLS = {
     getBrowserLogs: TOOL_DEFINITIONS.getBrowserLogs,
     // Safety
     createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
+    // PHASE 2: Design Consistency (Vibe Guard)
+    consultDesignTokens: TOOL_DEFINITIONS.consultDesignTokens,
+    validateStyle: TOOL_DEFINITIONS.validateStyle,
+    // PHASE 2: Self-Repair
+    parseError: TOOL_DEFINITIONS.parseError,
+    suggestFix: TOOL_DEFINITIONS.suggestFix,
+    // PHASE 2: Context
+    getCachedContext: TOOL_DEFINITIONS.getCachedContext,
   },
   backend: {
     // Reasoning
@@ -365,6 +726,14 @@ export const AGENT_TOOLS = {
     runSqlQuery: TOOL_DEFINITIONS.runSqlQuery,
     // Safety
     createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
+    // PHASE 2: Self-Repair
+    parseError: TOOL_DEFINITIONS.parseError,
+    suggestFix: TOOL_DEFINITIONS.suggestFix,
+    // PHASE 2: Secrets
+    getSecret: TOOL_DEFINITIONS.getSecret,
+    requireSecret: TOOL_DEFINITIONS.requireSecret,
+    // PHASE 2: Context
+    getCachedContext: TOOL_DEFINITIONS.getCachedContext,
   },
   database: {
     // Reasoning
@@ -384,6 +753,9 @@ export const AGENT_TOOLS = {
     runSqlQuery: TOOL_DEFINITIONS.runSqlQuery,
     // Safety
     createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
+    // PHASE 2: Context Caching
+    cacheContext: TOOL_DEFINITIONS.cacheContext,
+    getCachedContext: TOOL_DEFINITIONS.getCachedContext,
   },
   devops: {
     // Reasoning
@@ -405,6 +777,22 @@ export const AGENT_TOOLS = {
     createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
     rollbackToCheckpoint: TOOL_DEFINITIONS.rollbackToCheckpoint,
     listCheckpoints: TOOL_DEFINITIONS.listCheckpoints,
+    // PHASE 2: Secret Management (Secret Keeper)
+    listSecrets: TOOL_DEFINITIONS.listSecrets,
+    getSecret: TOOL_DEFINITIONS.getSecret,
+    requireSecret: TOOL_DEFINITIONS.requireSecret,
+    // PHASE 2: Package Validation
+    verifyPackage: TOOL_DEFINITIONS.verifyPackage,
+    checkPeerDependencies: TOOL_DEFINITIONS.checkPeerDependencies,
+    // PHASE 2: MCP (for infra integrations)
+    connectMcpServer: TOOL_DEFINITIONS.connectMcpServer,
+    invokeMcpTool: TOOL_DEFINITIONS.invokeMcpTool,
+    // PHASE 3: Secure Environment (Runtime Injection)
+    injectSecureEnv: TOOL_DEFINITIONS.injectSecureEnv,
+    listEnvVars: TOOL_DEFINITIONS.listEnvVars,
+    // PHASE 3: Localhost Tunnel (Instant Sharing)
+    openTunnelUrl: TOOL_DEFINITIONS.openTunnelUrl,
+    closeTunnel: TOOL_DEFINITIONS.closeTunnel,
   },
   qa: {
     // Reasoning
@@ -424,8 +812,72 @@ export const AGENT_TOOLS = {
     getBrowserLogs: TOOL_DEFINITIONS.getBrowserLogs,
     // Database (Read-only for verification)
     runSqlQuery: TOOL_DEFINITIONS.runSqlQuery,
+    // PHASE 2: Design Validation
+    consultDesignTokens: TOOL_DEFINITIONS.consultDesignTokens,
+    validateStyle: TOOL_DEFINITIONS.validateStyle,
+    // PHASE 2: Self-Repair
+    parseError: TOOL_DEFINITIONS.parseError,
+    suggestFix: TOOL_DEFINITIONS.suggestFix,
+    // PHASE 3: Visual Regression (Reality Check)
+    verifyVisualMatch: TOOL_DEFINITIONS.verifyVisualMatch,
+    // FINAL 5: Self-Healing Tester
+    runE2eCycle: TOOL_DEFINITIONS.runE2eCycle,
+    generateTest: TOOL_DEFINITIONS.generateTest,
+  },
+  planner: {
+    // Reasoning (Full control)
+    think: TOOL_DEFINITIONS.think,
+    planSteps: TOOL_DEFINITIONS.planSteps,
+    delegateToAgent: TOOL_DEFINITIONS.delegateToAgent,
+    // File reading
+    getFileTree: TOOL_DEFINITIONS.getFileTree,
+    readFile: TOOL_DEFINITIONS.readFile,
+    searchCode: TOOL_DEFINITIONS.searchCode,
+    // Safety
+    createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
+    rollbackToCheckpoint: TOOL_DEFINITIONS.rollbackToCheckpoint,
+    listCheckpoints: TOOL_DEFINITIONS.listCheckpoints,
+    // PHASE 2: MCP (for connecting external services)
+    connectMcpServer: TOOL_DEFINITIONS.connectMcpServer,
+    listMcpTools: TOOL_DEFINITIONS.listMcpTools,
+    invokeMcpTool: TOOL_DEFINITIONS.invokeMcpTool,
+    // PHASE 3: Human Handshake (Permission Gate)
+    requestUserDecision: TOOL_DEFINITIONS.requestUserDecision,
+    // FINAL 5: Ticket Master
+    syncExternalTicket: TOOL_DEFINITIONS.syncExternalTicket,
+    listTickets: TOOL_DEFINITIONS.listTickets,
+  },
+  auditor: {
+    // Reasoning
+    think: TOOL_DEFINITIONS.think,
+    // File reading (read-only for auditing)
+    readFile: TOOL_DEFINITIONS.readFile,
+    listFiles: TOOL_DEFINITIONS.listFiles,
+    searchCode: TOOL_DEFINITIONS.searchCode,
+    getFileTree: TOOL_DEFINITIONS.getFileTree,
+    // VISION (Eyes) - Verify UI matches specs
+    captureScreenshot: TOOL_DEFINITIONS.captureScreenshot,
+    analyzeVisual: TOOL_DEFINITIONS.analyzeVisual,
+    getBrowserLogs: TOOL_DEFINITIONS.getBrowserLogs,
+    // Design Validation
+    consultDesignTokens: TOOL_DEFINITIONS.consultDesignTokens,
+    validateStyle: TOOL_DEFINITIONS.validateStyle,
+    // PHASE 3: Visual Regression (Reality Check)
+    verifyVisualMatch: TOOL_DEFINITIONS.verifyVisualMatch,
+    // FINAL 5: Self-Healing Tester (for QA audits)
+    runE2eCycle: TOOL_DEFINITIONS.runE2eCycle,
   },
 } as const
+
+// Add scrapeAndIndexDocs to architect agent
+Object.assign(AGENT_TOOLS.architect, {
+  // PHASE 3: Docs Hunter (RAG on Demand)
+  scrapeAndIndexDocs: TOOL_DEFINITIONS.scrapeAndIndexDocs,
+  queryIndexedDocs: TOOL_DEFINITIONS.queryIndexedDocs,
+  // FINAL 5: Dependency Time-Machine
+  verifyDependencyGraph: TOOL_DEFINITIONS.verifyDependencyGraph,
+  resolveConflict: TOOL_DEFINITIONS.resolveConflict,
+})
 
 export type ToolName = keyof typeof TOOL_DEFINITIONS
 export type AgentId = keyof typeof AGENT_TOOLS

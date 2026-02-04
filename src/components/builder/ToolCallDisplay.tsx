@@ -63,6 +63,62 @@ const TOOL_META: Record<string, { icon: string; label: string; color: string }> 
   createCheckpoint: { icon: '💾', label: 'Checkpoint', color: '#60a5fa' },
   rollbackToCheckpoint: { icon: '⏪', label: 'Rollback', color: '#f87171' },
   listCheckpoints: { icon: '📋', label: 'Checkpoints', color: '#a3e635' },
+  
+  // PHASE 2: MCP Connectivity (Infinite Extensibility)
+  connectMcpServer: { icon: '🔌', label: 'Connect MCP', color: '#8b5cf6' },
+  listMcpTools: { icon: '📋', label: 'MCP Tools', color: '#a78bfa' },
+  invokeMcpTool: { icon: '⚡', label: 'Invoke MCP', color: '#c4b5fd' },
+  
+  // PHASE 2: Design Consistency (Vibe Guard)
+  consultDesignTokens: { icon: '🎨', label: 'Design Tokens', color: '#f472b6' },
+  validateStyle: { icon: '✨', label: 'Validate Style', color: '#fb7185' },
+  
+  // PHASE 2: Secret Management
+  listSecrets: { icon: '🔐', label: 'List Secrets', color: '#fbbf24' },
+  getSecret: { icon: '🔑', label: 'Get Secret', color: '#f59e0b' },
+  requireSecret: { icon: '🛡️', label: 'Require Secret', color: '#d97706' },
+  
+  // PHASE 2: Package Validation
+  verifyPackage: { icon: '📦', label: 'Verify Package', color: '#34d399' },
+  checkPeerDependencies: { icon: '🔗', label: 'Check Peers', color: '#6ee7b7' },
+  
+  // PHASE 2: Self-Repair Loop
+  parseError: { icon: '🔍', label: 'Parse Error', color: '#f87171' },
+  suggestFix: { icon: '💡', label: 'Suggest Fix', color: '#fbbf24' },
+  
+  // PHASE 2: Context Caching
+  cacheContext: { icon: '💾', label: 'Cache Context', color: '#38bdf8' },
+  getCachedContext: { icon: '📥', label: 'Get Cache', color: '#7dd3fc' },
+  
+  // PHASE 3: Visual Regression (Reality Check)
+  verifyVisualMatch: { icon: '👁️', label: 'Visual Check', color: '#ec4899' },
+  
+  // PHASE 3: Docs Hunter (RAG on Demand)
+  scrapeAndIndexDocs: { icon: '📚', label: 'Index Docs', color: '#8b5cf6' },
+  queryIndexedDocs: { icon: '🔎', label: 'Query Docs', color: '#a78bfa' },
+  
+  // PHASE 3: Secure Environment
+  injectSecureEnv: { icon: '🔐', label: 'Inject Secret', color: '#ef4444' },
+  listEnvVars: { icon: '📋', label: 'List Env', color: '#f87171' },
+  
+  // PHASE 3: Localhost Tunnel
+  openTunnelUrl: { icon: '🌐', label: 'Open Tunnel', color: '#22c55e' },
+  closeTunnel: { icon: '🔌', label: 'Close Tunnel', color: '#6b7280' },
+  
+  // PHASE 3: Human Handshake (Permission Gate)
+  requestUserDecision: { icon: '🤝', label: 'User Decision', color: '#f59e0b' },
+  
+  // FINAL 5: Self-Healing Tester
+  runE2eCycle: { icon: '🔄', label: 'E2E Cycle', color: '#8b5cf6' },
+  generateTest: { icon: '🧪', label: 'Generate Test', color: '#a78bfa' },
+  
+  // FINAL 5: Ticket Master
+  syncExternalTicket: { icon: '🎫', label: 'Sync Ticket', color: '#06b6d4' },
+  listTickets: { icon: '📋', label: 'List Tickets', color: '#22d3ee' },
+  
+  // FINAL 5: Dependency Time-Machine
+  verifyDependencyGraph: { icon: '🔗', label: 'Verify Deps', color: '#f97316' },
+  resolveConflict: { icon: '🔧', label: 'Resolve Conflict', color: '#fb923c' },
 }
 
 interface ToolCallDisplayProps {
