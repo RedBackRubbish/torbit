@@ -71,13 +71,49 @@ export interface FuelActions {
   getFuelPercentage: () => number
   getFuelStatus: () => 'full' | 'good' | 'low' | 'critical'
   canAfford: (amount: number) => boolean
+  
+  // NEW: Model-aware pricing
+  calculateCost: (baseCost: number, modelTier: ModelTier) => number
 }
+
+// ============================================
+// MODEL TIER COST MULTIPLIERS
+// Based on actual API pricing:
+// - Flash: $0.50/$3.00 per 1M tokens (baseline)
+// - Kimi: $0.50/$2.00 per 1M tokens (cheaper output)
+// - Sonnet: $3.00/$15.00 per 1M tokens
+// - Opus: $5.00/$25.00 per 1M tokens
+// ============================================
+
+export type ModelTier = 'flash' | 'kimi' | 'sonnet' | 'opus'
+
+export const MODEL_COST_MULTIPLIERS: Record<ModelTier, number> = {
+  flash: 1.0,    // Baseline
+  kimi: 0.9,     // Slightly cheaper (better output pricing)
+  sonnet: 5.0,   // 5x more expensive
+  opus: 8.3,     // 8.3x more expensive
+} as const
 
 // Cost multipliers by complexity
 const COMPLEXITY_COSTS = {
   low: { min: 5, max: 15 },
   medium: { min: 20, max: 60 },
   high: { min: 80, max: 200 },
+} as const
+
+// ============================================
+// CIRCUIT BREAKERS (Prevent runaway costs)
+// ============================================
+
+export const CIRCUIT_BREAKERS = {
+  /** Maximum retry attempts per task */
+  maxRetries: 3,
+  /** Maximum time for a single task (5 minutes) */
+  maxTimeMs: 300000,
+  /** Emergency fuel cutoff per task */
+  maxFuelPerTask: 500,
+  /** Maximum pending transactions before forcing settlement */
+  maxPendingTransactions: 10,
 } as const
 
 // Tier configurations
@@ -316,6 +352,17 @@ export const useFuelStore = create<FuelState & FuelActions>()(
       canAfford: (amount) => {
         return get().currentFuel >= amount
       },
+      
+      /**
+       * Calculate actual cost with model tier multiplier
+       * @param baseCost - The base fuel cost for the operation
+       * @param modelTier - The model tier being used
+       * @returns Adjusted fuel cost
+       */
+      calculateCost: (baseCost: number, modelTier: ModelTier) => {
+        const multiplier = MODEL_COST_MULTIPLIERS[modelTier] ?? 1
+        return Math.round(baseCost * multiplier)
+      },
     })),
     {
       name: 'torbit-fuel',
@@ -329,7 +376,38 @@ export const useFuelStore = create<FuelState & FuelActions>()(
   )
 )
 
-// Convenience hooks
+// ============================================
+// CONVENIENCE HOOKS
+// ============================================
+
 export const useFuelStatus = () => useFuelStore((s) => s.getFuelStatus())
 export const useFuelPercentage = () => useFuelStore((s) => s.getFuelPercentage())
+
+/**
+ * Calculate fuel cost with model tier adjustment
+ */
+export function calculateFuelCost(baseCost: number, modelTier: ModelTier): number {
+  const multiplier = MODEL_COST_MULTIPLIERS[modelTier] ?? 1
+  return Math.round(baseCost * multiplier)
+}
+
+/**
+ * Check if we've hit circuit breaker limits
+ */
+export function checkCircuitBreaker(
+  fuelSpent: number,
+  retries: number,
+  startTime: number
+): { triggered: boolean; reason?: string } {
+  if (fuelSpent > CIRCUIT_BREAKERS.maxFuelPerTask) {
+    return { triggered: true, reason: 'fuel_limit_exceeded' }
+  }
+  if (retries > CIRCUIT_BREAKERS.maxRetries) {
+    return { triggered: true, reason: 'max_retries_exceeded' }
+  }
+  if (Date.now() - startTime > CIRCUIT_BREAKERS.maxTimeMs) {
+    return { triggered: true, reason: 'timeout_exceeded' }
+  }
+  return { triggered: false }
+}
 export const useCanAfford = (amount: number) => useFuelStore((s) => s.canAfford(amount))

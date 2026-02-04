@@ -59,6 +59,44 @@ export interface RoutingDecision {
   confidence: number
   /** Suggested sub-tasks if task should be decomposed */
   subtasks?: string[]
+  /** Whether this was escalated due to low confidence */
+  escalated?: boolean
+  /** Effort level for Opus tasks (low/medium/high) */
+  effort?: 'low' | 'medium' | 'high'
+  /** Whether this is a critical security path */
+  isCriticalPath?: boolean
+}
+
+// ============================================
+// CONFIDENCE & ESCALATION THRESHOLDS
+// ============================================
+
+export const CONFIDENCE_THRESHOLDS = {
+  /** Below this, escalate to Planner for clarification */
+  ESCALATION: 0.7,
+  /** Above this, high confidence - proceed normally */
+  HIGH: 0.85,
+  /** Above this, perfect confidence - use faster model */
+  PERFECT: 0.95,
+} as const
+
+// ============================================
+// CRITICAL PATH DETECTION
+// ============================================
+
+export const CRITICAL_PATH_PATTERNS = [
+  /\b(auth|authentication|login|signup|password|session|jwt|oauth)\b/i,
+  /\b(payment|stripe|checkout|billing|subscription|credit.?card)\b/i,
+  /\b(security|encrypt\w*|decrypt\w*|hash\w*|secret|api.?key|token)\b/i,
+  /\b(admin|permission|role|rbac|acl|access.?control)\b/i,
+  /\b(pii|gdpr|hipaa|compliance|audit.?log|vulnerabilit\w*)\b/i,
+]
+
+/**
+ * Check if a task is on a critical security path
+ */
+export function isCriticalPath(prompt: string): boolean {
+  return CRITICAL_PATH_PATTERNS.some(pattern => pattern.test(prompt))
 }
 
 export interface RouterConfig {
@@ -327,13 +365,47 @@ Context:
     const validTiers = ['opus', 'sonnet', 'flash'] as const
     const validComplexity: TaskComplexity[] = ['trivial', 'simple', 'moderate', 'complex', 'architectural']
 
+    const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.7
+    const criticalPath = isCriticalPath(prompt)
+    
+    // Escalate to Planner if confidence is too low
+    if (confidence < CONFIDENCE_THRESHOLDS.ESCALATION) {
+      return {
+        targetAgent: 'planner',
+        modelTier: 'opus',
+        complexity: 'complex',
+        category: parsed.category ?? 'code-generation',
+        requiresVision: parsed.requiresVision ?? false,
+        useThinking: true,
+        reasoning: `Low confidence (${(confidence * 100).toFixed(0)}%) - escalating to Planner for clarification`,
+        confidence,
+        escalated: true,
+        effort: 'medium',
+      }
+    }
+
+    // Determine effort level based on complexity
+    let effort: 'low' | 'medium' | 'high' = 'medium'
+    if (parsed.complexity === 'architectural') {
+      effort = 'high'
+    } else if (parsed.complexity === 'trivial' || parsed.complexity === 'simple') {
+      effort = 'low'
+    }
+
+    // Force Sonnet for critical paths (backend security)
+    let modelTier = validTiers.includes(parsed.modelTier as typeof validTiers[number])
+      ? (parsed.modelTier as 'opus' | 'sonnet' | 'flash')
+      : this.config.fallbackTier
+    
+    if (criticalPath && modelTier === 'flash') {
+      modelTier = 'sonnet' // Upgrade Flash to Sonnet for critical paths
+    }
+
     return {
       targetAgent: validAgents.includes(parsed.targetAgent as AgentId)
         ? (parsed.targetAgent as AgentId)
         : 'architect',
-      modelTier: validTiers.includes(parsed.modelTier as typeof validTiers[number])
-        ? (parsed.modelTier as 'opus' | 'sonnet' | 'flash')
-        : this.config.fallbackTier,
+      modelTier,
       complexity: validComplexity.includes(parsed.complexity as TaskComplexity)
         ? (parsed.complexity as TaskComplexity)
         : 'moderate',
@@ -341,8 +413,10 @@ Context:
       requiresVision: parsed.requiresVision ?? false,
       useThinking: parsed.useThinking ?? false,
       reasoning: parsed.reasoning ?? 'Decision made by Kimi router',
-      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.7,
+      confidence,
       subtasks: Array.isArray(parsed.subtasks) ? parsed.subtasks : undefined,
+      effort,
+      isCriticalPath: criticalPath,
     }
   }
 

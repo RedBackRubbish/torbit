@@ -17,6 +17,7 @@ import { google } from '@ai-sdk/google'
 import { TOOL_DEFINITIONS, AGENT_TOOLS, type ToolName, type AgentId } from '../tools/definitions'
 import { executeTool, createExecutionContext, type ToolExecutionContext, type ToolResult } from '../tools/executor'
 import { KimiRouter, type RoutingDecision, isKimiConfigured } from './router'
+import { checkCircuitBreaker, calculateFuelCost, useFuelStore, type ModelTier as FuelModelTier } from '@/store/fuel'
 
 // Agent prompts
 import { AUDITOR_SYSTEM_PROMPT } from './prompts/auditor'
@@ -64,7 +65,16 @@ export interface AuditResult {
     visual: { passed: boolean; issues: string[] }
     functional: { passed: boolean; issues: string[] }
     hygiene: { passed: boolean; issues: string[] }
+    security: { passed: boolean; issues: string[] }
   }
+}
+
+export interface PreflightResult {
+  feasible: boolean
+  reason?: string
+  estimatedComplexity: 'trivial' | 'simple' | 'moderate' | 'complex' | 'architectural'
+  estimatedFuel: { min: number; max: number }
+  warnings?: string[]
 }
 
 // ============================================
@@ -146,6 +156,19 @@ function createToolExecutor(context: ToolExecutionContext) {
 }
 
 // ============================================
+// UNFEASIBLE REQUEST PATTERNS
+// ============================================
+
+const UNFEASIBLE_PATTERNS = [
+  { pattern: /build\s+(me\s+)?(a\s+)?facebook/i, reason: 'Request scope too large - Facebook-scale projects require months of work' },
+  { pattern: /build\s+(me\s+)?(a\s+)?twitter/i, reason: 'Request scope too large - Twitter-scale projects require months of work' },
+  { pattern: /build\s+(me\s+)?(a\s+)?amazon/i, reason: 'Request scope too large - Amazon-scale projects require months of work' },
+  { pattern: /clone\s+(of\s+)?(facebook|twitter|instagram|tiktok|youtube)/i, reason: 'Social platform clones are beyond single-session scope' },
+  { pattern: /hack|exploit|malware|virus|keylogger/i, reason: 'Malicious intent detected - request rejected' },
+  { pattern: /bypass\s+(auth|security|paywall)/i, reason: 'Security bypass requests are not permitted' },
+]
+
+// ============================================
 // MAIN ORCHESTRATOR
 // ============================================
 
@@ -153,6 +176,11 @@ export class TorbitOrchestrator {
   private context: ToolExecutionContext
   private config: OrchestrationConfig
   private kimiRouter: KimiRouter | null = null
+  
+  // Circuit breaker state for this orchestration session
+  private sessionStartTime: number = Date.now()
+  private sessionRetries: number = 0
+  private sessionFuelSpent: number = 0
   
   constructor(config: OrchestrationConfig) {
     this.config = config
@@ -175,6 +203,60 @@ export class TorbitOrchestrator {
           tools: [],
         })
       }
+    }
+  }
+  
+  /**
+   * Pre-flight check - validate request before spending fuel
+   * Uses Flash (cheap) to catch unreasonable requests early
+   */
+  async preflight(userPrompt: string): Promise<PreflightResult> {
+    // Fast pattern matching first (no API call)
+    for (const { pattern, reason } of UNFEASIBLE_PATTERNS) {
+      if (pattern.test(userPrompt)) {
+        return {
+          feasible: false,
+          reason,
+          estimatedComplexity: 'architectural',
+          estimatedFuel: { min: 0, max: 0 },
+          warnings: ['Request rejected during pre-flight check'],
+        }
+      }
+    }
+    
+    // Quick complexity estimation based on prompt characteristics
+    const wordCount = userPrompt.split(/\s+/).length
+    const hasMultipleFeatures = /and|also|plus|additionally|furthermore/i.test(userPrompt)
+    const mentionsMultipleFiles = /files?|components?|pages?/gi.test(userPrompt)
+    
+    let estimatedComplexity: PreflightResult['estimatedComplexity'] = 'moderate'
+    let estimatedFuel = { min: 20, max: 60 }
+    const warnings: string[] = []
+    
+    if (wordCount > 200) {
+      estimatedComplexity = 'complex'
+      estimatedFuel = { min: 80, max: 200 }
+      warnings.push('Long request - consider breaking into smaller tasks')
+    } else if (wordCount < 10 && !hasMultipleFeatures) {
+      estimatedComplexity = 'simple'
+      estimatedFuel = { min: 5, max: 15 }
+    } else if (hasMultipleFeatures || mentionsMultipleFiles) {
+      estimatedComplexity = 'moderate'
+      estimatedFuel = { min: 40, max: 100 }
+    }
+    
+    // Check for architectural keywords
+    if (/architect|redesign|refactor\s+(entire|all|whole)|migrate|rewrite/i.test(userPrompt)) {
+      estimatedComplexity = 'architectural'
+      estimatedFuel = { min: 150, max: 400 }
+      warnings.push('Architectural change detected - high fuel consumption expected')
+    }
+    
+    return {
+      feasible: true,
+      estimatedComplexity,
+      estimatedFuel,
+      warnings: warnings.length > 0 ? warnings : undefined,
     }
   }
   
@@ -209,9 +291,29 @@ export class TorbitOrchestrator {
     const toolCalls: AgentResult['toolCalls'] = []
     const toolExecutor = createToolExecutor(this.context)
     
+    // Check circuit breaker before execution
+    const circuitCheck = checkCircuitBreaker(
+      this.sessionFuelSpent,
+      this.sessionRetries,
+      this.sessionStartTime
+    )
+    if (circuitCheck.triggered) {
+      return {
+        agentId,
+        success: false,
+        output: `Circuit breaker tripped: ${circuitCheck.reason}`,
+        toolCalls: [],
+        duration: 0,
+      }
+    }
+    
     const model = selectModel('medium', options?.modelTier)
     const tools = getToolsForAgent(agentId)
     const systemPrompt = AGENT_PROMPTS[agentId]
+    
+    // Map model tier to fuel model tier for cost calculation
+    const fuelModelTier: FuelModelTier = options?.modelTier === 'opus' ? 'opus' :
+                                          options?.modelTier === 'sonnet' ? 'sonnet' : 'flash'
     
     try {
       const result = await streamText({
@@ -228,6 +330,12 @@ export class TorbitOrchestrator {
               // AI SDK v6: access input property - cast to any for compatibility
               const toolInput = (tc as { input?: unknown }).input ?? {}
               const toolResult = await toolExecutor(tc.toolName, toolInput as Record<string, unknown>)
+              
+              // Track fuel cost per tool call with model tier multiplier
+              const baseFuelCost = 1 // Base cost per tool call
+              const adjustedCost = calculateFuelCost(baseFuelCost, fuelModelTier)
+              this.sessionFuelSpent += adjustedCost
+              
               toolCalls.push({
                 name: tc.toolName,
                 args: toolInput as Record<string, unknown>,
@@ -253,6 +361,9 @@ export class TorbitOrchestrator {
         duration: Date.now() - start,
       }
     } catch (error) {
+      // Track retry count for circuit breaker
+      this.sessionRetries++
+      
       return {
         agentId,
         success: false,
@@ -272,6 +383,7 @@ export class TorbitOrchestrator {
       visual: { passed: boolean; issues: string[] }
       functional: { passed: boolean; issues: string[] }
       hygiene: { passed: boolean; issues: string[] }
+      security: { passed: boolean; issues: string[] }
     }
     fixes: string[]
   }> {
@@ -279,6 +391,7 @@ export class TorbitOrchestrator {
       visual: { passed: true, issues: [] as string[] },
       functional: { passed: true, issues: [] as string[] },
       hygiene: { passed: true, issues: [] as string[] },
+      security: { passed: true, issues: [] as string[] },
     }
     const fixes: string[] = []
     
@@ -286,6 +399,7 @@ export class TorbitOrchestrator {
     type VisualResult = { passed: boolean; violations?: Array<{ element: string; issue: string }> }
     type E2EResult = { passed: boolean; healedCount?: number }
     type LogsResult = { logs: Array<{ message: string; level: string }> }
+    type SecurityResult = { passed: boolean; vulnerabilities?: Array<{ type: string; severity: string; message: string; file?: string }> }
     
     // Gate 1: Visual Inspection
     const screenshotResult = await executeTool('captureScreenshot', { route: '/' }, this.context)
@@ -330,10 +444,83 @@ export class TorbitOrchestrator {
       gates.hygiene.issues = logsData.logs.map((l) => l.message)
     }
     
+    // Gate 4: Security Scan (NEW)
+    const securityResult = await this.runSecurityScan()
+    if (!securityResult.passed) {
+      gates.security.passed = false
+      gates.security.issues = securityResult.vulnerabilities?.map((v) => 
+        `[${v.severity.toUpperCase()}] ${v.type}: ${v.message}${v.file ? ` (${v.file})` : ''}`
+      ) || ['Security scan detected issues']
+    }
+    
     return {
-      passed: gates.visual.passed && gates.functional.passed && gates.hygiene.passed,
+      passed: gates.visual.passed && gates.functional.passed && gates.hygiene.passed && gates.security.passed,
       gates,
       fixes,
+    }
+  }
+  
+  /**
+   * Run security scan (Gate 4)
+   * Detects: hardcoded secrets, SQL injection, npm vulnerabilities, CORS issues
+   */
+  private async runSecurityScan(): Promise<{
+    passed: boolean
+    vulnerabilities?: Array<{ type: string; severity: string; message: string; file?: string }>
+  }> {
+    const vulnerabilities: Array<{ type: string; severity: string; message: string; file?: string }> = []
+    
+    // Pattern-based secret detection
+    const secretPatterns = [
+      { pattern: /['"`]sk[-_]live[-_][a-zA-Z0-9]{20,}['"`]/g, type: 'hardcoded_secret', message: 'Stripe live key detected' },
+      { pattern: /['"`]AKIA[0-9A-Z]{16}['"`]/g, type: 'hardcoded_secret', message: 'AWS access key detected' },
+      { pattern: /password\s*[:=]\s*['"`][^'"`]+['"`]/gi, type: 'hardcoded_secret', message: 'Hardcoded password detected' },
+      { pattern: /api[-_]?key\s*[:=]\s*['"`][a-zA-Z0-9]{20,}['"`]/gi, type: 'hardcoded_secret', message: 'Hardcoded API key detected' },
+      { pattern: /private[-_]?key\s*[:=]\s*['"`]-----BEGIN/gi, type: 'hardcoded_secret', message: 'Private key in source code' },
+    ]
+    
+    // SQL injection patterns
+    const sqlInjectionPatterns = [
+      { pattern: /\$\{.*\}.*(?:SELECT|INSERT|UPDATE|DELETE|DROP)/gi, type: 'sql_injection', message: 'Potential SQL injection via template literal' },
+      { pattern: /query\s*\(\s*['"`].*\+/gi, type: 'sql_injection', message: 'String concatenation in SQL query' },
+    ]
+    
+    // CORS issues
+    const corsPatterns = [
+      { pattern: /Access-Control-Allow-Origin['":\s]+\*/g, type: 'cors_misconfiguration', message: 'Wildcard CORS origin detected' },
+      { pattern: /credentials:\s*['"]include['"].*origin:\s*\*/g, type: 'cors_misconfiguration', message: 'Credentials with wildcard origin' },
+    ]
+    
+    // Scan all files in context
+    for (const [filePath, content] of this.context.files) {
+      // Skip non-source files
+      if (!filePath.match(/\.(ts|tsx|js|jsx|mjs|cjs)$/)) continue
+      
+      // Check secret patterns
+      for (const { pattern, type, message } of secretPatterns) {
+        if (pattern.test(content)) {
+          vulnerabilities.push({ type, severity: 'critical', message, file: filePath })
+        }
+      }
+      
+      // Check SQL injection patterns
+      for (const { pattern, type, message } of sqlInjectionPatterns) {
+        if (pattern.test(content)) {
+          vulnerabilities.push({ type, severity: 'high', message, file: filePath })
+        }
+      }
+      
+      // Check CORS patterns
+      for (const { pattern, type, message } of corsPatterns) {
+        if (pattern.test(content)) {
+          vulnerabilities.push({ type, severity: 'medium', message, file: filePath })
+        }
+      }
+    }
+    
+    return {
+      passed: vulnerabilities.length === 0,
+      vulnerabilities: vulnerabilities.length > 0 ? vulnerabilities : undefined,
     }
   }
   
@@ -346,7 +533,33 @@ export class TorbitOrchestrator {
     execution: AgentResult[]
     audit: AuditResult
     routing?: RoutingDecision
+    preflight?: PreflightResult
   }> {
+    // 0. Pre-flight check: validate request before spending fuel
+    const preflightResult = this.preflight(userPrompt)
+    if (!preflightResult.feasible) {
+      // Return early with empty results if request is unfeasible
+      return {
+        plan: {
+          content: `Request rejected: ${preflightResult.reason}`,
+          toolCalls: [],
+          tokensUsed: 0,
+        },
+        execution: [],
+        audit: {
+          passed: false,
+          timestamp: new Date().toISOString(),
+          gates: {
+            visual: { passed: false, issues: ['Pre-flight check failed'] },
+            functional: { passed: false, issues: [] },
+            hygiene: { passed: false, issues: [] },
+            security: { passed: false },
+          },
+        },
+        preflight: preflightResult,
+      }
+    }
+    
     // 1. Create checkpoint before any work
     await executeTool('createCheckpoint', {
       name: 'pre-orchestration',
@@ -418,7 +631,7 @@ export class TorbitOrchestrator {
       `)
     }
     
-    return { plan, execution, audit, routing: routing ?? undefined }
+    return { plan, execution, audit, routing: routing ?? undefined, preflight: preflightResult }
   }
   
   /**

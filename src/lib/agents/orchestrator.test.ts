@@ -4,7 +4,8 @@ import {
   type OrchestrationConfig,
   type AgentResult,
   type AuditResult,
-  type ModelTier
+  type ModelTier,
+  type PreflightResult
 } from './orchestrator'
 
 describe('Orchestrator', () => {
@@ -195,5 +196,116 @@ describe('Orchestrator exports', () => {
     const exports = await import('./index')
     
     expect(exports.TorbitOrchestrator).toBeDefined()
+  })
+})
+
+describe('Pre-flight Check', () => {
+  let orchestrator: TorbitOrchestrator
+
+  it('should reject unfeasible requests - Facebook clone', async () => {
+    orchestrator = new TorbitOrchestrator({
+      projectId: 'test',
+      userId: 'user1',
+    })
+
+    const result = await orchestrator.preflight('build me a Facebook clone')
+    
+    expect(result.feasible).toBe(false)
+    expect(result.reason).toContain('scope')
+    expect(result.warnings?.length).toBeGreaterThan(0)
+  })
+
+  it('should reject unfeasible requests - malicious intent', async () => {
+    orchestrator = new TorbitOrchestrator({
+      projectId: 'test',
+      userId: 'user1',
+    })
+
+    const result = await orchestrator.preflight('write me a keylogger')
+    
+    expect(result.feasible).toBe(false)
+    expect(result.reason?.toLowerCase()).toContain('malicious')
+  })
+
+  it('should accept reasonable requests', async () => {
+    orchestrator = new TorbitOrchestrator({
+      projectId: 'test',
+      userId: 'user1',
+    })
+
+    const result = await orchestrator.preflight('create a landing page with a hero section')
+    
+    expect(result.feasible).toBe(true)
+    expect(result.estimatedComplexity).toBeDefined()
+    expect(result.estimatedFuel).toBeDefined()
+    expect(result.estimatedFuel.min).toBeGreaterThan(0)
+  })
+
+  it('should estimate complexity based on prompt length', async () => {
+    orchestrator = new TorbitOrchestrator({
+      projectId: 'test',
+      userId: 'user1',
+    })
+
+    const shortResult = await orchestrator.preflight('add a button')
+    const longResult = await orchestrator.preflight(
+      'Build a complete e-commerce platform with user authentication, ' +
+      'product catalog, shopping cart, checkout flow, payment integration, ' +
+      'order management, admin dashboard, inventory tracking, and analytics'
+    )
+    
+    expect(shortResult.estimatedFuel.max).toBeLessThan(longResult.estimatedFuel.max)
+  })
+})
+
+describe('AuditResult with Security Gate', () => {
+  it('should include security gate in audit result', () => {
+    const audit: AuditResult = {
+      passed: true,
+      gates: {
+        visual: { passed: true, issues: [] },
+        functional: { passed: true, issues: [] },
+        hygiene: { passed: true, issues: [] },
+        security: { passed: true },
+      },
+    }
+
+    expect(audit.gates.security).toBeDefined()
+    expect(audit.gates.security?.passed).toBe(true)
+  })
+
+  it('should fail audit if security gate fails', () => {
+    const audit: AuditResult = {
+      passed: false,
+      gates: {
+        visual: { passed: true, issues: [] },
+        functional: { passed: true, issues: [] },
+        hygiene: { passed: true, issues: [] },
+        security: { 
+          passed: false,
+          vulnerabilities: [
+            { type: 'hardcoded_secret', severity: 'critical', message: 'Stripe key exposed', file: 'src/payments.ts' }
+          ]
+        },
+      },
+    }
+
+    expect(audit.gates.security?.passed).toBe(false)
+    expect(audit.gates.security?.vulnerabilities).toHaveLength(1)
+    expect(audit.gates.security?.vulnerabilities?.[0].severity).toBe('critical')
+  })
+})
+
+describe('PreflightResult type', () => {
+  it('should export PreflightResult type', () => {
+    const result: PreflightResult = {
+      feasible: true,
+      estimatedComplexity: 'simple',
+      estimatedFuel: { min: 10, max: 30 },
+      warnings: [],
+    }
+
+    expect(result.feasible).toBe(true)
+    expect(['trivial', 'simple', 'medium', 'complex', 'architectural']).toContain(result.estimatedComplexity)
   })
 })

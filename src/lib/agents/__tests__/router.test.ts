@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { KimiRouter, type RoutingDecision } from '../router'
+import { KimiRouter, CONFIDENCE_THRESHOLDS, CRITICAL_PATH_PATTERNS, isCriticalPath, type RoutingDecision } from '../router'
 
 // Mock the Kimi provider
 vi.mock('../../providers/kimi', () => ({
@@ -180,5 +180,48 @@ describe('RoutingDecision Validation', () => {
     expect(typeof result.confidence).toBe('number')
     expect(result.confidence).toBeGreaterThanOrEqual(0)
     expect(result.confidence).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('Confidence Thresholds', () => {
+  it('should have correct threshold values', () => {
+    expect(CONFIDENCE_THRESHOLDS.ESCALATION).toBe(0.7)
+    expect(CONFIDENCE_THRESHOLDS.HIGH).toBe(0.85)
+    expect(CONFIDENCE_THRESHOLDS.PERFECT).toBe(0.95)
+  })
+
+  it('should have thresholds in ascending order', () => {
+    expect(CONFIDENCE_THRESHOLDS.ESCALATION).toBeLessThan(CONFIDENCE_THRESHOLDS.HIGH)
+    expect(CONFIDENCE_THRESHOLDS.HIGH).toBeLessThan(CONFIDENCE_THRESHOLDS.PERFECT)
+  })
+})
+
+describe('Critical Path Detection', () => {
+  it('should have patterns for auth, payment, and security', () => {
+    expect(CRITICAL_PATH_PATTERNS.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('should detect authentication as critical path', () => {
+    expect(isCriticalPath('implement user authentication')).toBe(true)
+    expect(isCriticalPath('add OAuth login')).toBe(true)
+    expect(isCriticalPath('create auth middleware')).toBe(true)
+  })
+
+  it('should detect payment as critical path', () => {
+    expect(isCriticalPath('integrate Stripe payments')).toBe(true)
+    expect(isCriticalPath('add credit card checkout')).toBe(true)
+    expect(isCriticalPath('implement billing system')).toBe(true)
+  })
+
+  it('should detect security as critical path', () => {
+    expect(isCriticalPath('add encryption to user data')).toBe(true)
+    expect(isCriticalPath('implement RBAC permissions')).toBe(true)
+    expect(isCriticalPath('fix security vulnerability')).toBe(true)
+  })
+
+  it('should NOT flag non-critical paths', () => {
+    expect(isCriticalPath('create a landing page')).toBe(false)
+    expect(isCriticalPath('add a button component')).toBe(false)
+    expect(isCriticalPath('refactor utility functions')).toBe(false)
   })
 })

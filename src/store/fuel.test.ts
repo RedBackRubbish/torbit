@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useFuelStore } from './fuel'
+import { useFuelStore, calculateFuelCost, checkCircuitBreaker, MODEL_COST_MULTIPLIERS, CIRCUIT_BREAKERS } from './fuel'
 
 describe('FuelStore', () => {
   beforeEach(() => {
@@ -263,6 +263,87 @@ describe('FuelStore', () => {
       const state = useFuelStore.getState()
       expect(state.showAuthorizeBurn).toBe(false)
       expect(state.pendingTaskDescription).toBeNull()
+    })
+  })
+
+  describe('Model Cost Multipliers', () => {
+    it('should have correct multipliers for each model tier', () => {
+      expect(MODEL_COST_MULTIPLIERS.flash).toBe(1)
+      expect(MODEL_COST_MULTIPLIERS.kimi).toBe(0.9)
+      expect(MODEL_COST_MULTIPLIERS.sonnet).toBe(5)
+      expect(MODEL_COST_MULTIPLIERS.opus).toBe(8.3)
+    })
+
+    it('should calculate fuel cost with flash multiplier (1x)', () => {
+      const cost = calculateFuelCost(10, 'flash')
+      expect(cost).toBe(10)
+    })
+
+    it('should calculate fuel cost with kimi multiplier (0.9x)', () => {
+      const cost = calculateFuelCost(10, 'kimi')
+      expect(cost).toBe(9)
+    })
+
+    it('should calculate fuel cost with sonnet multiplier (5x)', () => {
+      const cost = calculateFuelCost(10, 'sonnet')
+      expect(cost).toBe(50)
+    })
+
+    it('should calculate fuel cost with opus multiplier (8.3x)', () => {
+      const cost = calculateFuelCost(10, 'opus')
+      expect(cost).toBe(83)
+    })
+
+    it('should default to flash multiplier for unknown model tier', () => {
+      const cost = calculateFuelCost(10, 'unknown' as any)
+      expect(cost).toBe(10)
+    })
+  })
+
+  describe('Circuit Breakers', () => {
+    it('should have correct circuit breaker constants', () => {
+      expect(CIRCUIT_BREAKERS.maxRetries).toBe(3)
+      expect(CIRCUIT_BREAKERS.maxTimeMs).toBe(300000) // 5 minutes
+      expect(CIRCUIT_BREAKERS.maxFuelPerTask).toBe(500)
+    })
+
+    it('should not trigger when within limits', () => {
+      const now = Date.now()
+      const result = checkCircuitBreaker(100, 1, now - 60000) // 100 fuel, 1 retry, 1 min ago
+      
+      expect(result.triggered).toBe(false)
+      expect(result.reason).toBeUndefined()
+    })
+
+    it('should trigger when max fuel exceeded', () => {
+      const now = Date.now()
+      const result = checkCircuitBreaker(501, 0, now)
+      
+      expect(result.triggered).toBe(true)
+      expect(result.reason).toContain('fuel')
+    })
+
+    it('should trigger when max retries exceeded', () => {
+      const now = Date.now()
+      const result = checkCircuitBreaker(100, 4, now)
+      
+      expect(result.triggered).toBe(true)
+      expect(result.reason).toContain('retries')
+    })
+
+    it('should trigger when max time exceeded', () => {
+      const sixMinutesAgo = Date.now() - 360000 // 6 minutes
+      const result = checkCircuitBreaker(100, 0, sixMinutesAgo)
+      
+      expect(result.triggered).toBe(true)
+      expect(result.reason).toContain('timeout')
+    })
+
+    it('should not trigger at exact limits', () => {
+      const now = Date.now()
+      const result = checkCircuitBreaker(500, 3, now - 300000) // Exactly at limits
+      
+      expect(result.triggered).toBe(false)
     })
   })
 })
