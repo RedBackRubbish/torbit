@@ -1,35 +1,37 @@
 @import "tailwindcss";
 
 /* ========================================
-   TORBIT - Premium Design System
-   Clean, modern, v0-inspired
+   TORBIT - Pure Black + Silver Design
+   Premium, minimal, elite
    ======================================== */
 
 @theme inline {
-  /* Core Neutrals - Rich blacks and grays */
+  /* Pure Black Foundation */
   --color-bg-primary: #000000;
-  --color-bg-secondary: #0a0a0a;
-  --color-bg-tertiary: #141414;
-  --color-bg-elevated: #1a1a1a;
-  --color-bg-hover: #1f1f1f;
+  --color-bg-secondary: #050505;
+  --color-bg-tertiary: #0a0a0a;
+  --color-bg-elevated: #0f0f0f;
+  --color-bg-hover: #121212;
   
-  /* Border system */
-  --color-border-subtle: #1f1f1f;
-  --color-border-default: #262626;
-  --color-border-strong: #333333;
-  --color-border-focus: #404040;
+  /* Silver Border System */
+  --color-border-subtle: #151515;
+  --color-border-default: #1a1a1a;
+  --color-border-strong: #222222;
+  --color-border-focus: #333333;
+  --color-border-silver: #404040;
 
-  /* Text hierarchy */
-  --color-text-primary: #fafafa;
-  --color-text-secondary: #a1a1a1;
-  --color-text-tertiary: #737373;
-  --color-text-muted: #525252;
+  /* Silver Text Hierarchy */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #c0c0c0;
+  --color-text-tertiary: #909090;
+  --color-text-muted: #606060;
+  --color-text-silver: #a8a8a8;
 
-  /* Accent - Subtle blue */
-  --color-accent: #3b82f6;
-  --color-accent-hover: #2563eb;
-  --color-accent-muted: rgba(59, 130, 246, 0.15);
-  --color-accent-subtle: rgba(59, 130, 246, 0.08);
+  /* Silver Accent */
+  --color-accent: #c0c0c0;
+  --color-accent-hover: #d4d4d4;
+  --color-accent-muted: rgba(192, 192, 192, 0.15);
+  --color-accent-subtle: rgba(192, 192, 192, 0.08);
 
   /* Status colors */
   --color-success: #22c55e;

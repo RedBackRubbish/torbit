@@ -129,8 +129,8 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
         onClick={handleClick}
         className={`w-full flex items-center gap-1.5 px-2 py-[5px] text-left transition-all rounded group ${
           isSelected
-            ? 'bg-[#1a1a1a] text-[#e5e5e5]'
-            : 'text-[#737373] hover:bg-[#111] hover:text-[#b3b3b3]'
+            ? 'bg-[#0f0f0f] text-[#c0c0c0]'
+            : 'text-[#808080] hover:bg-[#080808] hover:text-[#a8a8a8]'
         }`}
         style={{ paddingLeft: `${depth * 10 + 6}px` }}
         whileTap={{ scale: 0.98 }}
@@ -139,7 +139,7 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
         <span className="shrink-0 w-3.5 flex items-center justify-center">
           {node.type === 'folder' ? (
             <motion.svg 
-              className="w-2.5 h-2.5 text-[#404040]"
+              className="w-2.5 h-2.5 text-[#505050]"
               animate={{ rotate: expanded ? 90 : 0 }}
               transition={{ duration: 0.15 }}
               fill="none" 
@@ -202,12 +202,12 @@ export default function FileExplorer() {
     return (
       <div className="h-full flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="w-9 h-9 mx-auto mb-3 rounded-lg bg-[#0f0f0f] border border-[#1a1a1a] flex items-center justify-center">
-            <svg className="w-4 h-4 text-[#333]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <div className="w-9 h-9 mx-auto mb-3 rounded-lg bg-[#050505] border border-[#151515] flex items-center justify-center">
+            <svg className="w-4 h-4 text-[#404040]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
             </svg>
           </div>
-          <p className="text-[11px] text-[#525252]">No files yet</p>
+          <p className="text-[11px] text-[#606060]">No files yet</p>
         </div>
       </div>
     )

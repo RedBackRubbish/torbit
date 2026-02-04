@@ -20,12 +20,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   
   return (
     <motion.aside
-      className="h-full bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col"
+      className="h-full bg-[#000000] border-r border-[#151515] flex flex-col"
       animate={{ width: collapsed ? 44 : 200 }}
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
     >
       {/* Header */}
-      <div className="h-11 border-b border-[#1a1a1a] flex items-center px-2 shrink-0">
+      <div className="h-11 border-b border-[#151515] flex items-center px-2 shrink-0">
         <AnimatePresence mode="wait">
           {!collapsed && (
             <motion.div
@@ -58,7 +58,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         
         <button
           onClick={onToggle}
-          className="w-6 h-6 flex items-center justify-center text-[#404040] hover:text-[#737373] hover:bg-[#141414] rounded transition-colors ml-auto"
+          className="w-6 h-6 flex items-center justify-center text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded transition-colors ml-auto"
         >
           <svg 
             className={`w-3.5 h-3.5 transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`}
@@ -94,7 +94,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <div className="flex flex-col items-center gap-1 pt-2">
             <button
               onClick={() => { onToggle(); setActiveTab('files'); }}
-              className="w-9 h-9 flex items-center justify-center text-[#525252] hover:text-[#fafafa] hover:bg-[#141414] rounded-lg transition-all"
+              className="w-9 h-9 flex items-center justify-center text-[#505050] hover:text-[#c0c0c0] hover:bg-[#0a0a0a] rounded-lg transition-all"
               title="Files"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -103,7 +103,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </button>
             <button
               onClick={() => { onToggle(); setActiveTab('activity'); }}
-              className="w-9 h-9 flex items-center justify-center text-[#525252] hover:text-[#fafafa] hover:bg-[#141414] rounded-lg transition-all"
+              className="w-9 h-9 flex items-center justify-center text-[#505050] hover:text-[#c0c0c0] hover:bg-[#0a0a0a] rounded-lg transition-all"
               title="Activity"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -132,8 +132,8 @@ function TabButton({
       onClick={onClick}
       className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium rounded transition-all ${
         active
-          ? 'bg-[#141414] text-[#e5e5e5]'
-          : 'text-[#404040] hover:text-[#737373]'
+          ? 'bg-[#0f0f0f] text-[#c0c0c0]'
+          : 'text-[#505050] hover:text-[#909090]'
       }`}
     >
       {children}

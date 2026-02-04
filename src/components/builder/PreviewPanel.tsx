@@ -60,21 +60,21 @@ export default function PreviewPanel() {
   }, [terminalLines.length, isBooting])
 
   return (
-    <div className="flex-1 flex flex-col bg-[#080808] overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[#000000] overflow-hidden">
       {previewTab === 'preview' ? (
         <>
-          {/* Controls Bar - Emergent style: minimal */}
-          <div className="h-10 border-b border-[#1a1a1a] flex items-center justify-between px-3 bg-[#0a0a0a]">
+          {/* Controls Bar - Pure black + silver */}
+          <div className="h-10 border-b border-[#151515] flex items-center justify-between px-3 bg-[#000000]">
             {/* Device Switcher */}
-            <div className="flex items-center gap-0.5 p-0.5 bg-[#0f0f0f] rounded-md border border-[#1a1a1a]">
+            <div className="flex items-center gap-0.5 p-0.5 bg-[#050505] rounded-md border border-[#151515]">
               {(['desktop', 'tablet', 'mobile'] as const).map((device) => (
                 <button
                   key={device}
                   onClick={() => setPreviewDevice(device)}
                   className={`p-1.5 rounded transition-all ${
                     previewDevice === device
-                      ? 'bg-[#1a1a1a] text-[#e5e5e5]'
-                      : 'text-[#404040] hover:text-[#737373]'
+                      ? 'bg-[#0f0f0f] text-[#c0c0c0]'
+                      : 'text-[#505050] hover:text-[#808080]'
                   }`}
                   title={device.charAt(0).toUpperCase() + device.slice(1)}
                 >
@@ -104,8 +104,8 @@ export default function PreviewPanel() {
                 onClick={() => setShowTerminal(!showTerminal)}
                 className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-all ${
                   showTerminal
-                    ? 'bg-[#1a1a1a] text-[#e5e5e5]'
-                    : 'text-[#404040] hover:text-[#737373]'
+                    ? 'bg-[#0f0f0f] text-[#c0c0c0]'
+                    : 'text-[#505050] hover:text-[#808080]'
                 }`}
               >
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -121,7 +121,7 @@ export default function PreviewPanel() {
                     const iframe = document.getElementById('webcontainer-preview') as HTMLIFrameElement
                     if (iframe) iframe.src = iframe.src
                   }}
-                  className="w-6 h-6 flex items-center justify-center rounded text-[#404040] hover:text-[#737373] hover:bg-[#141414] transition-all"
+                  className="w-6 h-6 flex items-center justify-center rounded text-[#505050] hover:text-[#808080] hover:bg-[#0a0a0a] transition-all"
                   title="Refresh"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -131,15 +131,15 @@ export default function PreviewPanel() {
               )}
 
               {/* Status pill */}
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#0f0f0f] border border-[#1a1a1a]">
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#050505] border border-[#151515]">
                 <div className={`w-1.5 h-1.5 rounded-full ${
-                  !isMounted ? 'bg-[#333]' :
+                  !isMounted ? 'bg-[#404040]' :
                   isBooting ? 'bg-amber-400 animate-pulse' :
-                  serverUrl ? 'bg-emerald-400' :
+                  serverUrl ? 'bg-[#c0c0c0]' :
                   error ? 'bg-red-400' :
-                  'bg-[#333]'
+                  'bg-[#404040]'
                 }`} />
-                <span className="text-[10px] text-[#666]">
+                <span className="text-[10px] text-[#707070]">
                   {!isMounted ? 'Idle' :
                    isBooting ? 'Starting' :
                    serverUrl ? 'Live' :
@@ -152,7 +152,7 @@ export default function PreviewPanel() {
           
           {/* Preview Area */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className={`flex-1 flex items-center justify-center p-4 overflow-auto bg-[#080808] ${showTerminal ? 'h-1/2' : ''}`}>
+            <div className={`flex-1 flex items-center justify-center p-4 overflow-auto bg-[#000000] ${showTerminal ? 'h-1/2' : ''}`}>
               <PreviewContent
                 isBooting={isBooting}
                 isReady={isReady}
@@ -173,7 +173,7 @@ export default function PreviewPanel() {
                   animate={{ height: '40%', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                  className="border-t border-[#1a1a1a] bg-[#000000] overflow-hidden"
+                  className="border-t border-[#151515] bg-[#000000] overflow-hidden"
                 >
                   <TerminalOutput />
                 </motion.div>
@@ -299,9 +299,9 @@ function StatusCard({
   variant?: 'default' | 'error' | 'blue' | 'amber'
 }) {
   const colors = {
-    default: { bg: 'bg-[#1a1a1a]', border: 'border-[#262626]', text: 'text-[#525252]' },
+    default: { bg: 'bg-[#0a0a0a]', border: 'border-[#1a1a1a]', text: 'text-[#606060]' },
     error: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400' },
-    blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400' },
+    blue: { bg: 'bg-[#0a0a0a]', border: 'border-[#1a1a1a]', text: 'text-[#808080]' },
     amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
   }[variant]
 
@@ -322,16 +322,16 @@ function StatusCard({
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
           </svg>
         ) : (
-          <svg className="w-6 h-6 text-[#404040]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg className="w-6 h-6 text-[#505050]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         )}
       </div>
-      <h3 className={`text-[15px] font-medium mb-2 ${variant === 'default' ? 'text-[#fafafa]' : colors.text}`}>
+      <h3 className={`text-[15px] font-medium mb-2 ${variant === 'default' ? 'text-[#c0c0c0]' : colors.text}`}>
         {title}
       </h3>
-      <p className="text-[13px] text-[#737373] leading-relaxed">{subtitle}</p>
+      <p className="text-[13px] text-[#707070] leading-relaxed">{subtitle}</p>
     </div>
   )
 }

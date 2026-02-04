@@ -42,10 +42,10 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
-      className="p-3 border-t border-[#1a1a1a] bg-[#0a0a0a]"
+      className="p-3 border-t border-[#151515] bg-[#000000]"
     >
       <form onSubmit={onSubmit} className="relative">
-        <div className="relative rounded-xl bg-[#0f0f0f] border border-[#1f1f1f] focus-within:border-[#2a2a2a] transition-all overflow-hidden">
+        <div className="relative rounded-xl bg-[#050505] border border-[#1a1a1a] focus-within:border-[#404040] transition-all overflow-hidden">
           <textarea
             ref={textareaRef}
             value={input}
@@ -54,7 +54,7 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
             placeholder="Message Agent..."
             disabled={isLoading}
             rows={1}
-            className="w-full px-4 py-3 pr-12 bg-transparent text-[14px] text-[#e5e5e5] placeholder:text-[#404040] resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
+            className="w-full px-4 py-3 pr-12 bg-transparent text-[14px] text-[#ffffff] placeholder:text-[#505050] resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
             style={{ minHeight: '46px', maxHeight: '160px' }}
           />
           
@@ -62,7 +62,7 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="absolute right-2.5 bottom-2.5 w-7 h-7 flex items-center justify-center rounded-lg bg-[#fafafa] text-[#0a0a0a] disabled:bg-[#1f1f1f] disabled:text-[#404040] disabled:cursor-not-allowed hover:bg-white transition-all"
+            className="absolute right-2.5 bottom-2.5 w-7 h-7 flex items-center justify-center rounded-lg bg-[#c0c0c0] text-[#000000] disabled:bg-[#1a1a1a] disabled:text-[#404040] disabled:cursor-not-allowed hover:bg-[#d4d4d4] transition-all"
           >
             {isLoading ? (
               <motion.div
