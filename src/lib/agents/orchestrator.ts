@@ -77,6 +77,20 @@ export interface PreflightResult {
   warnings?: string[]
 }
 
+export interface ParallelTask {
+  agent: AgentId
+  prompt: string
+  modelTier?: ModelTier
+}
+
+export interface ParallelResult {
+  results: AgentResult[]
+  merged?: AgentResult
+  checkpoint: string
+  totalDuration: number
+  parallelSpeedup: number // Theoretical sequential time / actual parallel time
+}
+
 // ============================================
 // MODEL SELECTION (Opus-Sonnet Handoff + Kimi Router)
 // ============================================
@@ -210,7 +224,7 @@ export class TorbitOrchestrator {
    * Pre-flight check - validate request before spending fuel
    * Uses Flash (cheap) to catch unreasonable requests early
    */
-  async preflight(userPrompt: string): Promise<PreflightResult> {
+  preflight(userPrompt: string): PreflightResult {
     // Fast pattern matching first (no API call)
     for (const { pattern, reason } of UNFEASIBLE_PATTERNS) {
       if (pattern.test(userPrompt)) {
@@ -541,19 +555,20 @@ export class TorbitOrchestrator {
       // Return early with empty results if request is unfeasible
       return {
         plan: {
-          content: `Request rejected: ${preflightResult.reason}`,
+          agentId: 'architect',
+          success: false,
+          output: `Request rejected: ${preflightResult.reason}`,
           toolCalls: [],
-          tokensUsed: 0,
+          duration: 0,
         },
         execution: [],
         audit: {
           passed: false,
-          timestamp: new Date().toISOString(),
           gates: {
             visual: { passed: false, issues: ['Pre-flight check failed'] },
             functional: { passed: false, issues: [] },
             hygiene: { passed: false, issues: [] },
-            security: { passed: false },
+            security: { passed: false, issues: [] },
           },
         },
         preflight: preflightResult,
@@ -655,6 +670,152 @@ export class TorbitOrchestrator {
     // Fallback: use architect with sonnet
     const result = await this.executeAgent('architect', prompt, { modelTier: 'sonnet' })
     return result
+  }
+  
+  /**
+   * Execute multiple agents in parallel for faster full-stack development
+   * 
+   * Use case: "Build full-stack feature" → Frontend + Backend + Database run simultaneously
+   * Then Architect merges results into a cohesive system.
+   * 
+   * Wall-clock speedup: ~3x for 3 parallel agents (network-bound, not compute-bound)
+   */
+  async executeParallel(
+    tasks: ParallelTask[],
+    options: {
+      /** If true, use Architect with Opus to merge all outputs into cohesive result */
+      mergeWithArchitect?: boolean
+      /** Custom merge prompt (optional) */
+      mergePrompt?: string
+      /** Model tier for merge step (default: opus) */
+      mergeModelTier?: ModelTier
+    } = {}
+  ): Promise<ParallelResult> {
+    const startTime = Date.now()
+    
+    // 1. Create checkpoint for safety (rollback if parallel execution fails)
+    const checkpointResult = await executeTool('createCheckpoint', {
+      name: `parallel-execution-${Date.now()}`,
+      reason: `Before parallel execution of ${tasks.length} agents: ${tasks.map(t => t.agent).join(', ')}`,
+    }, this.context)
+    const checkpoint = (checkpointResult.data as { checkpointId?: string })?.checkpointId ?? `checkpoint-${Date.now()}`
+    
+    // 2. Execute all agents in parallel
+    const parallelStart = Date.now()
+    const results = await Promise.all(
+      tasks.map(({ agent, prompt, modelTier }) =>
+        this.executeAgent(agent, prompt, { modelTier: modelTier ?? 'sonnet' })
+      )
+    )
+    const parallelDuration = Date.now() - parallelStart
+    
+    // Calculate theoretical sequential time (sum of all durations)
+    const theoreticalSequentialTime = results.reduce((sum, r) => sum + r.duration, 0)
+    const parallelSpeedup = theoreticalSequentialTime / parallelDuration
+    
+    // 3. Optionally merge results with Architect
+    let merged: AgentResult | undefined
+    if (options.mergeWithArchitect) {
+      const mergePrompt = options.mergePrompt ?? this.buildMergePrompt(tasks, results)
+      merged = await this.executeAgent('architect', mergePrompt, {
+        modelTier: options.mergeModelTier ?? 'opus',
+      })
+    }
+    
+    return {
+      results,
+      merged,
+      checkpoint,
+      totalDuration: Date.now() - startTime,
+      parallelSpeedup,
+    }
+  }
+  
+  /**
+   * Build default merge prompt for Architect
+   */
+  private buildMergePrompt(tasks: ParallelTask[], results: AgentResult[]): string {
+    const sections = tasks.map((task, i) => {
+      const result = results[i]
+      const status = result.success ? '✅' : '❌'
+      return `### ${task.agent.toUpperCase()} Agent ${status}
+**Task:** ${task.prompt}
+**Output:**
+${result.output}
+**Tool calls:** ${result.toolCalls.length} (${result.toolCalls.map(tc => tc.name).join(', ') || 'none'})`
+    }).join('\n\n')
+    
+    return `You are integrating work from ${tasks.length} parallel agents.
+
+Review their outputs and create a cohesive, working system:
+
+${sections}
+
+## Your Task:
+1. Identify any conflicts or inconsistencies between the outputs
+2. Resolve type mismatches (e.g., frontend expecting different API shape than backend provides)
+3. Create any missing integration code (API clients, shared types, imports)
+4. Ensure all pieces work together as a unified feature
+5. List any remaining TODOs or manual steps needed
+
+Output a clear integration plan and any necessary code changes.`
+  }
+  
+  /**
+   * Decompose a complex task into parallel subtasks using Planner
+   * Then execute them in parallel and merge with Architect
+   */
+  async orchestrateParallel(
+    userPrompt: string,
+    options?: { maxParallelAgents?: number }
+  ): Promise<ParallelResult & { plan: AgentResult }> {
+    // 1. Use Planner to decompose into parallelizable tasks
+    const planPrompt = `Decompose this request into parallel subtasks that can be executed simultaneously.
+    
+User request: "${userPrompt}"
+
+Identify which agents should handle each subtask:
+- frontend: UI components, pages, styling
+- backend: APIs, business logic, server code
+- database: Schema design, migrations, queries
+- devops: Deployment, CI/CD, infrastructure
+- qa: Tests, test data, coverage
+
+Output a JSON array of tasks:
+[
+  { "agent": "frontend", "prompt": "Create the dashboard UI with...", "modelTier": "sonnet" },
+  { "agent": "backend", "prompt": "Build the REST API for...", "modelTier": "sonnet" }
+]
+
+Rules:
+- Maximum ${options?.maxParallelAgents ?? 4} parallel tasks
+- Each task should be independent (no dependencies between them)
+- Use "flash" for simple tasks, "sonnet" for moderate, "opus" for complex`
+
+    const plan = await this.executeAgent('planner', planPrompt, { modelTier: 'sonnet' })
+    
+    // 2. Parse tasks from planner output
+    let tasks: ParallelTask[] = []
+    try {
+      const jsonMatch = plan.output.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        tasks = parsed.map((t: { agent: string; prompt: string; modelTier?: string }) => ({
+          agent: t.agent as AgentId,
+          prompt: t.prompt,
+          modelTier: (t.modelTier as ModelTier) ?? 'sonnet',
+        }))
+      }
+    } catch {
+      // Fallback: single agent execution if parsing fails
+      console.warn('[Orchestrator] Failed to parse parallel tasks, falling back to single agent')
+      tasks = [{ agent: 'architect', prompt: userPrompt, modelTier: 'sonnet' }]
+    }
+    
+    // 3. Execute in parallel and merge
+    const parallelResult = await this.executeParallel(tasks, { mergeWithArchitect: true })
+    
+    return { ...parallelResult, plan }
   }
   
   /**

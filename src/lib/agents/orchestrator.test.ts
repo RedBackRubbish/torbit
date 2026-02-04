@@ -5,7 +5,9 @@ import {
   type AgentResult,
   type AuditResult,
   type ModelTier,
-  type PreflightResult
+  type PreflightResult,
+  type ParallelTask,
+  type ParallelResult
 } from './orchestrator'
 
 describe('Orchestrator', () => {
@@ -202,38 +204,38 @@ describe('Orchestrator exports', () => {
 describe('Pre-flight Check', () => {
   let orchestrator: TorbitOrchestrator
 
-  it('should reject unfeasible requests - Facebook clone', async () => {
+  it('should reject unfeasible requests - Facebook clone', () => {
     orchestrator = new TorbitOrchestrator({
       projectId: 'test',
       userId: 'user1',
     })
 
-    const result = await orchestrator.preflight('build me a Facebook clone')
+    const result = orchestrator.preflight('build me a Facebook clone')
     
     expect(result.feasible).toBe(false)
     expect(result.reason).toContain('scope')
     expect(result.warnings?.length).toBeGreaterThan(0)
   })
 
-  it('should reject unfeasible requests - malicious intent', async () => {
+  it('should reject unfeasible requests - malicious intent', () => {
     orchestrator = new TorbitOrchestrator({
       projectId: 'test',
       userId: 'user1',
     })
 
-    const result = await orchestrator.preflight('write me a keylogger')
+    const result = orchestrator.preflight('write me a keylogger')
     
     expect(result.feasible).toBe(false)
     expect(result.reason?.toLowerCase()).toContain('malicious')
   })
 
-  it('should accept reasonable requests', async () => {
+  it('should accept reasonable requests', () => {
     orchestrator = new TorbitOrchestrator({
       projectId: 'test',
       userId: 'user1',
     })
 
-    const result = await orchestrator.preflight('create a landing page with a hero section')
+    const result = orchestrator.preflight('create a landing page with a hero section')
     
     expect(result.feasible).toBe(true)
     expect(result.estimatedComplexity).toBeDefined()
@@ -241,14 +243,14 @@ describe('Pre-flight Check', () => {
     expect(result.estimatedFuel.min).toBeGreaterThan(0)
   })
 
-  it('should estimate complexity based on prompt length', async () => {
+  it('should estimate complexity based on prompt length', () => {
     orchestrator = new TorbitOrchestrator({
       projectId: 'test',
       userId: 'user1',
     })
 
-    const shortResult = await orchestrator.preflight('add a button')
-    const longResult = await orchestrator.preflight(
+    const shortResult = orchestrator.preflight('add a button')
+    const longResult = orchestrator.preflight(
       'Build a complete e-commerce platform with user authentication, ' +
       'product catalog, shopping cart, checkout flow, payment integration, ' +
       'order management, admin dashboard, inventory tracking, and analytics'
@@ -307,5 +309,97 @@ describe('PreflightResult type', () => {
 
     expect(result.feasible).toBe(true)
     expect(['trivial', 'simple', 'medium', 'complex', 'architectural']).toContain(result.estimatedComplexity)
+  })
+})
+
+describe('Parallel Execution Types', () => {
+  it('should export ParallelTask type', () => {
+    const task: ParallelTask = {
+      agent: 'frontend',
+      prompt: 'Create a dashboard component',
+      modelTier: 'sonnet',
+    }
+
+    expect(task.agent).toBe('frontend')
+    expect(task.prompt).toContain('dashboard')
+    expect(task.modelTier).toBe('sonnet')
+  })
+
+  it('should allow optional modelTier in ParallelTask', () => {
+    const task: ParallelTask = {
+      agent: 'backend',
+      prompt: 'Build REST API',
+    }
+
+    expect(task.modelTier).toBeUndefined()
+  })
+
+  it('should export ParallelResult type', () => {
+    const result: ParallelResult = {
+      results: [
+        {
+          agentId: 'frontend',
+          success: true,
+          output: 'Created dashboard',
+          toolCalls: [],
+          duration: 1000,
+        },
+        {
+          agentId: 'backend',
+          success: true,
+          output: 'Built API',
+          toolCalls: [],
+          duration: 1200,
+        },
+      ],
+      checkpoint: 'checkpoint-123',
+      totalDuration: 1500,
+      parallelSpeedup: 1.47, // (1000 + 1200) / 1500
+    }
+
+    expect(result.results).toHaveLength(2)
+    expect(result.parallelSpeedup).toBeGreaterThan(1)
+    expect(result.checkpoint).toBeDefined()
+  })
+
+  it('should include merged result when architect integrates', () => {
+    const result: ParallelResult = {
+      results: [],
+      merged: {
+        agentId: 'architect',
+        success: true,
+        output: 'Integrated frontend + backend',
+        toolCalls: [],
+        duration: 800,
+      },
+      checkpoint: 'checkpoint-456',
+      totalDuration: 2300,
+      parallelSpeedup: 2.5,
+    }
+
+    expect(result.merged).toBeDefined()
+    expect(result.merged?.agentId).toBe('architect')
+  })
+})
+
+describe('Parallel Execution', () => {
+  it('should create orchestrator with parallel execution capability', () => {
+    const orchestrator = new TorbitOrchestrator({
+      projectId: 'test',
+      userId: 'user1',
+    })
+
+    expect(orchestrator.executeParallel).toBeDefined()
+    expect(typeof orchestrator.executeParallel).toBe('function')
+  })
+
+  it('should have orchestrateParallel method', () => {
+    const orchestrator = new TorbitOrchestrator({
+      projectId: 'test',
+      userId: 'user1',
+    })
+
+    expect(orchestrator.orchestrateParallel).toBeDefined()
+    expect(typeof orchestrator.orchestrateParallel).toBe('function')
   })
 })
