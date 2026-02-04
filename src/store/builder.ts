@@ -5,7 +5,8 @@ import { immer } from 'zustand/middleware/immer'
 // Types
 // ============================================
 
-export type AgentId = 'architect' | 'frontend' | 'backend' | 'database' | 'devops' | 'qa'
+// Full agent list - includes all specialist agents
+export type AgentId = 'architect' | 'frontend' | 'backend' | 'database' | 'devops' | 'qa' | 'planner' | 'auditor'
 export type AgentStatus = 'idle' | 'thinking' | 'working' | 'complete' | 'error'
 
 export interface Agent {
@@ -139,6 +140,20 @@ const INITIAL_AGENTS: Agent[] = [
     role: 'Testing & Quality',
     status: 'idle',
     color: '#eab308',
+  },
+  {
+    id: 'planner',
+    name: 'Planner',
+    role: 'Task & Ticket Management',
+    status: 'idle',
+    color: '#22c55e',
+  },
+  {
+    id: 'auditor',
+    name: 'Auditor',
+    role: 'Hostile QA & Code Review',
+    status: 'idle',
+    color: '#ef4444',
   },
 ]
 

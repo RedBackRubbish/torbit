@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
+import type { AgentId } from '@/lib/tools/definitions'
 
 const AGENT_ICONS: Record<string, string> = {
   architect: '◆',
@@ -11,6 +12,8 @@ const AGENT_ICONS: Record<string, string> = {
   database: '⬢',
   devops: '△',
   qa: '○',
+  planner: '▣',
+  auditor: '⚠',
 }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -20,6 +23,28 @@ const AGENT_COLORS: Record<string, string> = {
   database: '#a855f7',
   devops: '#f43f5e',
   qa: '#eab308',
+  planner: '#22c55e',
+  auditor: '#ef4444',
+}
+
+// Tool call for real-time display
+interface ToolCall {
+  id: string
+  name: string
+  args: Record<string, unknown>
+  status: 'pending' | 'running' | 'complete' | 'error'
+  result?: {
+    success: boolean
+    output: string
+    duration: number
+  }
+}
+
+// Usage metrics
+interface UsageMetrics {
+  inputTokens: number
+  outputTokens: number
+  estimatedCost: number
 }
 
 interface Message {
@@ -27,16 +52,121 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   agentId?: string
+  toolCalls?: ToolCall[]
+  usage?: UsageMetrics
+  error?: string
+}
+
+// Stream chunk types from API
+interface StreamChunk {
+  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage'
+  content?: string
+  toolCall?: {
+    id: string
+    name: string
+    args: Record<string, unknown>
+  }
+  toolResult?: {
+    id: string
+    success: boolean
+    output: string
+    duration: number
+  }
+  usage?: UsageMetrics
+  error?: string
+}
+
+// Tool call display component
+function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
+  const [expanded, setExpanded] = useState(false)
+  
+  const statusColor = {
+    pending: 'text-white/40',
+    running: 'text-yellow-400',
+    complete: 'text-green-400',
+    error: 'text-red-400',
+  }[toolCall.status]
+
+  const statusIcon = {
+    pending: '○',
+    running: '◐',
+    complete: '●',
+    error: '✕',
+  }[toolCall.status]
+
+  return (
+    <div className="my-2 bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-3 py-2 flex items-center gap-2 hover:bg-white/5 transition-colors"
+      >
+        <motion.span 
+          className={statusColor}
+          animate={toolCall.status === 'running' ? { rotate: 360 } : {}}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        >
+          {statusIcon}
+        </motion.span>
+        <code className="text-xs text-[#00ff41] flex-1 text-left truncate">
+          {toolCall.name}
+        </code>
+        {toolCall.result && (
+          <span className="text-white/40 text-xs">
+            {toolCall.result.duration}ms
+          </span>
+        )}
+        <svg 
+          className={`w-3 h-3 text-white/40 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-t border-white/10"
+          >
+            <div className="p-3 space-y-2 text-xs">
+              <div>
+                <span className="text-white/40">Arguments:</span>
+                <pre className="mt-1 p-2 bg-black/50 rounded text-white/60 overflow-x-auto">
+                  {JSON.stringify(toolCall.args, null, 2)}
+                </pre>
+              </div>
+              {toolCall.result && (
+                <div>
+                  <span className="text-white/40">Result:</span>
+                  <pre className={`mt-1 p-2 bg-black/50 rounded overflow-x-auto max-h-32 ${
+                    toolCall.result.success ? 'text-green-400/80' : 'text-red-400/80'
+                  }`}>
+                    {toolCall.result.output.slice(0, 500)}
+                    {toolCall.result.output.length > 500 && '...'}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
 }
 
 /**
  * ChatPanel - Conversational interface for interacting with agents
+ * With real-time tool call streaming!
  */
 export default function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedAgent, setSelectedAgent] = useState<AgentId>('architect')
   
   const { 
     chatCollapsed, 
@@ -45,27 +175,7 @@ export default function ChatPanel() {
     addFile,
     setIsGenerating,
     prompt,
-    initProject,
   } = useBuilderStore()
-
-  // Initialize with stored prompt
-  useEffect(() => {
-    if (prompt && messages.length === 0) {
-      setMessages([
-        {
-          id: 'init',
-          role: 'user',
-          content: prompt,
-        }
-      ])
-      // Auto-submit the initial prompt
-      handleSubmitMessage(prompt)
-    }
-  }, [prompt])
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
 
   // Parse code blocks from AI response
   const parseCodeBlocks = useCallback((content: string) => {
@@ -84,12 +194,110 @@ export default function ChatPanel() {
     return blocks
   }, [])
 
-  const handleSubmitMessage = async (messageContent: string) => {
+  // Parse SSE stream with tool calls
+  const parseSSEStream = useCallback(async (
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    assistantId: string,
+    agentId: AgentId
+  ) => {
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let fullContent = ''
+    const toolCalls: Map<string, ToolCall> = new Map()
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      
+      // Parse SSE format: data: {...}\n\n
+      const lines = buffer.split('\n\n')
+      buffer = lines.pop() || '' // Keep incomplete chunk in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        
+        try {
+          const chunk: StreamChunk = JSON.parse(line.slice(6))
+          
+          switch (chunk.type) {
+            case 'text':
+              fullContent += chunk.content || ''
+              setMessages(prev => prev.map(m => 
+                m.id === assistantId 
+                  ? { ...m, content: fullContent, toolCalls: Array.from(toolCalls.values()) }
+                  : m
+              ))
+              break
+
+            case 'tool-call':
+              if (chunk.toolCall) {
+                const tc: ToolCall = {
+                  id: chunk.toolCall.id,
+                  name: chunk.toolCall.name,
+                  args: chunk.toolCall.args,
+                  status: 'running',
+                }
+                toolCalls.set(tc.id, tc)
+                setAgentStatus(agentId, 'working', `Running ${tc.name}...`)
+                setMessages(prev => prev.map(m => 
+                  m.id === assistantId 
+                    ? { ...m, toolCalls: Array.from(toolCalls.values()) }
+                    : m
+                ))
+              }
+              break
+
+            case 'tool-result':
+              if (chunk.toolResult) {
+                const existing = toolCalls.get(chunk.toolResult.id)
+                if (existing) {
+                  existing.status = chunk.toolResult.success ? 'complete' : 'error'
+                  existing.result = chunk.toolResult
+                  toolCalls.set(existing.id, existing)
+                  setMessages(prev => prev.map(m => 
+                    m.id === assistantId 
+                      ? { ...m, toolCalls: Array.from(toolCalls.values()) }
+                      : m
+                  ))
+                }
+              }
+              break
+
+            case 'usage':
+              if (chunk.usage) {
+                setMessages(prev => prev.map(m => 
+                  m.id === assistantId 
+                    ? { ...m, usage: chunk.usage }
+                    : m
+                ))
+              }
+              break
+
+            case 'error':
+              setMessages(prev => prev.map(m => 
+                m.id === assistantId 
+                  ? { ...m, error: chunk.error, content: fullContent || chunk.error || 'An error occurred' }
+                  : m
+              ))
+              break
+          }
+        } catch {
+          // Ignore parse errors for incomplete chunks
+        }
+      }
+    }
+
+    return { content: fullContent, toolCalls: Array.from(toolCalls.values()) }
+  }, [setAgentStatus])
+
+  const handleSubmitMessage = useCallback(async (messageContent: string, agentId: AgentId) => {
     if (!messageContent.trim() || isLoading) return
 
     setIsLoading(true)
     setIsGenerating(true)
-    setAgentStatus('architect', 'working', 'Analyzing request...')
+    setAgentStatus(agentId, 'working', 'Analyzing request...')
 
     // Add assistant placeholder
     const assistantId = crypto.randomUUID()
@@ -97,7 +305,8 @@ export default function ChatPanel() {
       id: assistantId,
       role: 'assistant',
       content: '',
-      agentId: 'architect',
+      agentId,
+      toolCalls: [],
     }])
 
     try {
@@ -109,28 +318,18 @@ export default function ChatPanel() {
             role: m.role,
             content: m.content,
           })),
-          agentId: 'architect',
+          agentId,
         }),
       })
 
-      if (!response.ok) throw new Error('Failed to get response')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
 
       const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      let fullContent = ''
+      if (!reader) throw new Error('No response body')
 
-      while (reader) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value)
-        fullContent += chunk
-
-        // Update the assistant message with streaming content
-        setMessages(prev => prev.map(m => 
-          m.id === assistantId ? { ...m, content: fullContent } : m
-        ))
-      }
+      const { content: fullContent } = await parseSSEStream(reader, assistantId, agentId)
 
       // Parse code blocks and add as files
       const codeBlocks = parseCodeBlocks(fullContent)
@@ -143,20 +342,38 @@ export default function ChatPanel() {
         })
       })
 
-      setAgentStatus('architect', 'complete', 'Analysis complete')
+      setAgentStatus(agentId, 'complete', 'Complete')
     } catch (error) {
       console.error('Chat error:', error)
-      setAgentStatus('architect', 'error', 'Request failed')
+      setAgentStatus(agentId, 'error', 'Request failed')
       setMessages(prev => prev.map(m => 
         m.id === assistantId 
-          ? { ...m, content: 'Sorry, there was an error processing your request. Please check your API key configuration.' }
+          ? { ...m, content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, error: String(error) }
           : m
       ))
     } finally {
       setIsLoading(false)
       setIsGenerating(false)
     }
-  }
+  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, parseCodeBlocks, addFile])
+
+  // Initialize with stored prompt
+  useEffect(() => {
+    if (prompt && messages.length === 0) {
+      setMessages([
+        {
+          id: 'init',
+          role: 'user',
+          content: prompt,
+        }
+      ])
+      handleSubmitMessage(prompt, selectedAgent)
+    }
+  }, [prompt]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -168,7 +385,7 @@ export default function ChatPanel() {
       content: input,
     }
     setMessages(prev => [...prev, userMessage])
-    handleSubmitMessage(input)
+    handleSubmitMessage(input, selectedAgent)
     setInput('')
   }
 
@@ -279,12 +496,35 @@ export default function ChatPanel() {
                             />
                           </div>
                         )}
+                        {/* Token usage display */}
+                        {message.usage && (
+                          <span className="text-white/30 text-xs ml-auto">
+                            {message.usage.inputTokens + message.usage.outputTokens} tokens · ${message.usage.estimatedCost.toFixed(4)}
+                          </span>
+                        )}
                       </div>
-                      <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-md px-4 py-3">
-                        <p className="text-white/80 text-sm whitespace-pre-wrap">
-                          {message.content || 'Thinking...'}
-                        </p>
-                      </div>
+                      
+                      {/* Tool calls - show above text response */}
+                      {message.toolCalls && message.toolCalls.length > 0 && (
+                        <div className="mb-2">
+                          {message.toolCalls.map(tc => (
+                            <ToolCallDisplay key={tc.id} toolCall={tc} />
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Text response */}
+                      {(message.content || (!message.toolCalls?.length && !message.error)) && (
+                        <div className={`bg-white/5 border rounded-2xl rounded-tl-md px-4 py-3 ${
+                          message.error ? 'border-red-500/30' : 'border-white/5'
+                        }`}>
+                          <p className={`text-sm whitespace-pre-wrap ${
+                            message.error ? 'text-red-400' : 'text-white/80'
+                          }`}>
+                            {message.content || 'Thinking...'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -305,6 +545,28 @@ export default function ChatPanel() {
             exit={{ opacity: 0 }}
             className="p-4 border-t border-white/5"
           >
+            {/* Agent Selector */}
+            <div className="flex gap-1 mb-3 overflow-x-auto pb-1 custom-scrollbar">
+              {(Object.keys(AGENT_ICONS) as AgentId[]).map((agent) => (
+                <button
+                  key={agent}
+                  type="button"
+                  onClick={() => setSelectedAgent(agent)}
+                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 shrink-0 ${
+                    selectedAgent === agent
+                      ? 'bg-white/10 border border-white/20'
+                      : 'bg-transparent border border-transparent hover:bg-white/5'
+                  }`}
+                  style={{
+                    color: selectedAgent === agent ? AGENT_COLORS[agent] : 'rgba(255,255,255,0.4)',
+                  }}
+                >
+                  <span>{AGENT_ICONS[agent]}</span>
+                  <span className="capitalize">{agent}</span>
+                </button>
+              ))}
+            </div>
+
             <div className="relative">
               <textarea
                 value={input}
@@ -315,7 +577,7 @@ export default function ChatPanel() {
                     handleSubmit(e)
                   }
                 }}
-                placeholder="Describe what you want to build..."
+                placeholder={`Ask ${selectedAgent} to help you build...`}
                 rows={1}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12
                   text-white/90 text-sm placeholder:text-white/20 resize-none
@@ -346,7 +608,7 @@ export default function ChatPanel() {
             </div>
             
             <p className="text-white/20 text-xs mt-3 text-center">
-              Press Enter to send · Shift+Enter for new line
+              Enter to send · Shift+Enter for new line
             </p>
           </motion.form>
         )}
