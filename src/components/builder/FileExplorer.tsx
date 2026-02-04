@@ -157,12 +157,12 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
         {/* Name */}
         <span className="flex-1 truncate text-[11px] font-normal">{node.name}</span>
         
-        {/* NEW badge - minimal */}
+        {/* NEW badge - silver */}
         {isNew && (
           <motion.span 
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+            className="w-1.5 h-1.5 rounded-full bg-[#c0c0c0]"
           />
         )}
       </motion.button>

@@ -286,7 +286,7 @@ function PreviewContent({
   )
 }
 
-// Status card component
+// Status card component - Premium minimal design
 function StatusCard({ 
   icon, 
   title, 
@@ -298,40 +298,101 @@ function StatusCard({
   subtitle: string
   variant?: 'default' | 'error' | 'blue' | 'amber'
 }) {
-  const colors = {
-    default: { bg: 'bg-[#0a0a0a]', border: 'border-[#1a1a1a]', text: 'text-[#606060]' },
-    error: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400' },
-    blue: { bg: 'bg-[#0a0a0a]', border: 'border-[#1a1a1a]', text: 'text-[#808080]' },
-    amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
-  }[variant]
-
   return (
-    <div className="text-center max-w-sm">
-      <div className={`w-14 h-14 mx-auto mb-5 rounded-xl ${colors.bg} border ${colors.border} flex items-center justify-center`}>
+    <div className="text-center max-w-xs">
+      {/* Premium loading animation */}
+      <div className="relative w-16 h-16 mx-auto mb-6">
         {icon === 'loading' ? (
-          <motion.svg 
-            className={`w-6 h-6 ${colors.text}`} 
-            viewBox="0 0 24 24"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          >
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="32" strokeLinecap="round" />
-          </motion.svg>
+          <>
+            {/* Outer ring - slow pulse */}
+            <motion.div
+              className="absolute inset-0 rounded-full border border-[#1a1a1a]"
+              animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.2, 0.5] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            {/* Middle ring - silver accent */}
+            <motion.div
+              className="absolute inset-1 rounded-full border border-[#303030]"
+              animate={{ scale: [1, 1.08, 1], opacity: [0.6, 0.3, 0.6] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
+            />
+            {/* Inner core - glowing silver */}
+            <motion.div
+              className="absolute inset-3 rounded-full bg-gradient-to-br from-[#151515] to-[#0a0a0a] border border-[#252525] flex items-center justify-center"
+              animate={{ boxShadow: ['0 0 0 0 rgba(192,192,192,0)', '0 0 20px 2px rgba(192,192,192,0.15)', '0 0 0 0 rgba(192,192,192,0)'] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              {/* Orbiting dot */}
+              <motion.div
+                className="absolute w-1.5 h-1.5 rounded-full bg-[#c0c0c0]"
+                animate={{ 
+                  rotate: 360,
+                  x: [0, 20, 0, -20, 0],
+                  y: [-20, 0, 20, 0, -20]
+                }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+              />
+            </motion.div>
+            {/* Center icon */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <motion.svg 
+                className="w-5 h-5 text-[#c0c0c0]" 
+                viewBox="0 0 24 24"
+                fill="none"
+                animate={{ opacity: [0.4, 1, 0.4] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <path 
+                  d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" 
+                  stroke="currentColor" 
+                  strokeWidth="1.5" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round"
+                />
+              </motion.svg>
+            </div>
+          </>
         ) : icon === 'error' ? (
-          <svg className={`w-6 h-6 ${colors.text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
+          <div className="w-full h-full rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+            <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+          </div>
         ) : (
-          <svg className="w-6 h-6 text-[#505050]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
+          <div className="w-full h-full rounded-full bg-[#0a0a0a] border border-[#1a1a1a] flex items-center justify-center">
+            <svg className="w-6 h-6 text-[#404040]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
         )}
       </div>
-      <h3 className={`text-[15px] font-medium mb-2 ${variant === 'default' ? 'text-[#c0c0c0]' : colors.text}`}>
+      
+      {/* Title with silver gradient for loading */}
+      <h3 className={`text-[14px] font-medium mb-1.5 ${
+        icon === 'loading' 
+          ? 'text-[#c0c0c0]' 
+          : icon === 'error' 
+            ? 'text-red-400' 
+            : 'text-[#808080]'
+      }`}>
         {title}
       </h3>
-      <p className="text-[13px] text-[#707070] leading-relaxed">{subtitle}</p>
+      
+      {/* Subtitle */}
+      <p className="text-[12px] text-[#505050] leading-relaxed">{subtitle}</p>
+      
+      {/* Loading progress bar */}
+      {icon === 'loading' && (
+        <div className="mt-5 w-32 h-0.5 mx-auto bg-[#151515] rounded-full overflow-hidden">
+          <motion.div
+            className="h-full bg-gradient-to-r from-[#252525] via-[#c0c0c0] to-[#252525]"
+            animate={{ x: ['-100%', '100%'] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ width: '60%' }}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -470,7 +531,7 @@ function TerminalOutput() {
     switch (type) {
       case 'command': return 'text-cyan-400'
       case 'error': return 'text-red-400'
-      case 'success': return 'text-emerald-400'
+      case 'success': return 'text-[#c0c0c0]'
       case 'warning': return 'text-amber-400'
       case 'info': return 'text-blue-400'
       default: return 'text-[#a1a1a1]'

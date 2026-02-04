@@ -47,10 +47,10 @@ const FUEL_PACKS: FuelPack[] = [
     amount: 2500,
     price: 29,
     desc: 'Feature build & refactor',
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10',
-    borderColor: 'border-emerald-500/30 hover:border-emerald-400/60',
-    buttonColor: 'bg-emerald-500 hover:bg-emerald-400',
+    color: 'text-[#c0c0c0]',
+    bgColor: 'bg-[#c0c0c0]/10',
+    borderColor: 'border-[#c0c0c0]/30 hover:border-[#c0c0c0]/60',
+    buttonColor: 'bg-[#c0c0c0] hover:bg-[#d0d0d0] text-black',
     popular: true,
   },
   {
@@ -134,9 +134,9 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
                   initial={{ scale: 0 }}
                   animate={{ scale: [0, 1.2, 1] }}
                   transition={{ duration: 0.5 }}
-                  className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4"
+                  className="w-20 h-20 rounded-full bg-[#c0c0c0]/20 flex items-center justify-center mb-4"
                 >
-                  <svg className="w-10 h-10 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-10 h-10 text-[#c0c0c0]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </motion.div>
@@ -144,7 +144,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
-                  className="text-2xl font-bold text-emerald-400 mb-2"
+                  className="text-2xl font-bold text-[#c0c0c0] mb-2"
                 >
                   REACTOR RECHARGED
                 </motion.h3>
@@ -203,7 +203,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
               <div className={`w-2 h-2 rounded-full ${
                 status === 'critical' ? 'bg-red-500 animate-pulse' :
                 status === 'low' ? 'bg-amber-500' :
-                'bg-emerald-500'
+                'bg-[#c0c0c0]'
               }`} />
               <span className="text-sm text-neutral-400">Current Fuel:</span>
               <span className={`text-sm font-bold ${
@@ -240,7 +240,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
                 >
                   {/* Popular Badge */}
                   {pack.popular && (
-                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-[#c0c0c0] text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                       Best Value
                     </div>
                   )}

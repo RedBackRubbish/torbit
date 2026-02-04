@@ -250,7 +250,7 @@ export function getAgentDisplayInfo(agent: AgentType) {
     Architect: { icon: 'Compass', color: 'blue', label: 'Architecting' },
     Builder: { icon: 'Hammer', color: 'yellow', label: 'Building' },
     Auditor: { icon: 'ShieldCheck', color: 'purple', label: 'Auditing' },
-    DevOps: { icon: 'Rocket', color: 'emerald', label: 'Deploying' },
+    DevOps: { icon: 'Rocket', color: 'silver', label: 'Deploying' },
   }
   return info[agent] || info.Builder
 }

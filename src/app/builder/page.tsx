@@ -101,7 +101,7 @@ function BuilderPageContent() {
           <div className="flex items-center gap-2">
             {/* Status indicator */}
             <div className="flex items-center gap-2 mr-3">
-              <div className={`w-1.5 h-1.5 rounded-full ${isWorking ? 'bg-emerald-400 animate-pulse' : 'bg-[#333]'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${isWorking ? 'bg-[#c0c0c0] animate-pulse' : 'bg-[#333]'}`} />
               <span className="text-[11px] text-[#525252]">
                 {isWorking ? 'Building...' : 'Idle'}
               </span>

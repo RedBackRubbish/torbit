@@ -117,7 +117,7 @@ function parseAndRender(content: string): React.ReactNode {
       listType = 'check'
       listItems.push(
         <li key={`cli-${key++}`} className="flex items-start gap-2.5">
-          <span className="text-emerald-400 mt-[3px] shrink-0">
+          <span className="text-[#c0c0c0] mt-[3px] shrink-0">
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>

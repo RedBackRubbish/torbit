@@ -34,6 +34,9 @@ interface WebContainerContextValue {
 
 const WebContainerContext = createContext<WebContainerContextValue | null>(null)
 
+// Module-level flag to prevent duplicate boot logs in Strict Mode
+let hasLoggedBoot = false
+
 export function useWebContainerContext() {
   const context = useContext(WebContainerContext)
   if (!context) {
@@ -71,7 +74,11 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
 
     async function boot() {
       try {
-        addLog('🔋 Initializing virtual environment...', 'info')
+        // Only log once per session (prevents Strict Mode duplicates)
+        if (!hasLoggedBoot) {
+          hasLoggedBoot = true
+          addLog('🔋 Initializing virtual environment...', 'info')
+        }
         
         const instance = await getWebContainer()
         

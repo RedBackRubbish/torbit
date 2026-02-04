@@ -43,7 +43,7 @@ function ToolCallsGroup({ toolCalls }: { toolCalls: ToolCall[] }) {
           className="flex items-center gap-2 text-[11px] group"
         >
           <span className={`w-1.5 h-1.5 rounded-full ${
-            allComplete ? 'bg-emerald-400' : 'bg-blue-400 animate-pulse'
+            allComplete ? 'bg-[#c0c0c0]' : 'bg-[#808080] animate-pulse'
           }`} />
           <span className="text-[#666] group-hover:text-[#999] transition-colors">
             {allComplete ? 'Created' : 'Creating'} {totalFiles} files
@@ -75,8 +75,8 @@ function ToolCallsGroup({ toolCalls }: { toolCalls: ToolCall[] }) {
                   return (
                     <div key={tc.id} className="flex items-center gap-2 text-[10px]">
                       <span className={`w-1 h-1 rounded-full ${
-                        tc.status === 'complete' ? 'bg-emerald-400' :
-                        tc.status === 'running' ? 'bg-blue-400' : 'bg-red-400'
+                        tc.status === 'complete' ? 'bg-[#c0c0c0]' :
+                        tc.status === 'running' ? 'bg-[#808080]' : 'bg-red-400'
                       }`} />
                       <span className="text-[#404040] font-mono">{fileName}</span>
                     </div>

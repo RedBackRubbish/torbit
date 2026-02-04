@@ -56,8 +56,8 @@ export function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
     >
       {/* Status dot */}
       <span className={`w-1.5 h-1.5 rounded-full ${
-        toolCall.status === 'running' ? 'bg-blue-400 animate-pulse' :
-        toolCall.status === 'complete' ? 'bg-emerald-400' :
+        toolCall.status === 'running' ? 'bg-[#808080] animate-pulse' :
+        toolCall.status === 'complete' ? 'bg-[#c0c0c0]' :
         'bg-red-400'
       }`} />
       

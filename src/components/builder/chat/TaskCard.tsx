@@ -30,14 +30,14 @@ export function TaskCard({ tasks, isComplete }: TaskCardProps) {
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-[#1f1f1f] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-md bg-emerald-500/10 flex items-center justify-center">
+          <div className="w-5 h-5 rounded-md bg-[#c0c0c0]/10 flex items-center justify-center">
             {isComplete ? (
-              <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <svg className="w-3 h-3 text-[#c0c0c0]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
             ) : (
               <motion.svg 
-                className="w-3 h-3 text-emerald-400" 
+                className="w-3 h-3 text-[#c0c0c0]" 
                 viewBox="0 0 24 24"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
@@ -58,7 +58,7 @@ export function TaskCard({ tasks, isComplete }: TaskCardProps) {
       {/* Progress bar */}
       <div className="h-[2px] bg-[#1f1f1f]">
         <motion.div
-          className="h-full bg-emerald-500"
+          className="h-full bg-[#c0c0c0]"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -77,12 +77,12 @@ export function TaskCard({ tasks, isComplete }: TaskCardProps) {
           >
             <div className="w-4 h-4 flex items-center justify-center shrink-0">
               {(task.status === 'complete' || !task.status) ? (
-                <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <svg className="w-3 h-3 text-[#c0c0c0]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                 </svg>
               ) : task.status === 'creating' ? (
                 <motion.svg 
-                  className="w-3 h-3 text-blue-400" 
+                  className="w-3 h-3 text-[#808080]" 
                   viewBox="0 0 24 24"
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}

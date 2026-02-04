@@ -15,9 +15,9 @@ export default function AgentStatusBar() {
 
   return (
     <div className="flex items-center gap-2.5">
-      {/* Animated status dot */}
+      {/* Animated status dot - Silver */}
       <motion.div
-        className={`w-2 h-2 rounded-full ${isGenerating ? 'bg-emerald-400' : 'bg-emerald-400'}`}
+        className={`w-2 h-2 rounded-full ${isGenerating ? 'bg-[#c0c0c0]' : 'bg-[#808080]'}`}
         animate={isGenerating ? { 
           scale: [1, 1.3, 1],
           opacity: [1, 0.6, 1]
