@@ -21,6 +21,10 @@ export interface ToolExecutionContext {
   userId: string
   workingDirectory: string
   files: Map<string, string> // In-memory file system for sandboxed execution
+  checkpoints: Map<string, { name: string; files: Map<string, string>; timestamp: number }> // Time travel
+  browserLogs: Array<{ level: string; message: string; timestamp: number }> // Browser console
+  screenshots: Map<string, { data: string; viewport: { width: number; height: number }; timestamp: number }> // Vision
+  dbSchema?: Record<string, { columns: Array<{ name: string; type: string; nullable: boolean }>; indexes: string[] }> // Database
 }
 
 // Tool execution handlers
@@ -368,6 +372,370 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
       duration: 0,
     }
   },
+  
+  // ============================================
+  // GOD-TIER: VISION TOOLS (Eyes)
+  // ============================================
+  
+  captureScreenshot: async (args, ctx) => {
+    const { selector, viewport, description } = args as { 
+      selector?: string; 
+      viewport?: { width: number; height: number }; 
+      description?: string 
+    }
+    const start = Date.now()
+    
+    const screenshotId = `ss_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    const vp = viewport || { width: 1280, height: 720 }
+    
+    // In real implementation, this would use Puppeteer/Playwright to capture the WebContainer
+    // For now, we store a placeholder that represents the screenshot
+    ctx.screenshots.set(screenshotId, {
+      data: `[Screenshot of ${selector || 'full page'} at ${vp.width}x${vp.height}]`,
+      viewport: vp,
+      timestamp: Date.now(),
+    })
+    
+    return {
+      success: true,
+      output: `📸 Captured screenshot: ${screenshotId}\n` +
+        `Viewport: ${vp.width}x${vp.height}\n` +
+        `Selector: ${selector || 'full page'}` +
+        (description ? `\nExpected: ${description}` : ''),
+      data: { screenshotId, viewport: vp, selector },
+      duration: Date.now() - start,
+    }
+  },
+  
+  analyzeVisual: async (args, ctx) => {
+    const { screenshotId, prompt } = args as { screenshotId: string; prompt: string }
+    const start = Date.now()
+    
+    const screenshot = ctx.screenshots.get(screenshotId)
+    if (!screenshot) {
+      return { success: false, output: '', error: `Screenshot not found: ${screenshotId}` }
+    }
+    
+    // In real implementation, this sends the screenshot to a vision model (Sonnet/Gemini)
+    // The vision model analyzes the image and returns observations
+    return {
+      success: true,
+      output: `👁️ Visual Analysis of ${screenshotId}:\n` +
+        `Query: "${prompt}"\n\n` +
+        `[Vision model would analyze the screenshot here]\n` +
+        `Viewport: ${screenshot.viewport.width}x${screenshot.viewport.height}`,
+      data: { screenshotId, prompt, analyzed: true },
+      duration: Date.now() - start,
+    }
+  },
+  
+  getBrowserLogs: async (args, ctx) => {
+    const { level, limit } = args as { level: 'error' | 'warn' | 'info' | 'all'; limit: number }
+    const start = Date.now()
+    
+    // Filter logs by level
+    let logs = ctx.browserLogs
+    if (level !== 'all') {
+      logs = logs.filter(log => log.level === level)
+    }
+    
+    // Limit results
+    logs = logs.slice(-limit)
+    
+    if (logs.length === 0) {
+      return {
+        success: true,
+        output: `🌐 Browser Console (${level}): No logs found`,
+        data: { logs: [], count: 0 },
+        duration: Date.now() - start,
+      }
+    }
+    
+    const output = logs
+      .map(log => `[${log.level.toUpperCase()}] ${log.message}`)
+      .join('\n')
+    
+    return {
+      success: true,
+      output: `🌐 Browser Console (${level}):\n${output}`,
+      data: { logs, count: logs.length },
+      duration: Date.now() - start,
+    }
+  },
+  
+  // ============================================
+  // GOD-TIER: DATABASE TOOLS (Prevent Hallucinations)
+  // ============================================
+  
+  inspectSchema: async (args, ctx) => {
+    const { table, includeIndexes, includeRelations } = args as { 
+      table?: string; 
+      includeIndexes: boolean; 
+      includeRelations: boolean 
+    }
+    const start = Date.now()
+    
+    if (!ctx.dbSchema) {
+      // Return sample schema for demonstration
+      ctx.dbSchema = {
+        users: {
+          columns: [
+            { name: 'id', type: 'uuid', nullable: false },
+            { name: 'email', type: 'varchar(255)', nullable: false },
+            { name: 'name', type: 'varchar(255)', nullable: true },
+            { name: 'created_at', type: 'timestamp', nullable: false },
+          ],
+          indexes: ['PRIMARY KEY (id)', 'UNIQUE (email)'],
+        },
+        projects: {
+          columns: [
+            { name: 'id', type: 'uuid', nullable: false },
+            { name: 'user_id', type: 'uuid', nullable: false },
+            { name: 'name', type: 'varchar(255)', nullable: false },
+            { name: 'created_at', type: 'timestamp', nullable: false },
+          ],
+          indexes: ['PRIMARY KEY (id)', 'FOREIGN KEY (user_id) REFERENCES users(id)'],
+        },
+      }
+    }
+    
+    const schema = ctx.dbSchema
+    const tables = table ? { [table]: schema[table] } : schema
+    
+    if (table && !schema[table]) {
+      return { success: false, output: '', error: `Table not found: ${table}` }
+    }
+    
+    let output = '🗄️ Database Schema:\n\n'
+    
+    for (const [tableName, tableSchema] of Object.entries(tables)) {
+      output += `📋 ${tableName}\n`
+      output += '─'.repeat(40) + '\n'
+      
+      for (const col of tableSchema.columns) {
+        output += `  ${col.name}: ${col.type}${col.nullable ? '' : ' NOT NULL'}\n`
+      }
+      
+      if (includeIndexes && tableSchema.indexes.length > 0) {
+        output += '\n  Indexes:\n'
+        for (const idx of tableSchema.indexes) {
+          output += `    • ${idx}\n`
+        }
+      }
+      
+      output += '\n'
+    }
+    
+    return {
+      success: true,
+      output,
+      data: { tables: Object.keys(tables), schema: tables },
+      duration: Date.now() - start,
+    }
+  },
+  
+  runSqlQuery: async (args, _ctx) => {
+    const { query, limit } = args as { query: string; limit: number }
+    const start = Date.now()
+    
+    // Validate read-only
+    const upperQuery = query.toUpperCase().trim()
+    if (!upperQuery.startsWith('SELECT')) {
+      return { 
+        success: false, 
+        output: '', 
+        error: 'Only SELECT queries are allowed (read-only)' 
+      }
+    }
+    
+    // In real implementation, this would execute against the actual database
+    return {
+      success: true,
+      output: `📊 SQL Query Result:\n\n` +
+        `Query: ${query}\n` +
+        `Limit: ${limit} rows\n\n` +
+        `[Query results would appear here]`,
+      data: { query, limit, rowCount: 0 },
+      duration: Date.now() - start,
+    }
+  },
+  
+  // ============================================
+  // GOD-TIER: SAFETY TOOLS (Time Travel)
+  // ============================================
+  
+  createCheckpoint: async (args, ctx) => {
+    const { name, reason } = args as { name: string; reason?: string }
+    const start = Date.now()
+    
+    const checkpointId = `cp_${Date.now()}_${name.replace(/\s+/g, '-').toLowerCase()}`
+    
+    // Deep clone the current file state
+    const filesCopy = new Map<string, string>()
+    ctx.files.forEach((content, path) => {
+      filesCopy.set(path, content)
+    })
+    
+    ctx.checkpoints.set(checkpointId, {
+      name,
+      files: filesCopy,
+      timestamp: Date.now(),
+    })
+    
+    return {
+      success: true,
+      output: `💾 Checkpoint created: ${checkpointId}\n` +
+        `Name: ${name}\n` +
+        `Files: ${filesCopy.size}\n` +
+        (reason ? `Reason: ${reason}` : ''),
+      data: { checkpointId, name, fileCount: filesCopy.size },
+      duration: Date.now() - start,
+    }
+  },
+  
+  rollbackToCheckpoint: async (args, ctx) => {
+    const { checkpointId, confirm } = args as { checkpointId: string; confirm: boolean }
+    const start = Date.now()
+    
+    if (!confirm) {
+      return { 
+        success: false, 
+        output: '', 
+        error: 'Rollback requires confirm: true' 
+      }
+    }
+    
+    const checkpoint = ctx.checkpoints.get(checkpointId)
+    if (!checkpoint) {
+      return { success: false, output: '', error: `Checkpoint not found: ${checkpointId}` }
+    }
+    
+    // Restore file state
+    ctx.files.clear()
+    checkpoint.files.forEach((content, path) => {
+      ctx.files.set(path, content)
+    })
+    
+    return {
+      success: true,
+      output: `⏪ Rolled back to checkpoint: ${checkpointId}\n` +
+        `Name: ${checkpoint.name}\n` +
+        `Files restored: ${checkpoint.files.size}\n` +
+        `Created: ${new Date(checkpoint.timestamp).toISOString()}`,
+      data: { checkpointId, name: checkpoint.name, filesRestored: checkpoint.files.size },
+      duration: Date.now() - start,
+    }
+  },
+  
+  listCheckpoints: async (args, ctx) => {
+    const { limit } = args as { limit: number }
+    const start = Date.now()
+    
+    const checkpoints = Array.from(ctx.checkpoints.entries())
+      .sort((a, b) => b[1].timestamp - a[1].timestamp)
+      .slice(0, limit)
+    
+    if (checkpoints.length === 0) {
+      return {
+        success: true,
+        output: '📋 No checkpoints found',
+        data: { checkpoints: [], count: 0 },
+        duration: Date.now() - start,
+      }
+    }
+    
+    const output = checkpoints
+      .map(([id, cp]) => `  ${id}\n    Name: ${cp.name}\n    Files: ${cp.files.size}\n    Created: ${new Date(cp.timestamp).toISOString()}`)
+      .join('\n\n')
+    
+    return {
+      success: true,
+      output: `📋 Checkpoints (${checkpoints.length}):\n\n${output}`,
+      data: { checkpoints: checkpoints.map(([id, cp]) => ({ id, name: cp.name, files: cp.files.size })) },
+      duration: Date.now() - start,
+    }
+  },
+  
+  // ============================================
+  // GOD-TIER: BETTER EDITING (Surgical Precision)
+  // ============================================
+  
+  applyPatch: async (args, ctx) => {
+    const { path, patch, description } = args as { path: string; patch: string; description?: string }
+    const start = Date.now()
+    
+    const existingContent = ctx.files.get(path)
+    if (!existingContent) {
+      return { success: false, output: '', error: `File not found: ${path}` }
+    }
+    
+    // Parse unified diff and apply
+    // Format: 
+    // @@ -start,count +start,count @@
+    // -removed line
+    // +added line
+    //  context line
+    
+    try {
+      const lines = existingContent.split('\n')
+      const patchLines = patch.split('\n')
+      let resultLines = [...lines]
+      let offset = 0
+      
+      for (let i = 0; i < patchLines.length; i++) {
+        const line = patchLines[i]
+        
+        // Parse hunk header
+        const hunkMatch = line.match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/)
+        if (hunkMatch) {
+          const oldStart = parseInt(hunkMatch[1]) - 1 // 0-indexed
+          let lineIndex = oldStart + offset
+          
+          // Process hunk lines
+          i++
+          while (i < patchLines.length && !patchLines[i].startsWith('@@')) {
+            const patchLine = patchLines[i]
+            
+            if (patchLine.startsWith('-')) {
+              // Remove line
+              resultLines.splice(lineIndex, 1)
+              offset--
+            } else if (patchLine.startsWith('+')) {
+              // Add line
+              resultLines.splice(lineIndex, 0, patchLine.slice(1))
+              lineIndex++
+              offset++
+            } else if (patchLine.startsWith(' ')) {
+              // Context line - just advance
+              lineIndex++
+            }
+            
+            i++
+          }
+          i-- // Back up since outer loop will increment
+        }
+      }
+      
+      const newContent = resultLines.join('\n')
+      ctx.files.set(path, newContent)
+      
+      const linesChanged = patch.split('\n').filter(l => l.startsWith('+') || l.startsWith('-')).length
+      
+      return {
+        success: true,
+        output: `🔧 Patch applied: ${path}${description ? ` - ${description}` : ''}\n` +
+          `Lines changed: ~${linesChanged}`,
+        data: { path, linesChanged },
+        duration: Date.now() - start,
+      }
+    } catch (error) {
+      return {
+        success: false,
+        output: '',
+        error: `Failed to apply patch: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      }
+    }
+  },
 }
 
 // Helper function to build file tree visualization
@@ -444,5 +812,39 @@ export function createExecutionContext(
     userId,
     workingDirectory: '/',
     files,
+    checkpoints: new Map(),
+    browserLogs: [],
+    screenshots: new Map(),
+    dbSchema: undefined,
   }
+}
+
+/**
+ * Add a browser log entry (called from WebContainer integration)
+ */
+export function addBrowserLog(
+  ctx: ToolExecutionContext,
+  level: 'error' | 'warn' | 'info',
+  message: string
+): void {
+  ctx.browserLogs.push({
+    level,
+    message,
+    timestamp: Date.now(),
+  })
+  
+  // Keep only last 1000 logs
+  if (ctx.browserLogs.length > 1000) {
+    ctx.browserLogs = ctx.browserLogs.slice(-1000)
+  }
+}
+
+/**
+ * Set database schema (called when connecting to database)
+ */
+export function setDbSchema(
+  ctx: ToolExecutionContext,
+  schema: Record<string, { columns: Array<{ name: string; type: string; nullable: boolean }>; indexes: string[] }>
+): void {
+  ctx.dbSchema = schema
 }

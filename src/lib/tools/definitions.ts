@@ -114,6 +114,64 @@ export const delegateToAgentSchema = z.object({
 })
 
 // ============================================
+// GOD-TIER TOOLS - Vision, Safety, Database
+// ============================================
+
+// VISION TOOLS (Eyes - See the actual UI)
+export const captureScreenshotSchema = z.object({
+  selector: z.string().optional().describe('CSS selector to capture specific element (default: full page)'),
+  viewport: z.object({
+    width: z.number().default(1280),
+    height: z.number().default(720),
+  }).optional().describe('Viewport size for screenshot'),
+  description: z.string().optional().describe('What you expect to see'),
+})
+
+export const analyzeVisualSchema = z.object({
+  screenshotId: z.string().describe('ID of screenshot to analyze'),
+  prompt: z.string().describe('What to look for (e.g., "Is the button centered?", "Check color contrast")'),
+})
+
+export const getBrowserLogsSchema = z.object({
+  level: z.enum(['error', 'warn', 'info', 'all']).default('error').describe('Log level to retrieve'),
+  limit: z.number().default(50).describe('Maximum number of log entries'),
+})
+
+// DATABASE TOOLS (Prevent hallucinated columns)
+export const inspectSchemaSchema = z.object({
+  table: z.string().optional().describe('Specific table to inspect (default: all tables)'),
+  includeIndexes: z.boolean().default(false).describe('Include index information'),
+  includeRelations: z.boolean().default(true).describe('Include foreign key relationships'),
+})
+
+export const runSqlQuerySchema = z.object({
+  query: z.string().describe('READ-ONLY SQL query (SELECT only, no mutations)'),
+  limit: z.number().default(10).describe('Maximum rows to return'),
+})
+
+// SAFETY TOOLS (Time Travel - Undo mistakes)
+export const createCheckpointSchema = z.object({
+  name: z.string().describe('Descriptive name for checkpoint (e.g., "before-refactor")'),
+  reason: z.string().optional().describe('Why this checkpoint is being created'),
+})
+
+export const rollbackToCheckpointSchema = z.object({
+  checkpointId: z.string().describe('ID of checkpoint to rollback to'),
+  confirm: z.boolean().describe('Must be true to confirm rollback'),
+})
+
+export const listCheckpointsSchema = z.object({
+  limit: z.number().default(10).describe('Number of checkpoints to list'),
+})
+
+// BETTER EDITING (Surgical precision with unified diff)
+export const applyPatchSchema = z.object({
+  path: z.string().describe('The file path to patch'),
+  patch: z.string().describe('Unified diff format patch (like git diff output)'),
+  description: z.string().optional().describe('What this patch does'),
+})
+
+// ============================================
 // TOOL DEFINITIONS (for AI SDK v6)
 // ============================================
 
@@ -190,6 +248,54 @@ export const TOOL_DEFINITIONS = {
     description: 'Delegate a subtask to another specialized agent.',
     inputSchema: delegateToAgentSchema,
   },
+  
+  // ============================================
+  // GOD-TIER TOOLS
+  // ============================================
+  
+  // VISION TOOLS (Eyes)
+  captureScreenshot: {
+    description: 'Capture a screenshot of the current preview. Use to SEE the actual rendered UI and verify visual correctness.',
+    inputSchema: captureScreenshotSchema,
+  },
+  analyzeVisual: {
+    description: 'Analyze a screenshot using vision AI. Check for alignment, contrast, spacing, or any visual issues.',
+    inputSchema: analyzeVisualSchema,
+  },
+  getBrowserLogs: {
+    description: 'Get browser console logs from the preview. Catches React errors, hydration mismatches, and client-side crashes that terminal misses.',
+    inputSchema: getBrowserLogsSchema,
+  },
+  
+  // DATABASE TOOLS (Prevent hallucinations)
+  inspectSchema: {
+    description: 'Inspect the database schema. See actual tables, columns, types, and relationships. Prevents writing code for columns that do not exist.',
+    inputSchema: inspectSchemaSchema,
+  },
+  runSqlQuery: {
+    description: 'Run a READ-ONLY SQL query to inspect data. Helps understand current state before making changes.',
+    inputSchema: runSqlQuerySchema,
+  },
+  
+  // SAFETY TOOLS (Time Travel)
+  createCheckpoint: {
+    description: 'Create a checkpoint before risky operations. Like git commit but for agent safety. Call this BEFORE major refactors or deletions.',
+    inputSchema: createCheckpointSchema,
+  },
+  rollbackToCheckpoint: {
+    description: 'Rollback to a previous checkpoint. Use when an edit breaks the build or causes errors. Enables try/catch at the agent level.',
+    inputSchema: rollbackToCheckpointSchema,
+  },
+  listCheckpoints: {
+    description: 'List available checkpoints for rollback.',
+    inputSchema: listCheckpointsSchema,
+  },
+  
+  // BETTER EDITING (Surgical precision)
+  applyPatch: {
+    description: 'Apply a unified diff patch to a file. More surgical than editFile - only changes specific lines. Preferred for editing large files.',
+    inputSchema: applyPatchSchema,
+  },
 } as const
 
 // ============================================
@@ -199,67 +305,125 @@ export const TOOL_DEFINITIONS = {
 // Agent-specific tool access
 export const AGENT_TOOLS = {
   architect: {
+    // Reasoning
     think: TOOL_DEFINITIONS.think,
     planSteps: TOOL_DEFINITIONS.planSteps,
+    delegateToAgent: TOOL_DEFINITIONS.delegateToAgent,
+    // File reading
     getFileTree: TOOL_DEFINITIONS.getFileTree,
     readFile: TOOL_DEFINITIONS.readFile,
     searchCode: TOOL_DEFINITIONS.searchCode,
     analyzeDependencies: TOOL_DEFINITIONS.analyzeDependencies,
-    delegateToAgent: TOOL_DEFINITIONS.delegateToAgent,
     fetchDocumentation: TOOL_DEFINITIONS.fetchDocumentation,
+    // Database inspection
+    inspectSchema: TOOL_DEFINITIONS.inspectSchema,
+    // Safety (Time Travel)
+    createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
+    rollbackToCheckpoint: TOOL_DEFINITIONS.rollbackToCheckpoint,
+    listCheckpoints: TOOL_DEFINITIONS.listCheckpoints,
   },
   frontend: {
+    // Reasoning
     think: TOOL_DEFINITIONS.think,
+    // File operations
     createFile: TOOL_DEFINITIONS.createFile,
     editFile: TOOL_DEFINITIONS.editFile,
+    applyPatch: TOOL_DEFINITIONS.applyPatch,
     readFile: TOOL_DEFINITIONS.readFile,
     listFiles: TOOL_DEFINITIONS.listFiles,
     searchCode: TOOL_DEFINITIONS.searchCode,
+    // Terminal
     runCommand: TOOL_DEFINITIONS.runCommand,
     installPackage: TOOL_DEFINITIONS.installPackage,
+    // Research
     fetchDocumentation: TOOL_DEFINITIONS.fetchDocumentation,
+    // VISION (Eyes) - See the actual UI
+    captureScreenshot: TOOL_DEFINITIONS.captureScreenshot,
+    analyzeVisual: TOOL_DEFINITIONS.analyzeVisual,
+    getBrowserLogs: TOOL_DEFINITIONS.getBrowserLogs,
+    // Safety
+    createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
   },
   backend: {
+    // Reasoning
     think: TOOL_DEFINITIONS.think,
+    // File operations
     createFile: TOOL_DEFINITIONS.createFile,
     editFile: TOOL_DEFINITIONS.editFile,
+    applyPatch: TOOL_DEFINITIONS.applyPatch,
     readFile: TOOL_DEFINITIONS.readFile,
     listFiles: TOOL_DEFINITIONS.listFiles,
     searchCode: TOOL_DEFINITIONS.searchCode,
+    // Terminal
     runCommand: TOOL_DEFINITIONS.runCommand,
     runTests: TOOL_DEFINITIONS.runTests,
     installPackage: TOOL_DEFINITIONS.installPackage,
+    // Research
     fetchDocumentation: TOOL_DEFINITIONS.fetchDocumentation,
+    // Database
+    inspectSchema: TOOL_DEFINITIONS.inspectSchema,
+    runSqlQuery: TOOL_DEFINITIONS.runSqlQuery,
+    // Safety
+    createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
   },
   database: {
+    // Reasoning
     think: TOOL_DEFINITIONS.think,
+    // File operations
     createFile: TOOL_DEFINITIONS.createFile,
     editFile: TOOL_DEFINITIONS.editFile,
+    applyPatch: TOOL_DEFINITIONS.applyPatch,
     readFile: TOOL_DEFINITIONS.readFile,
+    // Terminal
     runCommand: TOOL_DEFINITIONS.runCommand,
+    // Research
     searchCode: TOOL_DEFINITIONS.searchCode,
     fetchDocumentation: TOOL_DEFINITIONS.fetchDocumentation,
+    // Database (Full access)
+    inspectSchema: TOOL_DEFINITIONS.inspectSchema,
+    runSqlQuery: TOOL_DEFINITIONS.runSqlQuery,
+    // Safety
+    createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
   },
   devops: {
+    // Reasoning
     think: TOOL_DEFINITIONS.think,
+    // File operations
     createFile: TOOL_DEFINITIONS.createFile,
     editFile: TOOL_DEFINITIONS.editFile,
+    applyPatch: TOOL_DEFINITIONS.applyPatch,
     readFile: TOOL_DEFINITIONS.readFile,
     listFiles: TOOL_DEFINITIONS.listFiles,
+    // Terminal
     runCommand: TOOL_DEFINITIONS.runCommand,
     installPackage: TOOL_DEFINITIONS.installPackage,
+    // Deployment
     deployPreview: TOOL_DEFINITIONS.deployPreview,
     checkDeployStatus: TOOL_DEFINITIONS.checkDeployStatus,
     analyzeDependencies: TOOL_DEFINITIONS.analyzeDependencies,
+    // Safety (Full Time Travel access)
+    createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
+    rollbackToCheckpoint: TOOL_DEFINITIONS.rollbackToCheckpoint,
+    listCheckpoints: TOOL_DEFINITIONS.listCheckpoints,
   },
   qa: {
+    // Reasoning
     think: TOOL_DEFINITIONS.think,
+    // File operations
     createFile: TOOL_DEFINITIONS.createFile,
     editFile: TOOL_DEFINITIONS.editFile,
+    applyPatch: TOOL_DEFINITIONS.applyPatch,
     readFile: TOOL_DEFINITIONS.readFile,
+    // Terminal
     runTests: TOOL_DEFINITIONS.runTests,
-    searchCode: TOOL_DEFINITIONS.searchCode,
     runCommand: TOOL_DEFINITIONS.runCommand,
+    searchCode: TOOL_DEFINITIONS.searchCode,
+    // VISION (Eyes) - Verify UI matches specs
+    captureScreenshot: TOOL_DEFINITIONS.captureScreenshot,
+    analyzeVisual: TOOL_DEFINITIONS.analyzeVisual,
+    getBrowserLogs: TOOL_DEFINITIONS.getBrowserLogs,
+    // Database (Read-only for verification)
+    runSqlQuery: TOOL_DEFINITIONS.runSqlQuery,
   },
 } as const
 

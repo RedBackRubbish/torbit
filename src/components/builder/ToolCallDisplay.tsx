@@ -19,24 +19,50 @@ export interface ToolCall {
 
 // Tool metadata for display
 const TOOL_META: Record<string, { icon: string; label: string; color: string }> = {
+  // File Operations
   createFile: { icon: '📄', label: 'Create File', color: '#00ff41' },
   editFile: { icon: '✏️', label: 'Edit File', color: '#00d4ff' },
   readFile: { icon: '📖', label: 'Read File', color: '#a855f7' },
   deleteFile: { icon: '🗑️', label: 'Delete File', color: '#f43f5e' },
   listFiles: { icon: '📁', label: 'List Files', color: '#eab308' },
+  applyPatch: { icon: '🔧', label: 'Apply Patch', color: '#00ff41' },
+  
+  // Terminal
   runCommand: { icon: '⚡', label: 'Run Command', color: '#ff6b00' },
   runTests: { icon: '🧪', label: 'Run Tests', color: '#10b981' },
   installPackage: { icon: '📦', label: 'Install Package', color: '#6366f1' },
+  
+  // Search & Analysis
   searchCode: { icon: '🔍', label: 'Search Code', color: '#ec4899' },
   getFileTree: { icon: '🌳', label: 'File Tree', color: '#14b8a6' },
   analyzeDependencies: { icon: '📊', label: 'Analyze Deps', color: '#f97316' },
+  
+  // Web
   fetchDocumentation: { icon: '📚', label: 'Fetch Docs', color: '#8b5cf6' },
   searchWeb: { icon: '🌐', label: 'Web Search', color: '#06b6d4' },
+  
+  // Deployment
   deployPreview: { icon: '🚀', label: 'Deploy Preview', color: '#22c55e' },
   checkDeployStatus: { icon: '📡', label: 'Check Deploy', color: '#84cc16' },
+  
+  // Reasoning
   think: { icon: '💭', label: 'Thinking', color: '#64748b' },
   planSteps: { icon: '📋', label: 'Planning', color: '#0ea5e9' },
   delegateToAgent: { icon: '🤝', label: 'Delegate', color: '#d946ef' },
+  
+  // GOD-TIER: Vision (Eyes)
+  captureScreenshot: { icon: '📸', label: 'Screenshot', color: '#f472b6' },
+  analyzeVisual: { icon: '👁️', label: 'Visual Analysis', color: '#c084fc' },
+  getBrowserLogs: { icon: '🖥️', label: 'Browser Logs', color: '#fb923c' },
+  
+  // GOD-TIER: Database
+  inspectSchema: { icon: '🗄️', label: 'Inspect Schema', color: '#2dd4bf' },
+  runSqlQuery: { icon: '📊', label: 'SQL Query', color: '#4ade80' },
+  
+  // GOD-TIER: Safety (Time Travel)
+  createCheckpoint: { icon: '💾', label: 'Checkpoint', color: '#60a5fa' },
+  rollbackToCheckpoint: { icon: '⏪', label: 'Rollback', color: '#f87171' },
+  listCheckpoints: { icon: '📋', label: 'Checkpoints', color: '#a3e635' },
 }
 
 interface ToolCallDisplayProps {
