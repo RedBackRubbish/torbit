@@ -12,7 +12,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.25",
+    "@ai-sdk/anthropic": "^3.0.36",
+    "@ai-sdk/google": "^3.0.20",
     "@ai-sdk/react": "^3.0.71",
     "@fontsource/space-grotesk": "^5.2.10",
     "@monaco-editor/react": "^4.7.0",
