@@ -31,6 +31,12 @@ export default function PreviewPanel() {
   const { isBooting, isReady, serverUrl, error, isSupported } = useWebContainer()
   const terminalLines = useTerminalStore((s) => s.lines)
   const [showTerminal, setShowTerminal] = useState(false)
+  
+  // Prevent hydration mismatch - only show dynamic status after mount
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const deviceWidths = {
     desktop: '100%',
@@ -121,13 +127,15 @@ export default function PreviewPanel() {
               {/* Status indicator */}
               <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-neutral-800/50 text-xs">
                 <div className={`w-1.5 h-1.5 rounded-full ${
+                  !isMounted ? 'bg-neutral-600' :
                   isBooting ? 'bg-amber-500 animate-pulse' :
                   serverUrl ? 'bg-emerald-500' :
                   error ? 'bg-red-500' :
                   'bg-neutral-600'
                 }`} />
                 <span className="text-neutral-400">
-                  {isBooting ? 'Booting...' :
+                  {!isMounted ? 'Ready' :
+                   isBooting ? 'Booting...' :
                    serverUrl ? 'Live' :
                    error ? 'Error' :
                    'Ready'}
@@ -201,6 +209,29 @@ function PreviewContent({
   deviceWidths,
   files,
 }: PreviewContentProps) {
+  const [isMounted, setIsMounted] = useState(false)
+  
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+  
+  // Prevent hydration mismatch - render neutral state on server
+  if (!isMounted) {
+    return (
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-neutral-500/10 border border-neutral-500/30 flex items-center justify-center">
+          <div className="w-8 h-8" />
+        </div>
+        <h3 className="text-neutral-400 text-lg font-medium mb-2">
+          Loading...
+        </h3>
+        <p className="text-neutral-500 text-sm">
+          Initializing preview
+        </p>
+      </div>
+    )
+  }
+  
   // Not supported
   if (!isSupported) {
     return (

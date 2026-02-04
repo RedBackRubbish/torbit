@@ -1,6 +1,6 @@
 import { streamText, stepCountIs } from 'ai'
 import { AGENT_TOOLS, AgentId } from '@/lib/tools/definitions'
-import { executeTool, createExecutionContext } from '@/lib/tools/executor'
+import { createAgentTools, createContextFromRequest } from '@/lib/tools/ai-sdk-tools'
 import { 
   getModelForTask, 
   analyzeTaskComplexity, 
@@ -185,18 +185,31 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { messages, agentId = 'architect', projectId = 'default', userId = 'anonymous' } = await req.json()
+    const { messages: rawMessages, agentId = 'architect', projectId = 'default', userId = 'anonymous' } = await req.json()
+
+    // Filter out empty messages to prevent API errors
+    const messages = rawMessages.filter((m: { content?: string }) => 
+      m.content && typeof m.content === 'string' && m.content.trim().length > 0
+    )
+
+    // Ensure we have at least one message
+    if (messages.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No valid messages provided' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
 
     const systemPrompt = AGENT_PROMPTS[agentId] || AGENT_PROMPTS.architect
     const complexity = analyzeTaskComplexity(messages)
     const model = getModelForTask(agentId as AgentId, complexity)
     const modelProvider = AGENT_MODEL_MAP[agentId as AgentId] || 'claude-sonnet'
     
-    // Get tools for this agent
-    const agentTools = AGENT_TOOLS[agentId as AgentId] || AGENT_TOOLS.architect
-    
     // Create execution context for tools - persists across this request
-    const executionContext = createExecutionContext(projectId, userId)
+    const executionContext = createContextFromRequest(projectId, userId)
+    
+    // Create AI SDK tools with execute functions for multi-step calling
+    const agentTools = createAgentTools(agentId as AgentId, executionContext)
 
     // Create a TransformStream for custom streaming with tool execution
     const encoder = new TextEncoder()
@@ -215,12 +228,12 @@ export async function POST(req: Request) {
               system: systemPrompt,
               messages,
               tools: agentTools,
-              stopWhen: stepCountIs(15), // Prevent infinite loops
+              stopWhen: stepCountIs(10), // Limited steps - AI should batch file creation in text
               onStepFinish: async (step) => {
-                // Execute and stream tool calls
+                // Stream tool calls to UI for visibility
                 if (step.toolCalls) {
                   for (const tc of step.toolCalls) {
-                    // Send tool call start to UI
+                    // Send tool call to UI
                     sendChunk({
                       type: 'tool-call',
                       toolCall: {
@@ -229,39 +242,24 @@ export async function POST(req: Request) {
                         args: (tc as { input?: Record<string, unknown> }).input ?? {},
                       },
                     })
-
-                    // Execute the tool
-                    const toolStart = Date.now()
-                    try {
-                      const toolInput = (tc as { input?: Record<string, unknown> }).input ?? {}
-                      const toolResult = await executeTool(
-                        tc.toolName as keyof typeof agentTools,
-                        toolInput,
-                        executionContext
-                      )
-
-                      // Send tool result to UI
-                      sendChunk({
-                        type: 'tool-result',
-                        toolResult: {
-                          id: tc.toolCallId,
-                          success: toolResult.success,
-                          output: toolResult.output,
-                          duration: Date.now() - toolStart,
-                        },
-                      })
-                    } catch (toolError) {
-                      // Tool execution error
-                      sendChunk({
-                        type: 'tool-result',
-                        toolResult: {
-                          id: tc.toolCallId,
-                          success: false,
-                          output: `Tool error: ${toolError instanceof Error ? toolError.message : 'Unknown error'}`,
-                          duration: Date.now() - toolStart,
-                        },
-                      })
-                    }
+                  }
+                }
+                
+                // Stream tool results to UI
+                if (step.toolResults) {
+                  for (const tr of step.toolResults) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const toolResult = (tr as any).result ?? (tr as any).output ?? ''
+                    const resultStr = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult)
+                    sendChunk({
+                      type: 'tool-result',
+                      toolResult: {
+                        id: tr.toolCallId,
+                        success: !resultStr.startsWith('Error:'),
+                        output: resultStr,
+                        duration: 0, // AI SDK handles timing internally
+                      },
+                    })
                   }
                 }
               },

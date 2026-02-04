@@ -1,7 +1,9 @@
 'use client'
 
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { ToolCallDisplay } from './ToolCallDisplay'
+import { TaskCard } from './TaskCard'
 import { AGENT_ICONS, AGENT_COLORS, type Message } from './types'
 
 interface MessageBubbleProps {
@@ -12,9 +14,47 @@ interface MessageBubbleProps {
 }
 
 /**
+ * Parses content to extract files and clean message
+ */
+function parseContent(content: string): {
+  cleanMessage: string
+  files: { path: string; status: 'complete' }[]
+} {
+  const files: { path: string; status: 'complete' }[] = []
+  
+  // Extract file paths from code blocks (format: ```lang\n// path\n...```)
+  const codeBlockRegex = /```\w*\n\/\/ ([\w\/.@-]+)\n[\s\S]*?```/g
+  let match
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    files.push({ path: match[1], status: 'complete' })
+  }
+  
+  // Remove code blocks from message to get clean text
+  let cleanMessage = content.replace(/```[\s\S]*?```/g, '').trim()
+  
+  // If only code was returned, provide a friendly message
+  if (!cleanMessage && files.length > 0) {
+    cleanMessage = `Created ${files.length} file${files.length > 1 ? 's' : ''}`
+  }
+  
+  // Clean up extra whitespace
+  cleanMessage = cleanMessage.replace(/\n{3,}/g, '\n\n').trim()
+  
+  return { cleanMessage, files }
+}
+
+/**
  * MessageBubble - Individual chat message with tool calls and error handling
+ * Shows clean status messages, not raw code
  */
 export function MessageBubble({ message, isLast, isLoading, index }: MessageBubbleProps) {
+  // Parse content to extract files and clean message
+  const { cleanMessage, files } = useMemo(() => {
+    if (message.role === 'user' || !message.content) {
+      return { cleanMessage: message.content || '', files: [] }
+    }
+    return parseContent(message.content)
+  }, [message.content, message.role])
   if (message.role === 'user') {
     return (
       <motion.div
@@ -48,12 +88,6 @@ export function MessageBubble({ message, isLast, isLoading, index }: MessageBubb
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span 
-            className="text-xs font-medium capitalize"
-            style={{ color: AGENT_COLORS[message.agentId || 'architect'] }}
-          >
-            {message.agentId || 'Architect'}
-          </span>
           {isLoading && isLast && !message.content && (
             <div className="flex gap-1">
               <motion.div
@@ -90,6 +124,16 @@ export function MessageBubble({ message, isLast, isLoading, index }: MessageBubb
           </div>
         )}
         
+        {/* File creation progress - TaskCard instead of raw code */}
+        {files.length > 0 && (
+          <div className="mb-2">
+            <TaskCard 
+              tasks={files} 
+              isComplete={!isLoading || !isLast}
+            />
+          </div>
+        )}
+        
         {/* Error display with type badge */}
         {message.error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-2xl rounded-tl-md px-4 py-3 mb-2">
@@ -117,11 +161,11 @@ export function MessageBubble({ message, isLast, isLoading, index }: MessageBubb
           </div>
         )}
         
-        {/* Text response */}
-        {(message.content && !message.error && !message.retrying) && (
+        {/* Clean text response - no code blocks shown */}
+        {(cleanMessage && !message.error && !message.retrying) && (
           <div className="bg-neutral-800/50 border border-neutral-700/50 rounded-2xl rounded-tl-md px-4 py-3">
             <p className="text-sm whitespace-pre-wrap text-neutral-200">
-              {message.content}
+              {cleanMessage}
             </p>
           </div>
         )}

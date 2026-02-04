@@ -66,8 +66,7 @@ export function useWebContainer(): UseWebContainerReturn {
 
     async function boot() {
       try {
-        addLog('🔋 Initializing virtual environment...', 'info')
-        
+        // Note: Logging handled by WebContainerProvider to avoid duplicates
         const instance = await getWebContainer()
         
         if (!mounted) return
@@ -78,18 +77,15 @@ export function useWebContainer(): UseWebContainerReturn {
         instance.on('server-ready', (port, url) => {
           console.log(`🚀 Server ready on port ${port}: ${url}`)
           setServerUrl(url)
-          addLog(`✅ Server ready at ${url}`, 'success')
         })
         
         // Listen for errors
         instance.on('error', (err) => {
           console.error('WebContainer error:', err)
-          addLog(`❌ Error: ${err.message}`, 'error')
         })
         
         setIsBooting(false)
         setIsReady(true)
-        addLog('✅ Virtual environment ready', 'success')
         
       } catch (err) {
         if (!mounted) return
@@ -97,7 +93,6 @@ export function useWebContainer(): UseWebContainerReturn {
         const message = err instanceof Error ? err.message : 'Unknown error'
         setError(message)
         setIsBooting(false)
-        addLog(`❌ Failed to boot: ${message}`, 'error')
       }
     }
 
@@ -108,7 +103,7 @@ export function useWebContainer(): UseWebContainerReturn {
       // Kill any active processes on unmount
       activeProcesses.current.forEach(p => p.kill())
     }
-  }, [isSupported, addLog])
+  }, [isSupported])
 
   // ========================================================================
   // File Operations

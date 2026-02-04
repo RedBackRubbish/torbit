@@ -711,34 +711,8 @@ export const TOOL_DEFINITIONS = {
 // Agent-specific tool access
 export const AGENT_TOOLS = {
   architect: {
-    // Reasoning
+    // Only think tool - files are output in text response for speed
     think: TOOL_DEFINITIONS.think,
-    planSteps: TOOL_DEFINITIONS.planSteps,
-    delegateToAgent: TOOL_DEFINITIONS.delegateToAgent,
-    manageTask: TOOL_DEFINITIONS.manageTask,
-    // File reading
-    getFileTree: TOOL_DEFINITIONS.getFileTree,
-    readFile: TOOL_DEFINITIONS.readFile,
-    searchCode: TOOL_DEFINITIONS.searchCode,
-    analyzeDependencies: TOOL_DEFINITIONS.analyzeDependencies,
-    fetchDocumentation: TOOL_DEFINITIONS.fetchDocumentation,
-    // Database inspection
-    inspectSchema: TOOL_DEFINITIONS.inspectSchema,
-    // Safety (Time Travel)
-    createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
-    rollbackToCheckpoint: TOOL_DEFINITIONS.rollbackToCheckpoint,
-    listCheckpoints: TOOL_DEFINITIONS.listCheckpoints,
-    // PHASE 2: MCP Connectivity (Skeleton Key)
-    connectMcpServer: TOOL_DEFINITIONS.connectMcpServer,
-    listMcpTools: TOOL_DEFINITIONS.listMcpTools,
-    invokeMcpTool: TOOL_DEFINITIONS.invokeMcpTool,
-    // PHASE 2: Package Validation (Dependency Sherlock)
-    verifyPackage: TOOL_DEFINITIONS.verifyPackage,
-    checkPeerDependencies: TOOL_DEFINITIONS.checkPeerDependencies,
-    verifyDependencyGraph: TOOL_DEFINITIONS.verifyDependencyGraph, // CLOSER: Prevent version conflicts before install
-    // PHASE 2: Context Caching (Infinite Memory)
-    cacheContext: TOOL_DEFINITIONS.cacheContext,
-    getCachedContext: TOOL_DEFINITIONS.getCachedContext,
   },
   frontend: {
     // Reasoning

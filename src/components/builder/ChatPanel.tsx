@@ -150,6 +150,19 @@ export default function ChatPanel() {
                       ? { ...m, toolCalls: Array.from(toolCalls.values()) }
                       : m
                   ))
+                  
+                  // Parse code blocks from tool output (for createFile/editFile tools)
+                  if (chunk.toolResult.success && chunk.toolResult.output) {
+                    const codeBlocks = parseCodeBlocks(chunk.toolResult.output)
+                    codeBlocks.forEach(block => {
+                      addFile({
+                        path: block.path,
+                        name: block.path.split('/').pop() || 'untitled',
+                        content: block.content,
+                        language: block.language,
+                      })
+                    })
+                  }
                 }
               }
               break
@@ -220,10 +233,12 @@ export default function ChatPanel() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: messageContent }].map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: [...messages, { role: 'user', content: messageContent }]
+            .filter(m => m.content && m.content.trim().length > 0) // Filter empty messages
+            .map(m => ({
+              role: m.role,
+              content: m.content,
+            })),
           agentId,
         }),
       })

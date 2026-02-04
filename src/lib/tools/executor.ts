@@ -89,6 +89,24 @@ export interface ParsedError {
   suggestedFixes: string[]
 }
 
+// Helper: Get language from file path
+function getLanguageFromPath(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase()
+  const langMap: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    json: 'json',
+    css: 'css',
+    scss: 'scss',
+    html: 'html',
+    md: 'markdown',
+    prisma: 'prisma',
+  }
+  return langMap[ext || ''] || 'typescript'
+}
+
 // Tool execution handlers
 const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolExecutionContext) => Promise<ToolResult>> = {
   
@@ -103,10 +121,13 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     // Store in virtual file system
     ctx.files.set(path, content)
     
+    // Return in a format the UI can parse to extract files
+    const output = `Created file: ${path}${description ? ` - ${description}` : ''}\n\n\`\`\`${getLanguageFromPath(path)}\n// ${path}\n${content}\n\`\`\``
+    
     return {
       success: true,
-      output: `Created file: ${path}${description ? ` - ${description}` : ''}`,
-      data: { path, size: content.length },
+      output,
+      data: { path, size: content.length, content },
       duration: Date.now() - start,
     }
   },

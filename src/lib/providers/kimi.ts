@@ -1,14 +1,15 @@
 /**
  * KIMI K2.5 PROVIDER
  *
- * OpenAI-compatible client for Moonshot AI's Kimi models.
- * API Docs: https://platform.moonshot.cn/docs/api/chat
+ * Uses OpenRouter to access Kimi models (English-accessible endpoint).
+ * OpenRouter Docs: https://openrouter.ai/docs
  *
- * Models:
+ * Models (via OpenRouter):
+ * - moonshotai/kimi-k2 (mapped to kimi-k2.5)
+ * 
+ * Direct Moonshot models (if using MOONSHOT_API_KEY):
  * - kimi-k2.5: Most intelligent, multimodal, 256K context, thinking mode
  * - kimi-k2-turbo-preview: Fast version (60-100 tokens/sec), 256K context
- * - kimi-k2-0905-preview: Enhanced agentic coding, 256K context
- * - kimi-k2-thinking: Long reasoning, multi-step tool calls
  */
 
 import OpenAI from 'openai'
@@ -27,16 +28,20 @@ export type KimiModel =
   | 'moonshot-v1-8k'
   | 'moonshot-v1-32k'
   | 'moonshot-v1-128k'
+  // OpenRouter model names
+  | 'moonshotai/kimi-k2'
 
 export interface KimiClientConfig {
-  /** API key (falls back to KIMI_API_KEY or MOONSHOT_API_KEY env vars) */
+  /** API key (falls back to OPENROUTER_API_KEY, KIMI_API_KEY, or MOONSHOT_API_KEY) */
   apiKey?: string
-  /** Base URL (defaults to https://api.moonshot.cn/v1) */
+  /** Base URL (defaults to OpenRouter, or Moonshot if using direct key) */
   baseUrl?: string
   /** Request timeout in ms */
   timeout?: number
   /** Max retries on failure */
   maxRetries?: number
+  /** Force using OpenRouter even if Moonshot key is available */
+  useOpenRouter?: boolean
 }
 
 export interface KimiChatOptions {
@@ -107,28 +112,88 @@ export const KIMI_MODEL_CAPABILITIES = {
 } as const
 
 // ============================================
+// OPENROUTER MODEL MAPPING
+// ============================================
+
+/** Map internal model names to OpenRouter model IDs */
+const OPENROUTER_MODEL_MAP: Record<string, string> = {
+  'kimi-k2.5': 'moonshotai/kimi-k2',
+  'kimi-k2-turbo-preview': 'moonshotai/kimi-k2', // OpenRouter only has one variant
+  'kimi-k2-0905-preview': 'moonshotai/kimi-k2',
+  'kimi-k2-thinking': 'moonshotai/kimi-k2',
+  'kimi-k2-thinking-turbo': 'moonshotai/kimi-k2',
+  'moonshotai/kimi-k2': 'moonshotai/kimi-k2',
+}
+
+// ============================================
 // CLIENT CREATION
 // ============================================
 
 /**
+ * Detect which provider to use based on available API keys
+ */
+function detectProvider(): { type: 'openrouter' | 'moonshot'; apiKey: string; baseUrl: string } {
+  const openRouterKey = process.env.OPENROUTER_API_KEY
+  const kimiKey = process.env.KIMI_API_KEY
+  const moonshotKey = process.env.MOONSHOT_API_KEY
+
+  // Prefer OpenRouter for English access
+  if (openRouterKey) {
+    return {
+      type: 'openrouter',
+      apiKey: openRouterKey,
+      baseUrl: 'https://openrouter.ai/api/v1',
+    }
+  }
+
+  // Fall back to direct Moonshot if available
+  if (kimiKey || moonshotKey) {
+    return {
+      type: 'moonshot',
+      apiKey: (kimiKey || moonshotKey)!,
+      baseUrl: 'https://api.moonshot.cn/v1',
+    }
+  }
+
+  throw new Error(
+    'Kimi API key not configured. Set OPENROUTER_API_KEY (recommended) or KIMI_API_KEY.'
+  )
+}
+
+/**
  * Create a Kimi (Moonshot AI) client
- * Uses OpenAI SDK since Kimi is OpenAI-compatible
+ * Uses OpenRouter by default (English-accessible), falls back to direct Moonshot
  */
 export function createKimiClient(config: KimiClientConfig = {}): OpenAI {
-  const apiKey = config.apiKey || process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY
+  const provider = config.apiKey
+    ? { type: 'custom' as const, apiKey: config.apiKey, baseUrl: config.baseUrl || 'https://openrouter.ai/api/v1' }
+    : detectProvider()
 
-  if (!apiKey) {
-    throw new Error(
-      'Kimi API key not configured. Set KIMI_API_KEY or MOONSHOT_API_KEY environment variable.'
-    )
+  const headers: Record<string, string> = {}
+  
+  // OpenRouter requires extra headers
+  if (provider.type === 'openrouter' || provider.baseUrl?.includes('openrouter')) {
+    headers['HTTP-Referer'] = 'https://torbit.dev'
+    headers['X-Title'] = 'Torbit AI Builder'
   }
 
   return new OpenAI({
-    apiKey,
-    baseURL: config.baseUrl || 'https://api.moonshot.cn/v1',
+    apiKey: provider.apiKey,
+    baseURL: config.baseUrl || provider.baseUrl,
     timeout: config.timeout || 60000,
     maxRetries: config.maxRetries ?? 3,
+    defaultHeaders: headers,
   })
+}
+
+/**
+ * Get the correct model name for the current provider
+ */
+export function getModelName(model: KimiModel, useOpenRouter: boolean = true): string {
+  if (useOpenRouter && OPENROUTER_MODEL_MAP[model]) {
+    return OPENROUTER_MODEL_MAP[model]
+  }
+  return model
 }
 
 // ============================================
@@ -148,7 +213,11 @@ export async function kimiChat(
   usage?: OpenAI.Completions.CompletionUsage
 }> {
   const client = createKimiClient()
-  const model = options.model || 'kimi-k2.5'
+  const requestedModel = options.model || 'kimi-k2.5'
+  
+  // Use OpenRouter model name if using OpenRouter
+  const isOpenRouter = !!process.env.OPENROUTER_API_KEY
+  const model = getModelName(requestedModel, isOpenRouter)
 
   // Build extra_body for Kimi-specific options
   const extraBody: Record<string, unknown> = {}

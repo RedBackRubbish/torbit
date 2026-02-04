@@ -73,14 +73,14 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * Default model for each agent - optimized for their specialty
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  architect: 'claude-opus',      // Best reasoning for system design
-  frontend: 'claude-sonnet',     // Great for React/Next.js UI code
-  backend: 'claude-sonnet',      // Strong API design
-  database: 'gemini-pro',        // Analytical schema design
-  devops: 'gemini-flash',        // Config files are templated, speed matters
-  qa: 'gemini-flash',            // Test generation is formulaic, high volume
-  planner: 'claude-sonnet',      // Ticket management needs reasoning
-  auditor: 'claude-opus',        // Hostile QA needs best model
+  architect: 'claude-sonnet',    // Sonnet for planning (smart but fast enough)
+  frontend: 'gemini-flash',      // Flash for fast code generation
+  backend: 'gemini-flash',       // Flash for fast code generation
+  database: 'gemini-flash',      // Flash for schema generation
+  devops: 'gemini-flash',        // Config files, speed matters
+  qa: 'gemini-flash',            // Test generation, high volume
+  planner: 'claude-sonnet',      // Planning needs reasoning
+  auditor: 'claude-sonnet',      // QA needs reasoning
 }
 
 // ============================================

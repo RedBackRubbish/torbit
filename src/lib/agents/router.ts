@@ -507,8 +507,12 @@ export async function routeRequest(
 }
 
 /**
- * Check if Kimi API is configured
+ * Check if Kimi API is configured (via OpenRouter or direct Moonshot)
  */
 export function isKimiConfigured(): boolean {
-  return Boolean(process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY)
+  return Boolean(
+    process.env.OPENROUTER_API_KEY || 
+    process.env.KIMI_API_KEY || 
+    process.env.MOONSHOT_API_KEY
+  )
 }
