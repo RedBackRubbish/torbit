@@ -32,7 +32,8 @@ function BuilderPageContent() {
     setPreviewTab,
     sidebarCollapsed,
     toggleSidebar,
-    agentStatuses,
+    agents,
+    isGenerating,
   } = useBuilderStore()
 
   const handleChatRetry = useCallback(() => setChatKey(k => k + 1), [])
@@ -46,9 +47,9 @@ function BuilderPageContent() {
     }
   }, [initProject, prompt])
 
-  // Get current agent status
-  const currentAgent = agentStatuses.architect || { state: 'idle', currentTask: null }
-  const isWorking = currentAgent.state === 'working' || currentAgent.state === 'thinking'
+  // Get current active agent
+  const activeAgent = agents.find(a => a.status === 'working' || a.status === 'thinking')
+  const isWorking = isGenerating || !!activeAgent
 
   return (
     <BuilderLayout>
@@ -66,7 +67,7 @@ function BuilderPageContent() {
           <div className="flex items-center gap-2 min-w-[180px]">
             <div className={`w-2 h-2 rounded-full ${isWorking ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-400'}`} />
             <span className="text-[13px] text-[#a1a1a1]">
-              {isWorking ? (currentAgent.currentTask || 'Working...') : 'Ready'}
+              {isWorking ? (activeAgent?.currentTask || 'Working...') : 'Ready'}
             </span>
           </div>
           
