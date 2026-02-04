@@ -54,12 +54,17 @@ interface Message {
   agentId?: string
   toolCalls?: ToolCall[]
   usage?: UsageMetrics
-  error?: string
+  error?: {
+    type: string
+    message: string
+    retryable: boolean
+  }
+  retrying?: boolean
 }
 
 // Stream chunk types from API
 interface StreamChunk {
-  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage'
+  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry'
   content?: string
   toolCall?: {
     id: string
@@ -73,7 +78,16 @@ interface StreamChunk {
     duration: number
   }
   usage?: UsageMetrics
-  error?: string
+  error?: {
+    type: string
+    message: string
+    retryable: boolean
+  }
+  retry?: {
+    attempt: number
+    maxAttempts: number
+    retryAfterMs: number
+  }
 }
 
 // Tool call display component
@@ -275,12 +289,30 @@ export default function ChatPanel() {
               }
               break
 
+            case 'retry':
+              if (chunk.retry) {
+                setAgentStatus(agentId, 'working', `Retrying (${chunk.retry.attempt}/${chunk.retry.maxAttempts})...`)
+                setMessages(prev => prev.map(m => 
+                  m.id === assistantId 
+                    ? { ...m, retrying: true, content: `Retrying... (attempt ${chunk.retry!.attempt}/${chunk.retry!.maxAttempts})` }
+                    : m
+                ))
+              }
+              break
+
             case 'error':
-              setMessages(prev => prev.map(m => 
-                m.id === assistantId 
-                  ? { ...m, error: chunk.error, content: fullContent || chunk.error || 'An error occurred' }
-                  : m
-              ))
+              if (chunk.error) {
+                setMessages(prev => prev.map(m => 
+                  m.id === assistantId 
+                    ? { 
+                        ...m, 
+                        error: chunk.error, 
+                        retrying: false,
+                        content: fullContent || chunk.error?.message || 'An error occurred' 
+                      }
+                    : m
+                ))
+              }
               break
           }
         } catch {
@@ -348,7 +380,15 @@ export default function ChatPanel() {
       setAgentStatus(agentId, 'error', 'Request failed')
       setMessages(prev => prev.map(m => 
         m.id === assistantId 
-          ? { ...m, content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, error: String(error) }
+          ? { 
+              ...m, 
+              content: '', 
+              error: {
+                type: 'network',
+                message: error instanceof Error ? error.message : 'Unknown error',
+                retryable: true,
+              }
+            }
           : m
       ))
     } finally {
@@ -513,16 +553,46 @@ export default function ChatPanel() {
                         </div>
                       )}
                       
+                      {/* Error display with type badge */}
+                      {message.error && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl rounded-tl-md px-4 py-3 mb-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs px-2 py-0.5 bg-red-500/20 rounded text-red-400 uppercase">
+                              {message.error.type}
+                            </span>
+                            {message.error.retryable && (
+                              <span className="text-xs text-white/40">Retryable</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-red-400">{message.error.message}</p>
+                        </div>
+                      )}
+                      
+                      {/* Retrying indicator */}
+                      {message.retrying && (
+                        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl rounded-tl-md px-4 py-3 mb-2 flex items-center gap-2">
+                          <motion.div
+                            className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                          />
+                          <p className="text-sm text-yellow-400">{message.content}</p>
+                        </div>
+                      )}
+                      
                       {/* Text response */}
-                      {(message.content || (!message.toolCalls?.length && !message.error)) && (
-                        <div className={`bg-white/5 border rounded-2xl rounded-tl-md px-4 py-3 ${
-                          message.error ? 'border-red-500/30' : 'border-white/5'
-                        }`}>
-                          <p className={`text-sm whitespace-pre-wrap ${
-                            message.error ? 'text-red-400' : 'text-white/80'
-                          }`}>
-                            {message.content || 'Thinking...'}
+                      {(message.content && !message.error && !message.retrying) && (
+                        <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-md px-4 py-3">
+                          <p className="text-sm whitespace-pre-wrap text-white/80">
+                            {message.content}
                           </p>
+                        </div>
+                      )}
+                      
+                      {/* Thinking state */}
+                      {!message.content && !message.error && !message.retrying && !message.toolCalls?.length && (
+                        <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-md px-4 py-3">
+                          <p className="text-sm text-white/40">Thinking...</p>
                         </div>
                       )}
                     </div>

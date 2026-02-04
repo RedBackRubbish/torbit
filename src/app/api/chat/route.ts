@@ -1,8 +1,14 @@
-import { anthropic } from '@ai-sdk/anthropic'
-import { google } from '@ai-sdk/google'
-import { streamText, LanguageModel, stepCountIs } from 'ai'
+import { streamText, stepCountIs } from 'ai'
 import { AGENT_TOOLS, AgentId } from '@/lib/tools/definitions'
 import { executeTool, createExecutionContext } from '@/lib/tools/executor'
+import { 
+  getModelForTask, 
+  analyzeTaskComplexity, 
+  calculateCost, 
+  AGENT_MODEL_MAP,
+  MODEL_CONFIGS,
+  type ModelProvider 
+} from '@/lib/agents/models'
 
 // Import rich agent prompts
 import { ARCHITECT_SYSTEM_PROMPT } from '@/lib/agents/prompts/architect'
@@ -14,29 +20,6 @@ import { PLANNER_SYSTEM_PROMPT } from '@/lib/agents/prompts/planner'
 
 // Allow streaming responses up to 120 seconds for tool-heavy tasks
 export const maxDuration = 120
-
-// Model configuration - map agents to optimal models
-type ModelProvider = 'claude-opus' | 'claude-sonnet' | 'gemini-pro' | 'gemini-flash'
-
-// Model instances - consistent with orchestrator
-const MODELS: Record<ModelProvider, () => LanguageModel> = {
-  'claude-opus': () => anthropic('claude-sonnet-4-20250514'), // Sonnet as Opus proxy until Opus available
-  'claude-sonnet': () => anthropic('claude-sonnet-4-20250514'),
-  'gemini-pro': () => google('gemini-2.5-pro-preview-06-05'),
-  'gemini-flash': () => google('gemini-2.0-flash'),
-}
-
-// Agent to model mapping - optimized for cost/performance
-const AGENT_MODEL_MAP: Record<string, ModelProvider> = {
-  architect: 'claude-opus',      // Best reasoning for system design
-  frontend: 'claude-sonnet',     // Great for React/Next.js UI code
-  backend: 'claude-sonnet',      // Strong API design
-  database: 'gemini-pro',        // Analytical schema design
-  devops: 'gemini-flash',        // Config files are templated, speed matters
-  qa: 'gemini-flash',            // Test generation is formulaic, high volume
-  planner: 'claude-sonnet',      // Ticket management needs reasoning
-  auditor: 'claude-opus',        // Hostile QA needs best model
-}
 
 // Rich agent system prompts - the sophisticated ones with tool awareness
 const AGENT_PROMPTS: Record<string, string> = {
@@ -91,34 +74,68 @@ Never hallucinate columns - use inspectSchema first.`,
   auditor: AUDITOR_SYSTEM_PROMPT,
 }
 
-// Task complexity analyzer - route to appropriate model
-function analyzeTaskComplexity(messages: Array<{ role: string; content: string }>): 'high' | 'medium' | 'low' {
-  const lastMessage = messages[messages.length - 1]?.content || ''
-  const wordCount = lastMessage.split(/\s+/).length
-  
-  // High complexity indicators
-  const highComplexityKeywords = ['refactor', 'architecture', 'design system', 'complex', 'optimize', 'performance', 'audit', 'review']
-  const hasHighComplexity = highComplexityKeywords.some(kw => lastMessage.toLowerCase().includes(kw))
-  
-  if (hasHighComplexity || wordCount > 200) return 'high'
-  if (wordCount > 50) return 'medium'
-  return 'low'
+// ============================================
+// ERROR HANDLING
+// ============================================
+
+interface TorbitError {
+  type: 'auth' | 'rate_limit' | 'context_length' | 'timeout' | 'tool_error' | 'unknown'
+  message: string
+  retryable: boolean
+  retryAfterMs?: number
 }
 
-// Get optimal model for agent and task
-function getModelForTask(agentId: string, complexity: 'high' | 'medium' | 'low'): LanguageModel {
-  // Override for high complexity tasks - use premium model
-  if (complexity === 'high' && agentId !== 'architect' && agentId !== 'auditor') {
-    return MODELS['claude-sonnet']()
+function classifyError(error: unknown): TorbitError {
+  if (!(error instanceof Error)) {
+    return { type: 'unknown', message: 'Unknown error occurred', retryable: false }
   }
   
-  const modelProvider = AGENT_MODEL_MAP[agentId] || 'claude-sonnet'
-  return MODELS[modelProvider]()
+  const msg = error.message.toLowerCase()
+  
+  if (msg.includes('api key') || msg.includes('authentication') || msg.includes('unauthorized')) {
+    return {
+      type: 'auth',
+      message: 'API key not configured. Please add ANTHROPIC_API_KEY or GOOGLE_API_KEY to environment variables.',
+      retryable: false,
+    }
+  }
+  
+  if (msg.includes('rate limit') || msg.includes('429') || msg.includes('too many requests')) {
+    return {
+      type: 'rate_limit',
+      message: 'Rate limited. Retrying in a moment...',
+      retryable: true,
+      retryAfterMs: 5000,
+    }
+  }
+  
+  if (msg.includes('context length') || msg.includes('too long') || msg.includes('maximum')) {
+    return {
+      type: 'context_length',
+      message: 'Message too long. Try breaking your request into smaller parts.',
+      retryable: false,
+    }
+  }
+  
+  if (msg.includes('timeout') || msg.includes('timed out')) {
+    return {
+      type: 'timeout',
+      message: 'Request timed out. Please try again.',
+      retryable: true,
+      retryAfterMs: 1000,
+    }
+  }
+  
+  return {
+    type: 'unknown',
+    message: error.message,
+    retryable: false,
+  }
 }
 
 // Response with tool call metadata for UI streaming
 interface StreamChunk {
-  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage'
+  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry'
   content?: string
   toolCall?: {
     id: string
@@ -135,9 +152,22 @@ interface StreamChunk {
     inputTokens: number
     outputTokens: number
     estimatedCost: number
+    provider: string
   }
-  error?: string
+  error?: {
+    type: string
+    message: string
+    retryable: boolean
+  }
+  retry?: {
+    attempt: number
+    maxAttempts: number
+    retryAfterMs: number
+  }
 }
+
+// Maximum retry attempts for retryable errors
+const MAX_RETRIES = 3
 
 export async function POST(req: Request) {
   try {
@@ -145,7 +175,8 @@ export async function POST(req: Request) {
 
     const systemPrompt = AGENT_PROMPTS[agentId] || AGENT_PROMPTS.architect
     const complexity = analyzeTaskComplexity(messages)
-    const model = getModelForTask(agentId, complexity)
+    const model = getModelForTask(agentId as AgentId, complexity)
+    const modelProvider = AGENT_MODEL_MAP[agentId as AgentId] || 'claude-sonnet'
     
     // Get tools for this agent
     const agentTools = AGENT_TOOLS[agentId as AgentId] || AGENT_TOOLS.architect
@@ -153,7 +184,7 @@ export async function POST(req: Request) {
     // Create execution context for tools - persists across this request
     const executionContext = createExecutionContext(projectId, userId)
 
-    console.log(`[TORBIT] Agent: ${agentId} | Complexity: ${complexity} | Tools: ${Object.keys(agentTools).length}`)
+    console.log(`[TORBIT] Agent: ${agentId} | Complexity: ${complexity} | Model: ${MODEL_CONFIGS[modelProvider].model} | Tools: ${Object.keys(agentTools).length}`)
 
     // Create a TransformStream for custom streaming with tool execution
     const encoder = new TextEncoder()
@@ -164,100 +195,123 @@ export async function POST(req: Request) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
         }
 
-        try {
-          const result = await streamText({
-            model,
-            system: systemPrompt,
-            messages,
-            tools: agentTools,
-            stopWhen: stepCountIs(15), // Prevent infinite loops
-            onStepFinish: async (step) => {
-              // Execute and stream tool calls
-              if (step.toolCalls) {
-                for (const tc of step.toolCalls) {
-                  // Send tool call start to UI
-                  sendChunk({
-                    type: 'tool-call',
-                    toolCall: {
-                      id: tc.toolCallId,
-                      name: tc.toolName,
-                      args: (tc as { input?: Record<string, unknown> }).input ?? {},
-                    },
-                  })
+        // Retry wrapper for transient errors
+        const executeWithRetry = async (attempt = 1): Promise<void> => {
+          try {
+            const result = await streamText({
+              model,
+              system: systemPrompt,
+              messages,
+              tools: agentTools,
+              stopWhen: stepCountIs(15), // Prevent infinite loops
+              onStepFinish: async (step) => {
+                // Execute and stream tool calls
+                if (step.toolCalls) {
+                  for (const tc of step.toolCalls) {
+                    // Send tool call start to UI
+                    sendChunk({
+                      type: 'tool-call',
+                      toolCall: {
+                        id: tc.toolCallId,
+                        name: tc.toolName,
+                        args: (tc as { input?: Record<string, unknown> }).input ?? {},
+                      },
+                    })
 
-                  // Execute the tool
-                  const toolStart = Date.now()
-                  const toolInput = (tc as { input?: Record<string, unknown> }).input ?? {}
-                  const toolResult = await executeTool(
-                    tc.toolName as keyof typeof agentTools,
-                    toolInput,
-                    executionContext
-                  )
+                    // Execute the tool
+                    const toolStart = Date.now()
+                    try {
+                      const toolInput = (tc as { input?: Record<string, unknown> }).input ?? {}
+                      const toolResult = await executeTool(
+                        tc.toolName as keyof typeof agentTools,
+                        toolInput,
+                        executionContext
+                      )
 
-                  // Send tool result to UI
-                  sendChunk({
-                    type: 'tool-result',
-                    toolResult: {
-                      id: tc.toolCallId,
-                      success: toolResult.success,
-                      output: toolResult.output,
-                      duration: Date.now() - toolStart,
-                    },
-                  })
+                      // Send tool result to UI
+                      sendChunk({
+                        type: 'tool-result',
+                        toolResult: {
+                          id: tc.toolCallId,
+                          success: toolResult.success,
+                          output: toolResult.output,
+                          duration: Date.now() - toolStart,
+                        },
+                      })
+                    } catch (toolError) {
+                      // Tool execution error
+                      sendChunk({
+                        type: 'tool-result',
+                        toolResult: {
+                          id: tc.toolCallId,
+                          success: false,
+                          output: `Tool error: ${toolError instanceof Error ? toolError.message : 'Unknown error'}`,
+                          duration: Date.now() - toolStart,
+                        },
+                      })
+                    }
+                  }
                 }
-              }
-            },
-          })
-
-          // Stream the text response
-          let totalText = ''
-          for await (const chunk of result.textStream) {
-            totalText += chunk
-            sendChunk({ type: 'text', content: chunk })
-          }
-
-          // Send usage metrics at the end
-          const usage = await result.usage
-          if (usage) {
-            // AI SDK v6 uses totalTokens, promptTokens may not exist
-            const inputTokens = (usage as { promptTokens?: number }).promptTokens || 0
-            const outputTokens = (usage as { completionTokens?: number }).completionTokens || 0
-            
-            // Estimate cost (rough pricing)
-            const inputCost = (inputTokens / 1000) * 0.003 // ~$3/M input
-            const outputCost = (outputTokens / 1000) * 0.015 // ~$15/M output
-            
-            sendChunk({
-              type: 'usage',
-              usage: {
-                inputTokens,
-                outputTokens,
-                estimatedCost: inputCost + outputCost,
               },
             })
-          }
 
-          controller.close()
-        } catch (error) {
-          console.error('[TORBIT] Stream error:', error)
-          
-          // Classify the error
-          let errorMessage = 'Unknown error occurred'
-          if (error instanceof Error) {
-            if (error.message.includes('API key') || error.message.includes('authentication')) {
-              errorMessage = 'API key not configured. Please add your ANTHROPIC_API_KEY or GOOGLE_API_KEY to environment variables.'
-            } else if (error.message.includes('rate limit') || error.message.includes('429')) {
-              errorMessage = 'Rate limited. Please wait a moment and try again.'
-            } else if (error.message.includes('context length') || error.message.includes('too long')) {
-              errorMessage = 'Message too long. Try breaking your request into smaller parts.'
-            } else {
-              errorMessage = error.message
+            // Stream the text response
+            for await (const chunk of result.textStream) {
+              sendChunk({ type: 'text', content: chunk })
             }
+
+            // Send usage metrics at the end
+            const usage = await result.usage
+            if (usage) {
+              const inputTokens = (usage as { promptTokens?: number }).promptTokens || 0
+              const outputTokens = (usage as { completionTokens?: number }).completionTokens || 0
+              const estimatedCost = calculateCost(modelProvider, inputTokens, outputTokens)
+              
+              sendChunk({
+                type: 'usage',
+                usage: {
+                  inputTokens,
+                  outputTokens,
+                  estimatedCost,
+                  provider: modelProvider,
+                },
+              })
+            }
+
+            controller.close()
+          } catch (error) {
+            const classified = classifyError(error)
+            console.error(`[TORBIT] Stream error (attempt ${attempt}):`, classified)
+            
+            // Retry if retryable and within limits
+            if (classified.retryable && attempt < MAX_RETRIES) {
+              sendChunk({
+                type: 'retry',
+                retry: {
+                  attempt,
+                  maxAttempts: MAX_RETRIES,
+                  retryAfterMs: classified.retryAfterMs || 1000,
+                },
+              })
+              
+              await new Promise(resolve => setTimeout(resolve, classified.retryAfterMs || 1000))
+              return executeWithRetry(attempt + 1)
+            }
+            
+            // Non-retryable or max retries exceeded
+            sendChunk({ 
+              type: 'error', 
+              error: {
+                type: classified.type,
+                message: classified.message,
+                retryable: classified.retryable,
+              }
+            })
+            controller.close()
           }
-          
-          sendChunk({ type: 'error', error: errorMessage })
-          controller.close()
         }
+
+        await executeWithRetry()
       },
     })
 
