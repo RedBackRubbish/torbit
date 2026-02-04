@@ -8,22 +8,25 @@ interface MarkdownRendererProps {
 }
 
 interface ParsedBlock {
-  type: 'paragraph' | 'heading' | 'code' | 'list' | 'blockquote'
+  type: 'paragraph' | 'heading' | 'list' | 'blockquote'
   content: string
-  language?: string
   level?: number
   items?: string[]
 }
 
 /**
- * Lightweight markdown renderer optimized for AI chat output
- * Supports: paragraphs, headings, inline code, code blocks, lists, bold, italic
+ * Lightweight markdown renderer for AI chat output
+ * 
+ * NOTE: Code blocks are NOT rendered here - they belong in the Code panel.
+ * This only renders conversational elements: text, headings, lists, quotes.
  */
 export function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
   const blocks = useMemo(() => parseMarkdown(content), [content])
 
+  if (blocks.length === 0) return null
+
   return (
-    <div className={`markdown-content space-y-3 ${className}`}>
+    <div className={`space-y-2 ${className}`}>
       {blocks.map((block, i) => (
         <BlockRenderer key={i} block={block} />
       ))}
@@ -36,10 +39,10 @@ function BlockRenderer({ block }: { block: ParsedBlock }) {
     case 'heading':
       const HeadingTag = `h${block.level || 3}` as keyof JSX.IntrinsicElements
       const headingStyles = {
-        1: 'text-[16px] font-semibold text-[#fafafa]',
-        2: 'text-[15px] font-semibold text-[#fafafa]',
-        3: 'text-[14px] font-medium text-[#fafafa]',
-        4: 'text-[13px] font-medium text-[#e5e5e5]',
+        1: 'text-[14px] font-semibold text-[#fafafa] mt-3 first:mt-0',
+        2: 'text-[13px] font-semibold text-[#fafafa] mt-2 first:mt-0',
+        3: 'text-[13px] font-medium text-[#e5e5e5] mt-2 first:mt-0',
+        4: 'text-[13px] font-medium text-[#a1a1a1] mt-1 first:mt-0',
       }[block.level || 3]
       return (
         <HeadingTag className={headingStyles}>
@@ -47,35 +50,11 @@ function BlockRenderer({ block }: { block: ParsedBlock }) {
         </HeadingTag>
       )
 
-    case 'code':
-      return (
-        <div className="rounded-lg overflow-hidden border border-[#262626] bg-[#0a0a0a]">
-          {block.language && (
-            <div className="px-3 py-1.5 bg-[#141414] border-b border-[#262626] flex items-center justify-between">
-              <span className="text-[11px] text-[#737373] font-medium uppercase tracking-wide">
-                {block.language}
-              </span>
-              <button 
-                onClick={() => navigator.clipboard.writeText(block.content)}
-                className="text-[11px] text-[#525252] hover:text-[#a1a1a1] transition-colors"
-              >
-                Copy
-              </button>
-            </div>
-          )}
-          <pre className="p-3 overflow-x-auto">
-            <code className="text-[12px] leading-relaxed text-[#e5e5e5] font-mono">
-              {block.content}
-            </code>
-          </pre>
-        </div>
-      )
-
     case 'list':
       return (
-        <ul className="space-y-1.5 pl-4">
+        <ul className="space-y-1 pl-3">
           {block.items?.map((item, i) => (
-            <li key={i} className="text-[14px] text-[#e5e5e5] leading-relaxed relative before:absolute before:left-[-16px] before:top-[10px] before:w-1 before:h-1 before:rounded-full before:bg-[#525252]">
+            <li key={i} className="text-[13px] text-[#e5e5e5] leading-relaxed relative before:absolute before:left-[-10px] before:top-[8px] before:w-1 before:h-1 before:rounded-full before:bg-[#525252]">
               {renderInline(item)}
             </li>
           ))}
@@ -84,7 +63,7 @@ function BlockRenderer({ block }: { block: ParsedBlock }) {
 
     case 'blockquote':
       return (
-        <blockquote className="border-l-2 border-[#333] pl-4 text-[14px] text-[#a1a1a1] italic">
+        <blockquote className="border-l-2 border-[#333] pl-3 text-[13px] text-[#a1a1a1] italic">
           {renderInline(block.content)}
         </blockquote>
       )
@@ -93,7 +72,7 @@ function BlockRenderer({ block }: { block: ParsedBlock }) {
     default:
       if (!block.content.trim()) return null
       return (
-        <p className="text-[14px] text-[#e5e5e5] leading-relaxed">
+        <p className="text-[13px] text-[#e5e5e5] leading-relaxed">
           {renderInline(block.content)}
         </p>
       )
@@ -122,11 +101,11 @@ function renderInline(text: string): React.ReactNode {
       continue
     }
 
-    // Inline code `code`
+    // Inline code `code` - render as subtle inline element
     const codeMatch = remaining.match(/^`([^`]+)`/)
     if (codeMatch) {
       parts.push(
-        <code key={key++} className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#262626] rounded text-[13px] text-[#e5e5e5] font-mono">
+        <code key={key++} className="px-1 py-0.5 bg-[#1a1a1a] rounded text-[12px] text-[#a1a1a1] font-mono">
           {codeMatch[1]}
         </code>
       )
@@ -176,21 +155,13 @@ function parseMarkdown(content: string): ParsedBlock[] {
   while (i < lines.length) {
     const line = lines[i]
 
-    // Code block ```
+    // SKIP code blocks entirely - they don't belong in chat
     if (line.startsWith('```')) {
-      const language = line.slice(3).trim()
-      const codeLines: string[] = []
       i++
       while (i < lines.length && !lines[i].startsWith('```')) {
-        codeLines.push(lines[i])
         i++
       }
-      blocks.push({
-        type: 'code',
-        content: codeLines.join('\n'),
-        language: language || undefined,
-      })
-      i++
+      i++ // skip closing ```
       continue
     }
 
@@ -211,6 +182,21 @@ function parseMarkdown(content: string): ParsedBlock[] {
       const items: string[] = []
       while (i < lines.length && lines[i].match(/^[-*]\s+/)) {
         items.push(lines[i].replace(/^[-*]\s+/, ''))
+        i++
+      }
+      blocks.push({
+        type: 'list',
+        content: '',
+        items,
+      })
+      continue
+    }
+
+    // Numbered list 1. 2. etc
+    if (line.match(/^\d+\.\s+/)) {
+      const items: string[] = []
+      while (i < lines.length && lines[i].match(/^\d+\.\s+/)) {
+        items.push(lines[i].replace(/^\d+\.\s+/, ''))
         i++
       }
       blocks.push({
@@ -243,7 +229,16 @@ function parseMarkdown(content: string): ParsedBlock[] {
 
     // Paragraph - collect consecutive non-empty lines
     const paraLines: string[] = []
-    while (i < lines.length && lines[i].trim() && !lines[i].startsWith('#') && !lines[i].startsWith('```') && !lines[i].startsWith('- ') && !lines[i].startsWith('* ') && !lines[i].startsWith('> ')) {
+    while (
+      i < lines.length && 
+      lines[i].trim() && 
+      !lines[i].startsWith('#') && 
+      !lines[i].startsWith('```') && 
+      !lines[i].startsWith('- ') && 
+      !lines[i].startsWith('* ') && 
+      !lines[i].startsWith('> ') &&
+      !lines[i].match(/^\d+\.\s+/)
+    ) {
       paraLines.push(lines[i])
       i++
     }

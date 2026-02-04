@@ -10,14 +10,16 @@ import { ChatInput } from './chat/ChatInput'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
- * ChatPanel - Premium v0-style conversational interface
+ * ChatPanel - Clean v0-style chat interface
+ * 
+ * The chat is conversational only. Code goes to Files/Code panels.
  */
 export default function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedAgent, _setSelectedAgent] = useState<AgentId>('architect')
+  const [selectedAgent] = useState<AgentId>('architect')
   
   const { 
     chatCollapsed, 
@@ -28,7 +30,7 @@ export default function ChatPanel() {
     prompt,
   } = useBuilderStore()
 
-  // Parse code blocks from AI response
+  // Parse code blocks from AI response to add to files
   const parseCodeBlocks = useCallback((content: string) => {
     const blocks: { path: string; content: string; language: string }[] = []
     const regex = /```(\w+)?\n\/\/\s*([\w\/.@_-]+)\n([\s\S]*?)```/g
@@ -45,7 +47,7 @@ export default function ChatPanel() {
     return blocks
   }, [])
 
-  // Parse SSE stream with tool calls
+  // Parse SSE stream
   const parseSSEStream = useCallback(async (
     reader: ReadableStreamDefaultReader<Uint8Array>,
     assistantId: string,
@@ -90,14 +92,14 @@ export default function ChatPanel() {
                   status: 'running',
                 }
                 toolCalls.set(tc.id, tc)
-                setAgentStatus(agentId, 'working', `${tc.name}`)
+                setAgentStatus(agentId, 'working', tc.name)
                 setMessages(prev => prev.map(m => 
                   m.id === assistantId 
                     ? { ...m, toolCalls: Array.from(toolCalls.values()) }
                     : m
                 ))
                 
-                // Execute tool client-side via WebContainer
+                // Execute tool and add file if it's a createFile
                 if (ExecutorService.isToolAvailable(tc.name)) {
                   ExecutorService.executeTool(tc.name, tc.args).then((result) => {
                     const existingTc = toolCalls.get(tc.id)
@@ -109,6 +111,18 @@ export default function ChatPanel() {
                         duration: result.duration,
                       }
                       toolCalls.set(existingTc.id, existingTc)
+                      
+                      // Add file to sidebar if createFile was successful
+                      if (tc.name === 'createFile' && result.success && tc.args.path && tc.args.content) {
+                        const path = tc.args.path as string
+                        addFile({
+                          path,
+                          name: path.split('/').pop() || 'untitled',
+                          content: tc.args.content as string,
+                          language: path.split('.').pop() || 'text',
+                        })
+                      }
+                      
                       setMessages(prev => prev.map(m => 
                         m.id === assistantId 
                           ? { ...m, toolCalls: Array.from(toolCalls.values()) }
@@ -148,18 +162,6 @@ export default function ChatPanel() {
                       ? { ...m, toolCalls: Array.from(toolCalls.values()) }
                       : m
                   ))
-                  
-                  if (chunk.toolResult.success && chunk.toolResult.output) {
-                    const codeBlocks = parseCodeBlocks(chunk.toolResult.output)
-                    codeBlocks.forEach(block => {
-                      addFile({
-                        path: block.path,
-                        name: block.path.split('/').pop() || 'untitled',
-                        content: block.content,
-                        language: block.language,
-                      })
-                    })
-                  }
                 }
               }
               break
@@ -176,7 +178,7 @@ export default function ChatPanel() {
 
             case 'retry':
               if (chunk.retry) {
-                setAgentStatus(agentId, 'working', `Retrying...`)
+                setAgentStatus(agentId, 'working', 'Retrying...')
                 setMessages(prev => prev.map(m => 
                   m.id === assistantId 
                     ? { ...m, retrying: true, content: `Retrying (${chunk.retry!.attempt}/${chunk.retry!.maxAttempts})...` }
@@ -202,7 +204,7 @@ export default function ChatPanel() {
     }
 
     return { content: fullContent, toolCalls: Array.from(toolCalls.values()) }
-  }, [setAgentStatus, parseCodeBlocks, addFile])
+  }, [setAgentStatus, addFile])
 
   const handleSubmitMessage = useCallback(async (messageContent: string, agentId: AgentId) => {
     if (!messageContent.trim() || isLoading) return
@@ -241,7 +243,7 @@ export default function ChatPanel() {
 
       const { content: fullContent } = await parseSSEStream(reader, assistantId, agentId)
 
-      // Parse and add files
+      // Parse any code blocks in text response and add as files
       const codeBlocks = parseCodeBlocks(fullContent)
       codeBlocks.forEach(block => {
         addFile({
@@ -278,16 +280,15 @@ export default function ChatPanel() {
     }
   }, [prompt]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Auto-fix errors (Reflex Arc)
+  // Auto-fix errors
   useEffect(() => {
     const handlePain = (e: CustomEvent<PainSignal>) => {
       const signal = e.detail
-      
       if (signal.severity !== 'critical') return
       
       const lastAutoFix = (window as unknown as { __lastAutoFix?: number }).__lastAutoFix || 0
@@ -295,13 +296,7 @@ export default function ChatPanel() {
       (window as unknown as { __lastAutoFix: number }).__lastAutoFix = Date.now()
       
       const errorMessage = NervousSystem.formatForAI(signal)
-      const systemMessage: Message = {
-        id: `pain-${signal.id}`,
-        role: 'user',
-        content: errorMessage,
-      }
-      
-      setMessages(prev => [...prev, systemMessage])
+      setMessages(prev => [...prev, { id: `pain-${signal.id}`, role: 'user', content: errorMessage }])
       setAgentStatus(selectedAgent, 'working', 'Auto-fixing...')
       handleSubmitMessage(errorMessage, selectedAgent)
     }
@@ -314,12 +309,7 @@ export default function ChatPanel() {
     e.preventDefault()
     if (!input.trim()) return
     
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: input,
-    }
-    setMessages(prev => [...prev, userMessage])
+    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: input }])
     handleSubmitMessage(input, selectedAgent)
     setInput('')
   }
@@ -327,22 +317,22 @@ export default function ChatPanel() {
   return (
     <motion.div
       className="h-full bg-[#0a0a0a] border-l border-[#1f1f1f] flex flex-col"
-      animate={{ width: chatCollapsed ? 48 : 440 }}
+      animate={{ width: chatCollapsed ? 48 : 420 }}
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
     >
       {/* Header */}
-      <div className="h-14 border-b border-[#1f1f1f] flex items-center justify-between px-4 shrink-0">
+      <div className="h-12 border-b border-[#1f1f1f] flex items-center justify-between px-3 shrink-0">
         <AnimatePresence mode="wait">
           {!chatCollapsed && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-3"
+              className="flex items-center gap-2"
             >
-              <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`} />
-              <span className="text-[13px] font-medium text-[#fafafa]">
-                {isLoading ? 'Working...' : 'TORBIT'}
+              <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400'}`} />
+              <span className="text-[12px] font-medium text-[#a1a1a1]">
+                {isLoading ? 'Working...' : 'Ready'}
               </span>
             </motion.div>
           )}
@@ -350,11 +340,11 @@ export default function ChatPanel() {
         
         <button
           onClick={toggleChat}
-          className="w-8 h-8 flex items-center justify-center text-[#525252] hover:text-[#fafafa] hover:bg-[#1a1a1a] rounded-lg transition-all"
+          className="w-7 h-7 flex items-center justify-center text-[#525252] hover:text-[#a1a1a1] hover:bg-[#1a1a1a] rounded-md transition-all"
         >
           <svg 
-            className={`w-4 h-4 transition-transform duration-200 ${chatCollapsed ? 'rotate-180' : ''}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
+            className={`w-3.5 h-3.5 transition-transform ${chatCollapsed ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
           </svg>
@@ -371,23 +361,23 @@ export default function ChatPanel() {
             className="flex-1 overflow-y-auto custom-scrollbar"
           >
             {messages.length === 0 ? (
-              <div className="h-full flex items-center justify-center p-8">
-                <div className="text-center max-w-[300px]">
-                  <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#1a1a1a] to-[#141414] border border-[#262626] flex items-center justify-center shadow-lg">
-                    <svg className="w-7 h-7 text-[#525252]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+              <div className="h-full flex items-center justify-center p-6">
+                <div className="text-center max-w-[280px]">
+                  <div className="w-10 h-10 mx-auto mb-4 rounded-xl bg-[#141414] border border-[#1f1f1f] flex items-center justify-center">
+                    <svg className="w-5 h-5 text-[#525252]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
                     </svg>
                   </div>
-                  <h3 className="text-[16px] font-semibold text-[#fafafa] mb-2">
-                    What would you like to build?
+                  <h3 className="text-[14px] font-medium text-[#fafafa] mb-1.5">
+                    What do you want to build?
                   </h3>
-                  <p className="text-[13px] text-[#737373] leading-relaxed">
-                    Describe your idea and I'll create it. I build full-stack apps, components, APIs, and more.
+                  <p className="text-[12px] text-[#525252] leading-relaxed">
+                    Describe your idea and I'll build it.
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="px-4">
+              <div className="px-3">
                 {messages.map((message, i) => (
                   <MessageBubble 
                     key={message.id}
@@ -397,7 +387,7 @@ export default function ChatPanel() {
                     index={i}
                   />
                 ))}
-                <div ref={messagesEndRef} className="h-4" />
+                <div ref={messagesEndRef} className="h-3" />
               </div>
             )}
           </motion.div>
