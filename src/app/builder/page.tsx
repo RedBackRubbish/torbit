@@ -34,11 +34,9 @@ function BuilderPageContent() {
     toggleSidebar,
   } = useBuilderStore()
 
-  // Retry handlers for error boundaries
   const handleChatRetry = useCallback(() => setChatKey(k => k + 1), [])
   const handlePreviewRetry = useCallback(() => setPreviewKey(k => k + 1), [])
 
-  // Initialize project from session storage (from landing page)
   useEffect(() => {
     const storedPrompt = sessionStorage.getItem('torbit_prompt')
     if (storedPrompt && !prompt) {
@@ -49,64 +47,54 @@ function BuilderPageContent() {
 
   return (
     <BuilderLayout>
-      {/* Left Sidebar - File Explorer & Agents */}
+      {/* Left Sidebar */}
       <Sidebar 
         collapsed={sidebarCollapsed} 
         onToggle={toggleSidebar} 
       />
       
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Top Bar */}
-        <header className="h-12 bg-neutral-900/80 border-b border-neutral-800 flex items-center justify-between px-4">
+        {/* Header */}
+        <header className="h-14 bg-[#0a0a0a] border-b border-[#1f1f1f] flex items-center justify-between px-4">
+          {/* Left: Agent Status */}
           <AgentStatusBar />
           
-          {/* Tab Switcher */}
-          <div className="flex items-center gap-1 bg-neutral-800/50 rounded-lg p-1">
-            <button
+          {/* Center: Tab Switcher */}
+          <div className="flex items-center gap-1 p-1 bg-[#141414] rounded-lg border border-[#1f1f1f]">
+            <TabButton 
+              active={previewTab === 'preview'} 
               onClick={() => setPreviewTab('preview')}
-              className={`px-4 py-1.5 text-sm rounded-md transition-all duration-200 ${
-                previewTab === 'preview'
-                  ? 'bg-blue-500/20 text-blue-400'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
             >
+              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
               Preview
-            </button>
-            <button
+            </TabButton>
+            <TabButton 
+              active={previewTab === 'code'} 
               onClick={() => setPreviewTab('code')}
-              className={`px-4 py-1.5 text-sm rounded-md transition-all duration-200 ${
-                previewTab === 'code'
-                  ? 'bg-blue-500/20 text-blue-400'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
             >
+              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+              </svg>
               Code
-            </button>
-            <button
+            </TabButton>
+            <TabButton 
+              active={showTasks} 
               onClick={() => setShowTasks(!showTasks)}
-              className={`px-4 py-1.5 text-sm rounded-md transition-all duration-200 flex items-center gap-2 ${
-                showTasks
-                  ? 'bg-blue-500/20 text-blue-400'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Tasks
-            </button>
+            </TabButton>
           </div>
           
-          {/* Actions - Throne Room: Reactor Core + Ship Command */}
-          <div className="flex items-center gap-4 relative">
-            {/* Fuel Gauge (Reactor Core) */}
+          {/* Right: Actions */}
+          <div className="flex items-center gap-3">
             <FuelGauge />
-            
-            {/* Ship Menu (Deploy + Export) */}
             <ShipMenu />
           </div>
         </header>
@@ -119,18 +107,18 @@ function BuilderPageContent() {
           <PreviewPanel key={previewKey} />
         </ErrorBoundary>
         
-        {/* Tasks Slide-out Panel */}
+        {/* Tasks Slide-out */}
         {showTasks && (
-          <div className="absolute top-12 right-0 bottom-0 w-96 z-40 border-l border-neutral-800 shadow-2xl">
-            <div className="h-full flex flex-col bg-neutral-900">
-              <div className="h-10 border-b border-neutral-800 flex items-center justify-between px-4">
-                <span className="text-sm font-medium text-neutral-300">Tasks</span>
+          <div className="absolute top-14 right-0 bottom-0 w-96 z-40 border-l border-[#1f1f1f] bg-[#0a0a0a] shadow-2xl">
+            <div className="h-full flex flex-col">
+              <div className="h-12 border-b border-[#1f1f1f] flex items-center justify-between px-4">
+                <span className="text-[13px] font-medium text-[#fafafa]">Tasks</span>
                 <button
                   onClick={() => setShowTasks(false)}
-                  className="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-300 transition-colors"
+                  className="w-7 h-7 flex items-center justify-center text-[#737373] hover:text-[#fafafa] hover:bg-[#1f1f1f] rounded-md transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
@@ -150,5 +138,29 @@ function BuilderPageContent() {
         <ChatPanel key={chatKey} />
       </ErrorBoundary>
     </BuilderLayout>
+  )
+}
+
+// Tab button component
+function TabButton({ 
+  children, 
+  active, 
+  onClick 
+}: { 
+  children: React.ReactNode
+  active: boolean
+  onClick: () => void 
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center px-3 py-1.5 text-[13px] font-medium rounded-md transition-all duration-200 ${
+        active
+          ? 'bg-[#1f1f1f] text-[#fafafa]'
+          : 'text-[#737373] hover:text-[#a1a1a1]'
+      }`}
+    >
+      {children}
+    </button>
   )
 }

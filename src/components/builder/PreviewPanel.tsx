@@ -8,32 +8,33 @@ import { useWebContainer } from '@/hooks/useWebContainer'
 import { useTerminalStore } from '@/store/terminal'
 import { NervousSystem } from '@/lib/nervous-system'
 
-// Dynamic import Monaco to avoid SSR issues
+// Dynamic import Monaco
 const CodeEditor = dynamic(() => import('./CodeEditor'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-full bg-neutral-950">
-      <div className="flex items-center gap-3">
-        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-        <span className="text-neutral-400 text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          Loading editor...
-        </span>
+    <div className="flex items-center justify-center h-full bg-[#0a0a0a]">
+      <div className="flex items-center gap-2.5">
+        <motion.div
+          className="w-2 h-2 rounded-full bg-blue-500"
+          animate={{ opacity: [1, 0.4, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        />
+        <span className="text-[13px] text-[#737373]">Loading editor...</span>
       </div>
     </div>
   ),
 })
 
 /**
- * PreviewPanel - Live preview with WebContainer or code editor
+ * PreviewPanel - Clean, minimal preview with WebContainer
  */
 export default function PreviewPanel() {
   const { previewTab, previewDevice, setPreviewDevice, files } = useBuilderStore()
   const { isBooting, isReady, serverUrl, error, isSupported } = useWebContainer()
   const terminalLines = useTerminalStore((s) => s.lines)
   const [showTerminal, setShowTerminal] = useState(false)
-  
-  // Prevent hydration mismatch - only show dynamic status after mount
   const [isMounted, setIsMounted] = useState(false)
+  
   useEffect(() => {
     setIsMounted(true)
   }, [])
@@ -44,17 +45,13 @@ export default function PreviewPanel() {
     mobile: '375px',
   }
 
-  // Track previous terminal lines length
   const prevLinesLength = useRef(terminalLines.length)
   
-  // Auto-show terminal when there's NEW activity during boot
-  // Using requestAnimationFrame to defer setState and satisfy react-hooks/set-state-in-effect
   useEffect(() => {
     const hasNewActivity = terminalLines.length > prevLinesLength.current
     prevLinesLength.current = terminalLines.length
     
     if (hasNewActivity && isBooting) {
-      // Defer the setState to next frame to avoid synchronous setState in effect
       const frameId = requestAnimationFrame(() => {
         setShowTerminal(true)
       })
@@ -63,79 +60,88 @@ export default function PreviewPanel() {
   }, [terminalLines.length, isBooting])
 
   return (
-    <div className="flex-1 flex flex-col bg-neutral-950 overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[#0a0a0a] overflow-hidden">
       {previewTab === 'preview' ? (
         <>
-          {/* Device Switcher & Controls */}
-          <div className="h-10 border-b border-neutral-800 flex items-center justify-between px-4 bg-neutral-900/50">
-            <div className="flex items-center gap-2">
+          {/* Controls Bar */}
+          <div className="h-11 border-b border-[#1f1f1f] flex items-center justify-between px-4 bg-[#0a0a0a]">
+            {/* Device Switcher */}
+            <div className="flex items-center gap-1 p-1 bg-[#141414] rounded-lg border border-[#1f1f1f]">
               {(['desktop', 'tablet', 'mobile'] as const).map((device) => (
                 <button
                   key={device}
                   onClick={() => setPreviewDevice(device)}
-                  className={`px-3 py-1 rounded text-xs transition-all ${
+                  className={`p-1.5 rounded-md transition-all ${
                     previewDevice === device
-                      ? 'bg-neutral-700/50 text-neutral-200'
-                      : 'text-neutral-500 hover:text-neutral-300'
+                      ? 'bg-[#1f1f1f] text-[#fafafa]'
+                      : 'text-[#525252] hover:text-[#a1a1a1]'
                   }`}
-                  style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                  title={device.charAt(0).toUpperCase() + device.slice(1)}
                 >
-                  {device === 'desktop' && '🖥️'}
-                  {device === 'tablet' && '📱'}
-                  {device === 'mobile' && '📲'}
+                  {device === 'desktop' && (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+                    </svg>
+                  )}
+                  {device === 'tablet' && (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5h3m-6.75 2.25h10.5a2.25 2.25 0 002.25-2.25v-15a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 4.5v15a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                  )}
+                  {device === 'mobile' && (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+                    </svg>
+                  )}
                 </button>
               ))}
-              
-              <div className="ml-4 text-neutral-600 text-xs" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                {deviceWidths[previewDevice]}
-              </div>
             </div>
 
-            {/* Right side controls */}
+            {/* Right Controls */}
             <div className="flex items-center gap-2">
               {/* Terminal toggle */}
               <button
                 onClick={() => setShowTerminal(!showTerminal)}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all border ${
                   showTerminal
-                    ? 'bg-neutral-700 text-neutral-200'
-                    : 'text-neutral-500 hover:text-neutral-300'
+                    ? 'bg-[#1f1f1f] border-[#262626] text-[#fafafa]'
+                    : 'border-transparent text-[#525252] hover:text-[#a1a1a1]'
                 }`}
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
                 </svg>
                 Terminal
               </button>
 
-              {/* Refresh button */}
+              {/* Refresh */}
               {serverUrl && (
                 <button
                   onClick={() => {
                     const iframe = document.getElementById('webcontainer-preview') as HTMLIFrameElement
                     if (iframe) iframe.src = iframe.src
                   }}
-                  className="p-1.5 rounded text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-all"
-                  title="Refresh preview"
+                  className="p-1.5 rounded-lg text-[#525252] hover:text-[#fafafa] hover:bg-[#1f1f1f] transition-all"
+                  title="Refresh"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                   </svg>
                 </button>
               )}
 
-              {/* Status indicator */}
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-neutral-800/50 text-xs">
-                <div className={`w-1.5 h-1.5 rounded-full ${
-                  !isMounted ? 'bg-neutral-600' :
-                  isBooting ? 'bg-amber-500 animate-pulse' :
+              {/* Status */}
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[#141414] border border-[#1f1f1f]">
+                <div className={`w-2 h-2 rounded-full ${
+                  !isMounted ? 'bg-[#525252]' :
+                  isBooting ? 'bg-amber-500 animate-pulse-subtle' :
                   serverUrl ? 'bg-emerald-500' :
                   error ? 'bg-red-500' :
-                  'bg-neutral-600'
+                  'bg-[#525252]'
                 }`} />
-                <span className="text-neutral-400">
+                <span className="text-[12px] text-[#a1a1a1]">
                   {!isMounted ? 'Ready' :
-                   isBooting ? 'Booting...' :
+                   isBooting ? 'Starting...' :
                    serverUrl ? 'Live' :
                    error ? 'Error' :
                    'Ready'}
@@ -144,10 +150,9 @@ export default function PreviewPanel() {
             </div>
           </div>
           
-          {/* Main Preview Area */}
+          {/* Preview Area */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Preview Frame */}
-            <div className={`flex-1 flex items-center justify-center p-4 overflow-auto ${showTerminal ? 'h-1/2' : ''}`}>
+            <div className={`flex-1 flex items-center justify-center p-6 overflow-auto bg-[#0a0a0a] ${showTerminal ? 'h-1/2' : ''}`}>
               <PreviewContent
                 isBooting={isBooting}
                 isReady={isReady}
@@ -160,15 +165,15 @@ export default function PreviewPanel() {
               />
             </div>
 
-            {/* Terminal Panel */}
+            {/* Terminal */}
             <AnimatePresence>
               {showTerminal && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: '40%', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="border-t border-neutral-800 bg-black overflow-hidden"
+                  transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                  className="border-t border-[#1f1f1f] bg-[#000000] overflow-hidden"
                 >
                   <TerminalOutput />
                 </motion.div>
@@ -177,7 +182,6 @@ export default function PreviewPanel() {
           </div>
         </>
       ) : (
-        /* Code View - Real Monaco Editor */
         <CodeEditor />
       )}
     </div>
@@ -185,7 +189,7 @@ export default function PreviewPanel() {
 }
 
 // ============================================================================
-// Preview Content Component
+// Preview Content
 // ============================================================================
 
 interface PreviewContentProps {
@@ -215,85 +219,43 @@ function PreviewContent({
     setIsMounted(true)
   }, [])
   
-  // Prevent hydration mismatch - render neutral state on server
   if (!isMounted) {
-    return (
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-neutral-500/10 border border-neutral-500/30 flex items-center justify-center">
-          <div className="w-8 h-8" />
-        </div>
-        <h3 className="text-neutral-400 text-lg font-medium mb-2">
-          Loading...
-        </h3>
-        <p className="text-neutral-500 text-sm">
-          Initializing preview
-        </p>
-      </div>
-    )
+    return <StatusCard icon="loading" title="Loading..." subtitle="Initializing preview" />
   }
   
-  // Not supported
   if (!isSupported) {
     return (
-      <div className="text-center max-w-md">
-        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center">
-          <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <h3 className="text-red-400 text-lg font-medium mb-2">
-          WebContainer Not Supported
-        </h3>
-        <p className="text-neutral-500 text-sm">
-          Your browser doesn&apos;t support SharedArrayBuffer. 
-          Try using Chrome or Edge with the required security headers.
-        </p>
-      </div>
+      <StatusCard 
+        icon="error" 
+        title="Browser Not Supported" 
+        subtitle="WebContainers require Chrome or Edge with SharedArrayBuffer support."
+        variant="error"
+      />
     )
   }
 
-  // Error state
   if (error) {
     return (
-      <div className="text-center max-w-md">
-        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center">
-          <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </div>
-        <h3 className="text-red-400 text-lg font-medium mb-2">
-          Engine Failure
-        </h3>
-        <p className="text-neutral-500 text-sm">{error}</p>
-      </div>
+      <StatusCard 
+        icon="error" 
+        title="Something went wrong" 
+        subtitle={error}
+        variant="error"
+      />
     )
   }
 
-  // Booting state
   if (isBooting) {
     return (
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          >
-            <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </motion.div>
-        </div>
-        <h3 className="text-blue-400 text-lg font-medium mb-2">
-          Initializing Virtual Environment
-        </h3>
-        <p className="text-neutral-500 text-sm">
-          Booting Node.js runtime in browser...
-        </p>
-      </div>
+      <StatusCard 
+        icon="loading" 
+        title="Starting environment..." 
+        subtitle="Booting Node.js runtime in browser"
+        variant="blue"
+      />
     )
   }
 
-  // Server running - show iframe
   if (serverUrl) {
     return (
       <LivePreviewFrame
@@ -304,54 +266,78 @@ function PreviewContent({
     )
   }
 
-  // Ready but no server yet
   if (isReady && files.length > 0) {
     return (
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
-          <motion.div
-            animate={{ opacity: [1, 0.5, 1] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          >
-            <svg className="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </motion.div>
-        </div>
-        <h3 className="text-amber-400 text-lg font-medium mb-2">
-          Waiting for Server
-        </h3>
-        <p className="text-neutral-500 text-sm">
-          {files.length} files generated. Starting development server...
-        </p>
-      </div>
+      <StatusCard 
+        icon="loading" 
+        title="Starting server..." 
+        subtitle={`${files.length} files ready`}
+        variant="amber"
+      />
     )
   }
 
-  // Empty state
   return (
-    <div className="text-center">
-      <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-neutral-800/50 flex items-center justify-center">
-        <span className="text-2xl opacity-30">⚡</span>
+    <StatusCard 
+      icon="empty" 
+      title="No preview yet" 
+      subtitle="Describe what you want to build and the preview will appear here."
+    />
+  )
+}
+
+// Status card component
+function StatusCard({ 
+  icon, 
+  title, 
+  subtitle, 
+  variant = 'default' 
+}: { 
+  icon: 'loading' | 'error' | 'empty'
+  title: string
+  subtitle: string
+  variant?: 'default' | 'error' | 'blue' | 'amber'
+}) {
+  const colors = {
+    default: { bg: 'bg-[#1a1a1a]', border: 'border-[#262626]', text: 'text-[#525252]' },
+    error: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400' },
+    blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400' },
+    amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
+  }[variant]
+
+  return (
+    <div className="text-center max-w-sm">
+      <div className={`w-14 h-14 mx-auto mb-5 rounded-xl ${colors.bg} border ${colors.border} flex items-center justify-center`}>
+        {icon === 'loading' ? (
+          <motion.svg 
+            className={`w-6 h-6 ${colors.text}`} 
+            viewBox="0 0 24 24"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+          >
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="32" strokeLinecap="round" />
+          </motion.svg>
+        ) : icon === 'error' ? (
+          <svg className={`w-6 h-6 ${colors.text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+        ) : (
+          <svg className="w-6 h-6 text-[#404040]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        )}
       </div>
-      <h3 
-        className="text-neutral-400 text-lg font-light mb-2"
-        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-      >
-        No preview yet
+      <h3 className={`text-[15px] font-medium mb-2 ${variant === 'default' ? 'text-[#fafafa]' : colors.text}`}>
+        {title}
       </h3>
-      <p 
-        className="text-neutral-500 text-sm max-w-md"
-        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-      >
-        Enter a prompt in the chat to start building. The preview will appear here as agents generate code.
-      </p>
+      <p className="text-[13px] text-[#737373] leading-relaxed">{subtitle}</p>
     </div>
   )
 }
 
 // ============================================================================
-// Live Preview Frame with Visual Nerve (Browser Error Detection)
+// Live Preview Frame
 // ============================================================================
 
 interface LivePreviewFrameProps {
@@ -361,15 +347,10 @@ interface LivePreviewFrameProps {
 }
 
 function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePreviewFrameProps) {
-  // VISUAL NERVE: Listen for console.error messages from the iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Only accept messages from our iframe
       if (event.data?.type === 'TORBIT_CONSOLE_ERROR') {
         const errorMessage = event.data.message
-        console.warn('[PreviewFrame] Browser error intercepted:', errorMessage)
-        
-        // Analyze and dispatch pain signal
         const pain = NervousSystem.analyzeBrowserError(errorMessage)
         if (pain) {
           NervousSystem.dispatchPain(pain)
@@ -381,14 +362,11 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePrevie
     return () => window.removeEventListener('message', handleMessage)
   }, [])
 
-  // Handle iframe load to inject console spy
   const handleIframeLoad = () => {
     try {
       const iframe = document.getElementById('webcontainer-preview') as HTMLIFrameElement
       if (!iframe?.contentWindow) return
 
-      // Inject console spy script into the iframe
-      // This intercepts console.error and sends it to parent
       const script = `
         (function() {
           if (window.__torbitConsoleSpy) return;
@@ -408,7 +386,6 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePrevie
             originalError.apply(console, args);
           };
           
-          // Also catch React hydration warnings
           console.warn = function(...args) {
             const msg = args.join(' ');
             if (msg.includes('Hydration') || msg.includes('hydration')) {
@@ -420,7 +397,6 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePrevie
             originalWarn.apply(console, args);
           };
           
-          // Catch unhandled errors
           window.addEventListener('error', function(event) {
             window.parent.postMessage({ 
               type: 'TORBIT_CONSOLE_ERROR', 
@@ -428,7 +404,6 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePrevie
             }, '*');
           });
           
-          // Catch unhandled promise rejections
           window.addEventListener('unhandledrejection', function(event) {
             window.parent.postMessage({ 
               type: 'TORBIT_CONSOLE_ERROR', 
@@ -438,36 +413,34 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePrevie
         })();
       `
 
-      // Try to inject the script
       iframe.contentWindow.postMessage({ type: 'TORBIT_INJECT_SPY', script }, '*')
     } catch {
-      // Cross-origin restrictions may prevent injection
-      console.warn('[PreviewFrame] Could not inject console spy (cross-origin)')
+      // Cross-origin restrictions
     }
   }
 
   return (
     <motion.div
-      className="bg-white rounded-lg shadow-2xl overflow-hidden"
+      className="bg-white rounded-xl overflow-hidden shadow-2xl ring-1 ring-[#262626]"
       style={{ 
         width: previewDevice === 'desktop' ? '100%' : deviceWidths[previewDevice],
         maxWidth: '100%',
         height: previewDevice === 'mobile' ? '667px' : '100%',
       }}
       layout
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
-      {/* Address bar */}
-      <div className="h-8 bg-gray-100 border-b flex items-center px-3 gap-2">
+      {/* Browser chrome */}
+      <div className="h-9 bg-[#f5f5f5] border-b border-[#e5e5e5] flex items-center px-3 gap-2">
         <div className="flex gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
-          <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-          <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
+          <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+          <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
+          <div className="w-3 h-3 rounded-full bg-[#28c840]" />
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-1.5 px-3 py-0.5 bg-white rounded-md text-xs text-gray-500">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-white rounded-md text-[11px] text-[#737373] border border-[#e5e5e5]">
+            <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
             </svg>
             localhost:3000
           </div>
@@ -477,8 +450,8 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePrevie
       <iframe 
         id="webcontainer-preview"
         src={serverUrl} 
-        className="w-full h-[calc(100%-2rem)] bg-white"
-        title="App Preview"
+        className="w-full h-[calc(100%-2.25rem)] bg-white"
+        title="Preview"
         sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
         onLoad={handleIframeLoad}
       />
@@ -487,7 +460,7 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePrevie
 }
 
 // ============================================================================
-// Terminal Output Component
+// Terminal Output
 // ============================================================================
 
 function TerminalOutput() {
@@ -500,44 +473,42 @@ function TerminalOutput() {
       case 'success': return 'text-emerald-400'
       case 'warning': return 'text-amber-400'
       case 'info': return 'text-blue-400'
-      default: return 'text-neutral-300'
+      default: return 'text-[#a1a1a1]'
     }
   }
 
   return (
     <div className="h-full flex flex-col">
-      {/* Terminal Header */}
-      <div className="h-8 border-b border-neutral-800 flex items-center justify-between px-3 bg-neutral-900/50">
+      {/* Header */}
+      <div className="h-9 border-b border-[#1f1f1f] flex items-center justify-between px-3 bg-[#0a0a0a]">
         <div className="flex items-center gap-2">
-          <svg className="w-3.5 h-3.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          <svg className="w-3.5 h-3.5 text-[#525252]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
           </svg>
-          <span className="text-xs text-neutral-500">Terminal</span>
+          <span className="text-[12px] text-[#737373]">Terminal</span>
           {isRunning && (
             <motion.div
               className="w-1.5 h-1.5 rounded-full bg-amber-500"
-              animate={{ opacity: [1, 0.3, 1] }}
+              animate={{ opacity: [1, 0.4, 1] }}
               transition={{ duration: 0.8, repeat: Infinity }}
             />
           )}
         </div>
         <button
           onClick={clear}
-          className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors"
+          className="text-[11px] text-[#525252] hover:text-[#a1a1a1] transition-colors"
         >
           Clear
         </button>
       </div>
 
-      {/* Terminal Content */}
-      <div className="flex-1 overflow-auto p-3 font-mono text-xs">
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-3 font-mono text-[12px] leading-relaxed custom-scrollbar">
         {lines.length === 0 ? (
-          <div className="text-neutral-600">
-            Waiting for commands...
-          </div>
+          <span className="text-[#404040]">No output yet...</span>
         ) : (
-          lines.map((line) => (
-            <div key={line.id} className={`${getLineColor(line.type)} whitespace-pre-wrap`}>
+          lines.map((line, i) => (
+            <div key={i} className={`${getLineColor(line.type)} whitespace-pre-wrap`}>
               {line.content}
             </div>
           ))

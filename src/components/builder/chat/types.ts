@@ -4,26 +4,16 @@
 
 import type { AgentId } from '@/lib/tools/definitions'
 
-export const AGENT_ICONS: Record<string, string> = {
-  architect: '◆',
-  frontend: '◇',
-  backend: '⬡',
-  database: '⬢',
-  devops: '△',
-  qa: '○',
-  planner: '▣',
-  auditor: '⚠',
-}
-
+// Clean, minimal agent display
 export const AGENT_COLORS: Record<string, string> = {
-  architect: '#00ff41',
-  frontend: '#00d4ff',
-  backend: '#ff6b00',
-  database: '#a855f7',
-  devops: '#f43f5e',
-  qa: '#eab308',
-  planner: '#22c55e',
-  auditor: '#ef4444',
+  architect: '#3b82f6', // blue
+  frontend: '#06b6d4',  // cyan
+  backend: '#f59e0b',   // amber
+  database: '#8b5cf6',  // purple
+  devops: '#f43f5e',    // rose
+  qa: '#22c55e',        // green
+  planner: '#6366f1',   // indigo
+  auditor: '#ef4444',   // red
 }
 
 // Tool call for real-time display

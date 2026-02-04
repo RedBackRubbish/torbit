@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 
 interface ChatInputProps {
@@ -10,9 +11,20 @@ interface ChatInputProps {
 }
 
 /**
- * ChatInput - Message input area with submit button
+ * ChatInput - Clean, expansive input area like v0
  */
 export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInputProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
+    }
+  }, [input])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -26,46 +38,65 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="p-4 border-t border-neutral-800"
+      className="p-4 border-t border-[#1f1f1f]"
     >
-      <div className="relative">
+      <div className="relative bg-[#141414] border border-[#262626] rounded-xl focus-within:border-[#404040] transition-colors">
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="What would you like to build?"
+          placeholder="Ask anything..."
           rows={1}
-          className="w-full bg-neutral-800/50 border border-neutral-700 rounded-xl px-4 py-3 pr-12
-            text-neutral-100 text-sm placeholder:text-neutral-500 resize-none
-            focus:outline-none focus:border-blue-500/50 transition-colors"
+          disabled={isLoading}
+          className="w-full bg-transparent px-4 py-3 pr-12 text-[14px] text-[#fafafa] 
+            placeholder:text-[#525252] resize-none focus:outline-none
+            disabled:opacity-50 disabled:cursor-not-allowed
+            min-h-[48px] max-h-[200px]"
         />
+        
         <button
           type="submit"
           disabled={!input.trim() || isLoading}
-          className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg
-            flex items-center justify-center transition-all ${
-              input.trim() && !isLoading
-                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                : 'bg-neutral-700/50 text-neutral-500 cursor-not-allowed'
-            }`}
+          className={`absolute right-2 bottom-2 w-8 h-8 rounded-lg flex items-center justify-center 
+            transition-all duration-200 ${
+            input.trim() && !isLoading
+              ? 'bg-[#fafafa] text-[#0a0a0a] hover:bg-[#e5e5e5]'
+              : 'bg-[#1f1f1f] text-[#525252] cursor-not-allowed'
+          }`}
         >
           {isLoading ? (
-            <motion.div
-              className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
+            <motion.svg 
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            />
+            >
+              <circle 
+                cx="12" cy="12" r="10" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                fill="none"
+                strokeDasharray="32"
+                strokeLinecap="round"
+              />
+            </motion.svg>
           ) : (
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
             </svg>
           )}
         </button>
       </div>
       
-      <p className="text-neutral-500 text-xs mt-3 text-center">
-        Enter to send · Shift+Enter for new line
-      </p>
+      <div className="flex items-center justify-between mt-2 px-1">
+        <p className="text-[11px] text-[#404040]">
+          Press Enter to send
+        </p>
+        <p className="text-[11px] text-[#404040]">
+          Shift + Enter for new line
+        </p>
+      </div>
     </motion.form>
   )
 }

@@ -7,16 +7,11 @@ interface BuilderLayoutProps {
 }
 
 /**
- * BuilderLayout - Main layout wrapper for the builder interface
- * 
- * Full-screen dark environment with Matrix accents
+ * BuilderLayout - Clean, minimal layout wrapper
  */
 export default function BuilderLayout({ children }: BuilderLayoutProps) {
   return (
-    <div 
-      className="h-screen w-screen overflow-hidden bg-[#09090b] flex"
-      style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-    >
+    <div className="h-screen w-screen overflow-hidden bg-[#000000] flex">
       {children}
     </div>
   )

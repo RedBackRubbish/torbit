@@ -10,7 +10,7 @@ import { ChatInput } from './chat/ChatInput'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
- * ChatPanel - Conversational interface for interacting with agents
+ * ChatPanel - Clean, v0-inspired conversational interface
  * With real-time tool call streaming and Reflex Arc auto-healing
  */
 export default function ChatPanel() {
@@ -234,7 +234,7 @@ export default function ChatPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...messages, { role: 'user', content: messageContent }]
-            .filter(m => m.content && m.content.trim().length > 0) // Filter empty messages
+            .filter(m => m.content && m.content.trim().length > 0)
             .map(m => ({
               role: m.role,
               content: m.content,
@@ -297,16 +297,13 @@ export default function ChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // ========================================================================
   // REFLEX ARC: Listen for pain signals and auto-append to chat
-  // ========================================================================
   useEffect(() => {
     const handlePain = (e: CustomEvent<PainSignal>) => {
       const signal = e.detail
       
       if (signal.severity !== 'critical') return
       
-      // Debounce - only one auto-fix per 5 seconds
       const lastAutoFix = (window as unknown as { __lastAutoFix?: number }).__lastAutoFix || 0
       if (Date.now() - lastAutoFix < 5000) return
       (window as unknown as { __lastAutoFix: number }).__lastAutoFix = Date.now()
@@ -343,37 +340,40 @@ export default function ChatPanel() {
 
   return (
     <motion.div
-      className="h-full bg-neutral-900/80 border-l border-neutral-800 flex flex-col"
-      animate={{ width: chatCollapsed ? 48 : 400 }}
-      transition={{ duration: 0.2 }}
-      style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+      className="h-full bg-[#0a0a0a] border-l border-[#1f1f1f] flex flex-col"
+      animate={{ width: chatCollapsed ? 48 : 420 }}
+      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
     >
       {/* Header */}
-      <div className="h-12 border-b border-neutral-800 flex items-center justify-between px-4">
+      <div className="h-14 border-b border-[#1f1f1f] flex items-center justify-between px-4">
         <AnimatePresence mode="wait">
           {!chatCollapsed && (
-            <motion.span
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="text-neutral-300 text-sm font-medium"
+              className="flex items-center gap-3"
             >
-              Agent Console
-            </motion.span>
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse-subtle" />
+              <span className="text-[13px] font-medium text-[#fafafa]">
+                Assistant
+              </span>
+            </motion.div>
           )}
         </AnimatePresence>
         
         <button
           onClick={toggleChat}
-          className="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-300 transition-colors"
+          className="w-8 h-8 flex items-center justify-center text-[#737373] hover:text-[#fafafa] hover:bg-[#1f1f1f] rounded-lg transition-all"
         >
           <svg 
             className={`w-4 h-4 transition-transform duration-200 ${chatCollapsed ? 'rotate-180' : ''}`}
             fill="none" 
             viewBox="0 0 24 24" 
             stroke="currentColor"
+            strokeWidth={1.5}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
           </svg>
         </button>
       </div>
@@ -385,28 +385,38 @@ export default function ChatPanel() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+            className="flex-1 overflow-y-auto custom-scrollbar"
           >
-            {messages.length === 0 && (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-3xl mb-3 opacity-20">💬</div>
-                  <p className="text-neutral-400 text-sm">Describe what you want to build</p>
-                  <p className="text-neutral-500 text-xs mt-1">The agents will take it from there</p>
+            {messages.length === 0 ? (
+              <div className="h-full flex items-center justify-center p-8">
+                <div className="text-center max-w-[280px]">
+                  <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-[#1a1a1a] border border-[#262626] flex items-center justify-center">
+                    <svg className="w-6 h-6 text-[#525252]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-[15px] font-medium text-[#fafafa] mb-2">
+                    What would you like to build?
+                  </h3>
+                  <p className="text-[13px] text-[#737373] leading-relaxed">
+                    Describe your idea and I'll help you create it. I can build full-stack apps, components, and more.
+                  </p>
                 </div>
               </div>
+            ) : (
+              <div className="p-4 space-y-1">
+                {messages.map((message, i) => (
+                  <MessageBubble 
+                    key={message.id}
+                    message={message}
+                    isLast={i === messages.length - 1}
+                    isLoading={isLoading}
+                    index={i}
+                  />
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
             )}
-            
-            {messages.map((message, i) => (
-              <MessageBubble 
-                key={message.id}
-                message={message}
-                isLast={i === messages.length - 1}
-                isLoading={isLoading}
-                index={i}
-              />
-            ))}
-            <div ref={messagesEndRef} />
           </motion.div>
         )}
       </AnimatePresence>
