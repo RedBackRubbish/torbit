@@ -3,6 +3,12 @@
  * 
  * The central nervous system that wires agents to the Vercel AI SDK.
  * This file handles tool execution, agent routing, and the audit pipeline.
+ * 
+ * NOW WITH KIMI K2.5 INTELLIGENT ROUTING:
+ * - Task complexity assessment
+ * - Smart agent selection
+ * - Multimodal detection (vision tasks)
+ * - Thinking mode for complex problems
  */
 
 import { streamText, stepCountIs } from 'ai'
@@ -10,6 +16,7 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { google } from '@ai-sdk/google'
 import { TOOL_DEFINITIONS, AGENT_TOOLS, type ToolName, type AgentId } from '../tools/definitions'
 import { executeTool, createExecutionContext, type ToolExecutionContext, type ToolResult } from '../tools/executor'
+import { KimiRouter, type RoutingDecision, isKimiConfigured } from './router'
 
 // Agent prompts
 import { AUDITOR_SYSTEM_PROMPT } from './prompts/auditor'
@@ -32,6 +39,10 @@ export interface OrchestrationConfig {
   enableAudit?: boolean
   enableTicketSync?: boolean
   mcpServers?: Array<{ name: string; url: string }>
+  /** Enable Kimi K2.5 intelligent routing (default: true if API key configured) */
+  enableKimiRouter?: boolean
+  /** Use fast routing mode (kimi-k2-turbo) for quicker decisions */
+  fastRouting?: boolean
 }
 
 export interface AgentResult {
@@ -57,7 +68,7 @@ export interface AuditResult {
 }
 
 // ============================================
-// MODEL SELECTION (Opus-Sonnet Handoff)
+// MODEL SELECTION (Opus-Sonnet Handoff + Kimi Router)
 // ============================================
 
 const MODELS = {
@@ -67,7 +78,7 @@ const MODELS = {
 } as const
 
 /**
- * Select model based on task complexity
+ * Select model based on task complexity (legacy fallback)
  * - Opus: Architecture planning, complex debugging, multi-file refactors
  * - Sonnet: Standard code generation, single-file edits
  * - Flash: Simple queries, formatting, quick lookups
@@ -79,6 +90,22 @@ function selectModel(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: 
     case 'high': return MODELS.opus
     case 'medium': return MODELS.sonnet
     case 'low': return MODELS.flash
+  }
+}
+
+/**
+ * Map complexity from Kimi router to legacy format
+ */
+function mapComplexityToLegacy(complexity: RoutingDecision['complexity']): 'high' | 'medium' | 'low' {
+  switch (complexity) {
+    case 'architectural':
+    case 'complex':
+      return 'high'
+    case 'moderate':
+      return 'medium'
+    case 'simple':
+    case 'trivial':
+      return 'low'
   }
 }
 
@@ -125,10 +152,20 @@ function createToolExecutor(context: ToolExecutionContext) {
 export class TorbitOrchestrator {
   private context: ToolExecutionContext
   private config: OrchestrationConfig
+  private kimiRouter: KimiRouter | null = null
   
   constructor(config: OrchestrationConfig) {
     this.config = config
     this.context = createExecutionContext(config.projectId, config.userId)
+    
+    // Initialize Kimi router if configured
+    const useKimi = config.enableKimiRouter ?? isKimiConfigured()
+    if (useKimi && isKimiConfigured()) {
+      this.kimiRouter = new KimiRouter({
+        fastMode: config.fastRouting ?? false,
+        enableThinking: true,
+      })
+    }
     
     // Initialize MCP connections if provided
     if (config.mcpServers) {
@@ -138,6 +175,25 @@ export class TorbitOrchestrator {
           tools: [],
         })
       }
+    }
+  }
+  
+  /**
+   * Get routing decision from Kimi (or use legacy routing)
+   */
+  private async getRoutingDecision(
+    prompt: string,
+    context?: { hasImages?: boolean }
+  ): Promise<RoutingDecision | null> {
+    if (!this.kimiRouter) {
+      return null
+    }
+    
+    try {
+      return await this.kimiRouter.route(prompt, context)
+    } catch (error) {
+      console.warn('[Orchestrator] Kimi routing failed, using legacy routing:', error)
+      return null
     }
   }
   
@@ -283,11 +339,13 @@ export class TorbitOrchestrator {
   
   /**
    * Full orchestration: Plan → Execute → Audit
+   * Now powered by Kimi K2.5 intelligent routing!
    */
-  async orchestrate(userPrompt: string): Promise<{
+  async orchestrate(userPrompt: string, context?: { hasImages?: boolean }): Promise<{
     plan: AgentResult
     execution: AgentResult[]
     audit: AuditResult
+    routing?: RoutingDecision
   }> {
     // 1. Create checkpoint before any work
     await executeTool('createCheckpoint', {
@@ -295,30 +353,60 @@ export class TorbitOrchestrator {
       reason: 'Before executing user request',
     }, this.context)
     
-    // 2. Plan with Architect
+    // 2. Get routing decision from Kimi (if available)
+    const routing = await this.getRoutingDecision(userPrompt, context)
+    
+    // 3. Plan with Architect (using Kimi-recommended model tier if available)
+    const planModelTier = routing?.complexity === 'architectural' ? 'opus' : 
+                          routing?.modelTier ?? 'opus'
     const plan = await this.executeAgent('architect', `
       Plan the implementation for this user request:
       "${userPrompt}"
       
       Break it down into steps and identify which agents should handle each step.
-    `, { modelTier: 'opus' })
+      ${routing ? `\nRouting analysis suggests: ${routing.reasoning}` : ''}
+    `, { modelTier: planModelTier })
     
-    // 3. Execute with appropriate agents
-    // In a real implementation, we'd parse the plan and delegate to agents
+    // 4. Execute with appropriate agents (Kimi-routed or heuristic fallback)
     const execution: AgentResult[] = []
     
-    // For now, delegate to frontend for UI tasks
-    if (userPrompt.toLowerCase().includes('component') || 
-        userPrompt.toLowerCase().includes('page') ||
-        userPrompt.toLowerCase().includes('ui')) {
-      const frontendResult = await this.executeAgent('frontend', userPrompt)
-      execution.push(frontendResult)
+    if (routing) {
+      // Use Kimi's routing decision
+      const result = await this.executeAgent(
+        routing.targetAgent,
+        userPrompt,
+        { modelTier: routing.modelTier }
+      )
+      execution.push(result)
+      
+      // If Kimi decomposed into subtasks, execute them
+      if (routing.subtasks && routing.subtasks.length > 1) {
+        for (const subtask of routing.subtasks.slice(1)) { // First one already done
+          const subtaskRouting = await this.getRoutingDecision(subtask)
+          if (subtaskRouting) {
+            const subtaskResult = await this.executeAgent(
+              subtaskRouting.targetAgent,
+              subtask,
+              { modelTier: subtaskRouting.modelTier }
+            )
+            execution.push(subtaskResult)
+          }
+        }
+      }
+    } else {
+      // Legacy heuristic routing
+      if (userPrompt.toLowerCase().includes('component') || 
+          userPrompt.toLowerCase().includes('page') ||
+          userPrompt.toLowerCase().includes('ui')) {
+        const frontendResult = await this.executeAgent('frontend', userPrompt)
+        execution.push(frontendResult)
+      }
     }
     
-    // 4. Run audit pipeline
+    // 5. Run audit pipeline
     const audit = await this.runAuditPipeline()
     
-    // 5. If audit failed and we have fixes, apply them
+    // 6. If audit failed and we have fixes, apply them
     if (!audit.passed && this.config.enableAudit) {
       await this.executeAgent('auditor', `
         The following issues were detected:
@@ -330,7 +418,30 @@ export class TorbitOrchestrator {
       `)
     }
     
-    return { plan, execution, audit }
+    return { plan, execution, audit, routing: routing ?? undefined }
+  }
+  
+  /**
+   * Smart execution: Let Kimi decide which agent to use
+   */
+  async smartExecute(
+    prompt: string,
+    context?: { hasImages?: boolean }
+  ): Promise<AgentResult & { routing?: RoutingDecision }> {
+    const routing = await this.getRoutingDecision(prompt, context)
+    
+    if (routing) {
+      const result = await this.executeAgent(
+        routing.targetAgent,
+        prompt,
+        { modelTier: routing.modelTier }
+      )
+      return { ...result, routing }
+    }
+    
+    // Fallback: use architect with sonnet
+    const result = await this.executeAgent('architect', prompt, { modelTier: 'sonnet' })
+    return result
   }
   
   /**
@@ -338,6 +449,13 @@ export class TorbitOrchestrator {
    */
   getContext(): ToolExecutionContext {
     return this.context
+  }
+  
+  /**
+   * Check if Kimi routing is enabled
+   */
+  isKimiRoutingEnabled(): boolean {
+    return this.kimiRouter !== null
   }
 }
 
