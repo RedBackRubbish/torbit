@@ -55,7 +55,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   },
   'gemini-pro': {
     provider: 'gemini-pro',
-    model: 'gemini-2.5-pro-preview-06-05',
+    model: 'gemini-1.5-pro',
     description: 'Big brain - handles large context windows, full codebase analysis',
     costTier: 'standard',
     inputCostPer1k: 0.00125,
@@ -63,7 +63,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   },
   'gemini-flash': {
     provider: 'gemini-flash',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-1.5-flash',
     description: 'The rabbit - cleanup, small fixes, dirty work',
     costTier: 'economy',
     inputCostPer1k: 0.000075,
