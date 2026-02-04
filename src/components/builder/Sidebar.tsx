@@ -1,46 +1,75 @@
 'use client'
 
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useBuilderStore } from '@/store/builder'
 import FileExplorer from './FileExplorer'
-import AgentPanel from './AgentPanel'
+import NeuralTimeline from './NeuralTimeline'
 
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
 }
 
+type SidebarTab = 'files' | 'neural'
+
 /**
- * Sidebar - Left panel with file explorer and agent visualization
+ * Sidebar - Left panel with file explorer and neural timeline
  */
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { sidebarTab, setSidebarTab } = useBuilderStore()
-
+  const [activeTab, setActiveTab] = useState<SidebarTab>('files')
+  
   return (
     <motion.div
-      className="h-full bg-black/60 border-r border-white/5 flex flex-col"
+      className="h-full bg-neutral-900/80 border-r border-neutral-800 flex flex-col"
       animate={{ width: collapsed ? 48 : 280 }}
       transition={{ duration: 0.2 }}
     >
-      {/* Header */}
-      <div className="h-12 border-b border-white/5 flex items-center justify-between px-3">
+      {/* Header with Tabs */}
+      <div className="h-12 border-b border-neutral-800 flex items-center justify-between px-2">
         <AnimatePresence mode="wait">
           {!collapsed && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1 bg-neutral-800/50 rounded-lg p-0.5"
             >
-              <div className="w-2 h-2 bg-[#00ff41] rounded-full animate-pulse" />
-              <span className="text-white/60 text-sm font-medium">TORBIT</span>
+              {/* Files Tab */}
+              <button
+                onClick={() => setActiveTab('files')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  activeTab === 'files'
+                    ? 'bg-neutral-700 text-neutral-200'
+                    : 'text-neutral-500 hover:text-neutral-300'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                Files
+              </button>
+              
+              {/* Neural Tab */}
+              <button
+                onClick={() => setActiveTab('neural')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  activeTab === 'neural'
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : 'text-neutral-500 hover:text-neutral-300'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Neural
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
         
         <button
           onClick={onToggle}
-          className="w-6 h-6 flex items-center justify-center text-white/40 hover:text-white/80 transition-colors"
+          className="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-300 transition-colors"
         >
           <svg 
             className={`w-4 h-4 transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`}
@@ -53,57 +82,50 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </button>
       </div>
 
-      {/* Tab Switcher */}
-      <AnimatePresence mode="wait">
-        {!collapsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex border-b border-white/5"
-          >
-            <button
-              onClick={() => setSidebarTab('agents')}
-              className={`flex-1 py-2 text-xs uppercase tracking-wider transition-colors ${
-                sidebarTab === 'agents'
-                  ? 'text-[#00ff41] border-b-2 border-[#00ff41]'
-                  : 'text-white/30 hover:text-white/50'
-              }`}
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-            >
-              Agents
-            </button>
-            <button
-              onClick={() => setSidebarTab('files')}
-              className={`flex-1 py-2 text-xs uppercase tracking-wider transition-colors ${
-                sidebarTab === 'files'
-                  ? 'text-[#00ff41] border-b-2 border-[#00ff41]'
-                  : 'text-white/30 hover:text-white/50'
-              }`}
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-            >
-              Files
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Content */}
+      {/* Content Area */}
       <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           {!collapsed && (
             <motion.div
-              key={sidebarTab}
+              key={activeTab}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.15 }}
               className="h-full"
             >
-              {sidebarTab === 'files' ? <FileExplorer /> : <AgentPanel />}
+              {activeTab === 'files' ? (
+                <FileExplorer />
+              ) : (
+                <NeuralTimeline />
+              )}
             </motion.div>
           )}
         </AnimatePresence>
+        
+        {/* Collapsed Icons */}
+        {collapsed && (
+          <div className="flex flex-col items-center gap-2 pt-3">
+            <button
+              onClick={() => { onToggle(); setActiveTab('files'); }}
+              className="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 rounded-lg transition-all"
+              title="Files"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => { onToggle(); setActiveTab('neural'); }}
+              className="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+              title="Neural Link"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   )

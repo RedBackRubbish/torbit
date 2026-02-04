@@ -87,8 +87,8 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
         onClick={handleClick}
         className={`w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors rounded ${
           isSelected
-            ? 'bg-[#00ff41]/10 text-[#00ff41]'
-            : 'text-white/60 hover:bg-white/5 hover:text-white/80'
+            ? 'bg-blue-500/10 text-blue-400'
+            : 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200'
         }`}
         style={{ 
           paddingLeft: `${depth * 12 + 8}px`,
@@ -105,10 +105,10 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
         </span>
         <span className="truncate">{node.name}</span>
         {node.file?.isNew && (
-          <span className="ml-auto text-[10px] text-[#00ff41] uppercase tracking-wider">new</span>
+          <span className="ml-auto text-[10px] text-blue-400 uppercase tracking-wider">new</span>
         )}
         {node.file?.isModified && (
-          <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#00ff41]" />
+          <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500" />
         )}
       </motion.button>
       
@@ -146,13 +146,13 @@ export default function FileExplorer() {
         <div className="text-center">
           <div className="text-2xl mb-2 opacity-20">📁</div>
           <p 
-            className="text-white/30 text-xs"
+            className="text-neutral-400 text-xs"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
             No files yet
           </p>
           <p 
-            className="text-white/20 text-xs mt-1"
+            className="text-neutral-500 text-xs mt-1"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
             Files will appear as agents generate code

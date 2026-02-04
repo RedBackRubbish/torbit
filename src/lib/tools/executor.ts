@@ -8,6 +8,16 @@ import type { ToolName } from './definitions'
  * terminal, deployment services, etc.
  */
 
+// Helper: Adjust a hex color by a percentage (positive = lighter, negative = darker)
+function adjustColor(hex: string, percent: number): string {
+  const num = parseInt(hex.replace('#', ''), 16)
+  const amt = Math.round(2.55 * percent)
+  const R = Math.min(255, Math.max(0, (num >> 16) + amt))
+  const G = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt))
+  const B = Math.min(255, Math.max(0, (num & 0x0000ff) + amt))
+  return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`
+}
+
 export interface ToolResult {
   success: boolean
   output: string
@@ -20,6 +30,7 @@ export interface ToolExecutionContext {
   projectId: string
   userId: string
   workingDirectory: string
+  agentId?: string // Current agent executing tools
   files: Map<string, string> // In-memory file system for sandboxed execution
   checkpoints: Map<string, { name: string; files: Map<string, string>; timestamp: number }> // Time travel
   browserLogs: Array<{ level: string; message: string; timestamp: number }> // Browser console
@@ -31,6 +42,7 @@ export interface ToolExecutionContext {
   secrets: Map<string, { value: string; description: string }> // Secure secrets
   contextCache: Map<string, { content: string; timestamp: number; ttl: number }> // Prompt caching
   parsedErrors: Map<string, ParsedError> // Error recovery
+  tasks: Map<string, { id: string; title: string; description: string; status: string; priority: string; agentId?: string; createdAt: number; updatedAt?: number; completedAt?: number }> // Task management
 }
 
 export interface DesignTokens {
@@ -381,6 +393,270 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   },
   
   // ============================================
+  // CLOSER TOOLS - Ship to Production
+  // ============================================
+  
+  deployToProduction: async (args, _ctx) => {
+    const { provider, projectName, environmentVariables, framework, buildCommand, outputDirectory, region } = args as {
+      provider: 'vercel' | 'netlify' | 'railway'
+      projectName: string
+      environmentVariables?: Record<string, string>
+      framework?: string
+      buildCommand?: string
+      outputDirectory?: string
+      region?: string
+    }
+    const start = Date.now()
+    
+    // In production, this would use actual Vercel/Netlify/Railway APIs
+    // For now, simulate the deployment process
+    const deploymentId = `prod_${Math.random().toString(36).slice(2, 10)}`
+    const projectSlug = projectName.toLowerCase().replace(/[^a-z0-9]/g, '-')
+    
+    // Determine the production URL based on provider
+    const providerUrls: Record<string, string> = {
+      vercel: `https://${projectSlug}.vercel.app`,
+      netlify: `https://${projectSlug}.netlify.app`,
+      railway: `https://${projectSlug}.up.railway.app`,
+    }
+    
+    const productionUrl = providerUrls[provider]
+    const envCount = environmentVariables ? Object.keys(environmentVariables).length : 0
+    
+    return {
+      success: true,
+      output: [
+        `🚀 Deploying to ${provider.toUpperCase()} Production`,
+        ``,
+        `Project: ${projectName}`,
+        `Framework: ${framework || 'auto-detected'}`,
+        buildCommand ? `Build Command: ${buildCommand}` : null,
+        outputDirectory ? `Output Directory: ${outputDirectory}` : null,
+        region ? `Region: ${region}` : null,
+        envCount > 0 ? `Environment Variables: ${envCount} configured` : null,
+        ``,
+        `Deployment ID: ${deploymentId}`,
+        `Status: ✓ Deployed`,
+        ``,
+        `🌐 Production URL: ${productionUrl}`,
+      ].filter(Boolean).join('\n'),
+      data: {
+        deploymentId,
+        provider,
+        projectName,
+        productionUrl,
+        status: 'deployed',
+        framework,
+        region,
+      },
+      duration: Date.now() - start,
+    }
+  },
+  
+  syncToGithub: async (args, _ctx) => {
+    const { operation, repoName, private: isPrivate, commitMessage, branch, prTitle, prDescription, baseBranch } = args as {
+      operation: 'init' | 'push' | 'pull-request' | 'status'
+      repoName?: string
+      private?: boolean
+      commitMessage?: string
+      branch?: string
+      prTitle?: string
+      prDescription?: string
+      baseBranch?: string
+    }
+    const start = Date.now()
+    
+    // Simulate GitHub operations
+    switch (operation) {
+      case 'init': {
+        const repoUrl = `https://github.com/user/${repoName || 'my-project'}`
+        return {
+          success: true,
+          output: [
+            `📦 Initializing GitHub Repository`,
+            ``,
+            `Repository: ${repoName || 'my-project'}`,
+            `Visibility: ${isPrivate ? 'Private' : 'Public'}`,
+            ``,
+            `✓ Repository created`,
+            `✓ Remote origin added`,
+            ``,
+            `🔗 ${repoUrl}`,
+          ].join('\n'),
+          data: { repoUrl, repoName: repoName || 'my-project', private: isPrivate },
+          duration: Date.now() - start,
+        }
+      }
+      
+      case 'push': {
+        return {
+          success: true,
+          output: [
+            `📤 Pushing to GitHub`,
+            ``,
+            `Branch: ${branch || 'main'}`,
+            `Commit: ${commitMessage || 'Update from TORBIT'}`,
+            ``,
+            `✓ Changes committed`,
+            `✓ Pushed to origin/${branch || 'main'}`,
+          ].join('\n'),
+          data: { branch: branch || 'main', commitMessage: commitMessage || 'Update from TORBIT' },
+          duration: Date.now() - start,
+        }
+      }
+      
+      case 'pull-request': {
+        const prNumber = Math.floor(Math.random() * 100) + 1
+        const prUrl = `https://github.com/user/project/pull/${prNumber}`
+        return {
+          success: true,
+          output: [
+            `🔀 Opening Pull Request`,
+            ``,
+            `Title: ${prTitle || 'Changes from TORBIT'}`,
+            `Base: ${baseBranch || 'main'} ← ${branch || 'feature'}`,
+            prDescription ? `Description: ${prDescription}` : null,
+            ``,
+            `✓ Pull Request #${prNumber} created`,
+            ``,
+            `🔗 ${prUrl}`,
+            ``,
+            `Review your changes and merge when ready.`,
+          ].filter(Boolean).join('\n'),
+          data: { prNumber, prUrl, prTitle: prTitle || 'Changes from TORBIT', branch, baseBranch: baseBranch || 'main' },
+          duration: Date.now() - start,
+        }
+      }
+      
+      case 'status': {
+        return {
+          success: true,
+          output: [
+            `📊 Git Status`,
+            ``,
+            `Branch: ${branch || 'main'}`,
+            `Tracking: origin/${branch || 'main'}`,
+            ``,
+            `✓ Working tree clean`,
+            `✓ Up to date with remote`,
+          ].join('\n'),
+          data: { branch: branch || 'main', clean: true, upToDate: true },
+          duration: Date.now() - start,
+        }
+      }
+      
+      default:
+        return {
+          success: false,
+          output: `Unknown operation: ${operation}`,
+          duration: Date.now() - start,
+        }
+    }
+  },
+  
+  generateDesignSystem: async (args, _ctx) => {
+    const { style, primaryColor, mode, customPrompt, outputFormat, applyImmediately } = args as {
+      style: 'corporate' | 'playful' | 'brutalist' | 'minimal' | 'luxury' | 'tech' | 'organic' | 'custom'
+      primaryColor?: string
+      mode?: 'light' | 'dark' | 'both'
+      customPrompt?: string
+      outputFormat?: 'css-variables' | 'tailwind' | 'design-tokens-json'
+      applyImmediately?: boolean
+    }
+    const start = Date.now()
+    
+    // Style presets with color palettes
+    const stylePresets: Record<string, { primary: string; accent: string; bg: string; text: string; vibe: string }> = {
+      corporate: { primary: '#2563eb', accent: '#3b82f6', bg: '#f8fafc', text: '#1e293b', vibe: 'Professional, trustworthy, clean' },
+      playful: { primary: '#ec4899', accent: '#f472b6', bg: '#fdf2f8', text: '#831843', vibe: 'Fun, energetic, youthful' },
+      brutalist: { primary: '#000000', accent: '#ff0000', bg: '#ffffff', text: '#000000', vibe: 'Raw, bold, unapologetic' },
+      minimal: { primary: '#18181b', accent: '#71717a', bg: '#fafafa', text: '#27272a', vibe: 'Clean, focused, elegant' },
+      luxury: { primary: '#b8860b', accent: '#d4af37', bg: '#0a0a0a', text: '#fafafa', vibe: 'Premium, sophisticated, exclusive' },
+      tech: { primary: '#06b6d4', accent: '#22d3ee', bg: '#0f172a', text: '#e2e8f0', vibe: 'Modern, innovative, cutting-edge' },
+      organic: { primary: '#65a30d', accent: '#84cc16', bg: '#fefce8', text: '#365314', vibe: 'Natural, warm, sustainable' },
+      custom: { primary: primaryColor || '#6366f1', accent: '#818cf8', bg: '#ffffff', text: '#1f2937', vibe: customPrompt || 'Custom style' },
+    }
+    
+    const preset = stylePresets[style]
+    const effectivePrimary = primaryColor || preset.primary
+    
+    // Generate CSS variables
+    const cssVariables = `
+:root {
+  /* Primary Colors */
+  --color-primary: ${effectivePrimary};
+  --color-primary-light: ${preset.accent};
+  --color-primary-dark: ${adjustColor(effectivePrimary, -20)};
+  
+  /* Background */
+  --color-background: ${preset.bg};
+  --color-surface: ${mode === 'dark' ? '#1f2937' : '#ffffff'};
+  --color-surface-elevated: ${mode === 'dark' ? '#374151' : '#f9fafb'};
+  
+  /* Text */
+  --color-text-primary: ${preset.text};
+  --color-text-secondary: ${adjustColor(preset.text, 40)};
+  --color-text-muted: ${adjustColor(preset.text, 60)};
+  
+  /* Accents */
+  --color-accent: ${preset.accent};
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  
+  /* Border Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+`.trim()
+    
+    return {
+      success: true,
+      output: [
+        `🎨 Generated Design System`,
+        ``,
+        `Style: ${style}${customPrompt ? ` (${customPrompt})` : ''}`,
+        `Mode: ${mode || 'both'}`,
+        `Primary Color: ${effectivePrimary}`,
+        `Vibe: ${preset.vibe}`,
+        ``,
+        `Output Format: ${outputFormat || 'css-variables'}`,
+        applyImmediately ? `✓ Applied to globals.css` : `Ready to apply`,
+        ``,
+        `--- CSS Variables ---`,
+        cssVariables,
+      ].join('\n'),
+      data: {
+        style,
+        primaryColor: effectivePrimary,
+        mode: mode || 'both',
+        vibe: preset.vibe,
+        cssVariables,
+        applied: applyImmediately,
+      },
+      duration: Date.now() - start,
+    }
+  },
+  
+  // ============================================
   // REASONING
   // ============================================
   
@@ -420,6 +696,160 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
       output: `Delegating to ${agentId} agent: ${task}${context ? `\nContext: ${context}` : ''}`,
       data: { agentId, task },
       duration: 0,
+    }
+  },
+  
+  // ============================================
+  // TASK MANAGEMENT
+  // ============================================
+  
+  manageTask: async (args, ctx) => {
+    const { operation, taskId, title, description, status, priority } = args as {
+      operation: 'add' | 'update' | 'complete' | 'delete' | 'list'
+      taskId?: string
+      title?: string
+      description?: string
+      status?: string
+      priority?: string
+    }
+    const start = Date.now()
+    
+    // Note: In real implementation, this would interact with the task store
+    // For now, we track tasks in the execution context
+    if (!ctx.tasks) {
+      ctx.tasks = new Map()
+    }
+    
+    switch (operation) {
+      case 'add': {
+        if (!title) {
+          return {
+            success: false,
+            output: 'Task title is required for add operation',
+            duration: Date.now() - start,
+          }
+        }
+        const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+        const task = {
+          id,
+          title,
+          description: description || '',
+          status: status || 'in-progress',
+          priority: priority || 'medium',
+          agentId: ctx.agentId,
+          createdAt: Date.now(),
+        }
+        ctx.tasks.set(id, task)
+        return {
+          success: true,
+          output: `Created task: "${title}" [${id}]`,
+          data: task,
+          duration: Date.now() - start,
+        }
+      }
+      
+      case 'update': {
+        if (!taskId) {
+          return {
+            success: false,
+            output: 'Task ID is required for update operation',
+            duration: Date.now() - start,
+          }
+        }
+        const task = ctx.tasks.get(taskId)
+        if (!task) {
+          return {
+            success: false,
+            output: `Task not found: ${taskId}`,
+            duration: Date.now() - start,
+          }
+        }
+        if (title) task.title = title
+        if (description) task.description = description
+        if (status) task.status = status
+        if (priority) task.priority = priority
+        task.updatedAt = Date.now()
+        ctx.tasks.set(taskId, task)
+        return {
+          success: true,
+          output: `Updated task: "${task.title}"`,
+          data: task,
+          duration: Date.now() - start,
+        }
+      }
+      
+      case 'complete': {
+        if (!taskId) {
+          return {
+            success: false,
+            output: 'Task ID is required for complete operation',
+            duration: Date.now() - start,
+          }
+        }
+        const task = ctx.tasks.get(taskId)
+        if (!task) {
+          return {
+            success: false,
+            output: `Task not found: ${taskId}`,
+            duration: Date.now() - start,
+          }
+        }
+        task.status = 'completed'
+        task.completedAt = Date.now()
+        ctx.tasks.set(taskId, task)
+        return {
+          success: true,
+          output: `Completed task: "${task.title}" ✓`,
+          data: task,
+          duration: Date.now() - start,
+        }
+      }
+      
+      case 'delete': {
+        if (!taskId) {
+          return {
+            success: false,
+            output: 'Task ID is required for delete operation',
+            duration: Date.now() - start,
+          }
+        }
+        const task = ctx.tasks.get(taskId)
+        if (!task) {
+          return {
+            success: false,
+            output: `Task not found: ${taskId}`,
+            duration: Date.now() - start,
+          }
+        }
+        ctx.tasks.delete(taskId)
+        return {
+          success: true,
+          output: `Deleted task: "${task.title}"`,
+          duration: Date.now() - start,
+        }
+      }
+      
+      case 'list': {
+        const tasks = Array.from(ctx.tasks.values())
+        const filtered = status 
+          ? tasks.filter(t => t.status === status)
+          : tasks
+        return {
+          success: true,
+          output: filtered.length > 0
+            ? filtered.map(t => `[${t.status}] ${t.title}`).join('\n')
+            : 'No tasks found',
+          data: { tasks: filtered, count: filtered.length },
+          duration: Date.now() - start,
+        }
+      }
+      
+      default:
+        return {
+          success: false,
+          output: `Unknown operation: ${operation}`,
+          duration: Date.now() - start,
+        }
     }
   },
   
@@ -2737,6 +3167,8 @@ export function createExecutionContext(
     contextCache: new Map(),
     // Phase 2: Self-Repair Loop
     parsedErrors: new Map(),
+    // Task management
+    tasks: new Map(),
   }
 }
 

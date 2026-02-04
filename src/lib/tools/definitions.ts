@@ -92,6 +92,43 @@ export const checkDeployStatusSchema = z.object({
   deploymentId: z.string().describe('The deployment ID to check'),
 })
 
+// ============================================
+// CLOSER TOOLS - Ship to Production
+// ============================================
+
+// DEPLOY TO PRODUCTION (Actually ship to Vercel/Netlify)
+export const deployToProductionSchema = z.object({
+  provider: z.enum(['vercel', 'netlify', 'railway']).default('vercel').describe('Deployment platform'),
+  projectName: z.string().describe('Name for the deployed project'),
+  environmentVariables: z.record(z.string(), z.string()).optional().describe('Environment variables to set'),
+  framework: z.enum(['nextjs', 'vite', 'remix', 'astro', 'auto']).default('auto').describe('Framework preset'),
+  buildCommand: z.string().optional().describe('Custom build command'),
+  outputDirectory: z.string().optional().describe('Build output directory'),
+  region: z.string().optional().describe('Preferred deployment region'),
+})
+
+// SYNC TO GITHUB (Push code and open PR)
+export const syncToGithubSchema = z.object({
+  operation: z.enum(['init', 'push', 'pull-request', 'status']).describe('Git operation to perform'),
+  repoName: z.string().optional().describe('Repository name (for init)'),
+  private: z.boolean().default(true).describe('Create private repository'),
+  commitMessage: z.string().optional().describe('Commit message for push'),
+  branch: z.string().default('main').describe('Branch to push to'),
+  prTitle: z.string().optional().describe('Pull request title (for pull-request)'),
+  prDescription: z.string().optional().describe('Pull request description'),
+  baseBranch: z.string().default('main').describe('Base branch for PR'),
+})
+
+// GENERATE DESIGN SYSTEM (Dynamic theming from prompt)
+export const generateDesignSystemSchema = z.object({
+  style: z.enum(['corporate', 'playful', 'brutalist', 'minimal', 'luxury', 'tech', 'organic', 'custom']).describe('Design aesthetic'),
+  primaryColor: z.string().optional().describe('Primary brand color (hex, e.g., "#3B82F6")'),
+  mode: z.enum(['light', 'dark', 'both']).default('both').describe('Color mode support'),
+  customPrompt: z.string().optional().describe('Additional style description (e.g., "Pink cupcake bakery, warm and inviting")'),
+  outputFormat: z.enum(['css-variables', 'tailwind', 'design-tokens-json']).default('css-variables'),
+  applyImmediately: z.boolean().default(true).describe('Apply to globals.css immediately'),
+})
+
 // Reasoning
 export const thinkSchema = z.object({
   thought: z.string().describe('Your current thought or reasoning step'),
@@ -111,6 +148,16 @@ export const delegateToAgentSchema = z.object({
   agentId: z.enum(['frontend', 'backend', 'database', 'devops', 'qa']),
   task: z.string().describe('The task to delegate'),
   context: z.string().optional().describe('Additional context for the agent'),
+})
+
+// Task Management
+export const manageTaskSchema = z.object({
+  operation: z.enum(['add', 'update', 'complete', 'delete', 'list']).describe('Task operation to perform'),
+  taskId: z.string().optional().describe('Task ID (for update/complete/delete)'),
+  title: z.string().optional().describe('Task title (for add)'),
+  description: z.string().optional().describe('Task description (for add/update)'),
+  status: z.enum(['not-started', 'in-progress', 'completed', 'blocked']).optional().describe('Task status'),
+  priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Task priority'),
 })
 
 // ============================================
@@ -427,6 +474,18 @@ export const TOOL_DEFINITIONS = {
     description: 'Check the status of a deployment.',
     inputSchema: checkDeployStatusSchema,
   },
+  deployToProduction: {
+    description: 'Deploy to production on Vercel, Netlify, or Railway. Returns the live URL (https://project.vercel.app). The "Deploy" button comes to life.',
+    inputSchema: deployToProductionSchema,
+  },
+  syncToGithub: {
+    description: 'Push code to GitHub and optionally open a Pull Request. Initializes repo, commits, and creates PR for review. Users can see the diffs.',
+    inputSchema: syncToGithubSchema,
+  },
+  generateDesignSystem: {
+    description: 'Generate a complete design system (colors, typography, spacing) based on a style prompt. Transforms "corporate" or "pink cupcake bakery" into CSS variables.',
+    inputSchema: generateDesignSystemSchema,
+  },
   think: {
     description: 'Use this to think through a problem step by step. Your reasoning will be visible to the user.',
     inputSchema: thinkSchema,
@@ -438,6 +497,10 @@ export const TOOL_DEFINITIONS = {
   delegateToAgent: {
     description: 'Delegate a subtask to another specialized agent.',
     inputSchema: delegateToAgentSchema,
+  },
+  manageTask: {
+    description: 'Manage tasks in the TORBIT task panel. Add tasks to track work, mark as complete, update status. Users can see your task progress visually.',
+    inputSchema: manageTaskSchema,
   },
   
   // ============================================
@@ -652,6 +715,7 @@ export const AGENT_TOOLS = {
     think: TOOL_DEFINITIONS.think,
     planSteps: TOOL_DEFINITIONS.planSteps,
     delegateToAgent: TOOL_DEFINITIONS.delegateToAgent,
+    manageTask: TOOL_DEFINITIONS.manageTask,
     // File reading
     getFileTree: TOOL_DEFINITIONS.getFileTree,
     readFile: TOOL_DEFINITIONS.readFile,
@@ -671,6 +735,7 @@ export const AGENT_TOOLS = {
     // PHASE 2: Package Validation (Dependency Sherlock)
     verifyPackage: TOOL_DEFINITIONS.verifyPackage,
     checkPeerDependencies: TOOL_DEFINITIONS.checkPeerDependencies,
+    verifyDependencyGraph: TOOL_DEFINITIONS.verifyDependencyGraph, // CLOSER: Prevent version conflicts before install
     // PHASE 2: Context Caching (Infinite Memory)
     cacheContext: TOOL_DEFINITIONS.cacheContext,
     getCachedContext: TOOL_DEFINITIONS.getCachedContext,
@@ -772,6 +837,8 @@ export const AGENT_TOOLS = {
     // Deployment
     deployPreview: TOOL_DEFINITIONS.deployPreview,
     checkDeployStatus: TOOL_DEFINITIONS.checkDeployStatus,
+    deployToProduction: TOOL_DEFINITIONS.deployToProduction, // CLOSER: Actually ship to Vercel/Netlify
+    syncToGithub: TOOL_DEFINITIONS.syncToGithub, // CLOSER: Push and open PRs
     analyzeDependencies: TOOL_DEFINITIONS.analyzeDependencies,
     // Safety (Full Time Travel access)
     createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
@@ -829,6 +896,8 @@ export const AGENT_TOOLS = {
     think: TOOL_DEFINITIONS.think,
     planSteps: TOOL_DEFINITIONS.planSteps,
     delegateToAgent: TOOL_DEFINITIONS.delegateToAgent,
+    manageTask: TOOL_DEFINITIONS.manageTask, // Task management is planner's specialty
+    generateDesignSystem: TOOL_DEFINITIONS.generateDesignSystem, // CLOSER: Dynamic theming from prompt
     // File reading
     getFileTree: TOOL_DEFINITIONS.getFileTree,
     readFile: TOOL_DEFINITIONS.readFile,

@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
+import { ExecutorService } from '@/services/executor'
+import { NervousSystem, type PainSignal } from '@/lib/nervous-system'
 import type { AgentId } from '@/lib/tools/definitions'
 
 const AGENT_ICONS: Record<string, string> = {
@@ -121,7 +123,7 @@ function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
         >
           {statusIcon}
         </motion.span>
-        <code className="text-xs text-[#00ff41] flex-1 text-left truncate">
+        <code className="text-xs text-blue-400 flex-1 text-left truncate">
           {toolCall.name}
         </code>
         {toolCall.result && (
@@ -260,6 +262,46 @@ export default function ChatPanel() {
                     ? { ...m, toolCalls: Array.from(toolCalls.values()) }
                     : m
                 ))
+                
+                // CLIENT-SIDE EXECUTION: Route to WebContainer via ExecutorService
+                // This is the "Spinal Cord" - connecting AI intent to browser runtime
+                if (ExecutorService.isToolAvailable(tc.name)) {
+                  ExecutorService.executeTool(tc.name, tc.args).then((result) => {
+                    // Update the tool call with client-side result
+                    const existingTc = toolCalls.get(tc.id)
+                    if (existingTc) {
+                      existingTc.status = result.success ? 'complete' : 'error'
+                      existingTc.result = {
+                        success: result.success,
+                        output: result.output,
+                        duration: result.duration,
+                      }
+                      toolCalls.set(existingTc.id, existingTc)
+                      setMessages(prev => prev.map(m => 
+                        m.id === assistantId 
+                          ? { ...m, toolCalls: Array.from(toolCalls.values()) }
+                          : m
+                      ))
+                    }
+                  }).catch((error) => {
+                    console.error('[ChatPanel] Client execution error:', error)
+                    const existingTc = toolCalls.get(tc.id)
+                    if (existingTc) {
+                      existingTc.status = 'error'
+                      existingTc.result = {
+                        success: false,
+                        output: error instanceof Error ? error.message : 'Unknown error',
+                        duration: 0,
+                      }
+                      toolCalls.set(existingTc.id, existingTc)
+                      setMessages(prev => prev.map(m => 
+                        m.id === assistantId 
+                          ? { ...m, toolCalls: Array.from(toolCalls.values()) }
+                          : m
+                      ))
+                    }
+                  })
+                }
               }
               break
 
@@ -415,6 +457,52 @@ export default function ChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // ========================================================================
+  // REFLEX ARC: Listen for pain signals and auto-append to chat
+  // This makes Torbit self-heal by immediately notifying the AI of errors
+  // ========================================================================
+  useEffect(() => {
+    const handlePain = (e: CustomEvent<PainSignal>) => {
+      const signal = e.detail
+      
+      // Skip if we're not loading (AI not active) or if it's just a warning
+      if (signal.severity !== 'critical') {
+        console.log('[ReflexArc] Ignoring non-critical pain:', signal.type)
+        return
+      }
+      
+      // Prevent notification storms - only allow one auto-fix per 5 seconds
+      const lastAutoFix = (window as unknown as { __lastAutoFix?: number }).__lastAutoFix || 0
+      const now = Date.now()
+      if (now - lastAutoFix < 5000) {
+        console.log('[ReflexArc] Debouncing pain signal (too soon after last)')
+        return
+      }
+      (window as unknown as { __lastAutoFix: number }).__lastAutoFix = now
+      
+      console.warn('[ReflexArc] 🔴 Pain detected, triggering auto-fix:', signal.type)
+      
+      // Create the error message for the AI
+      const errorMessage = NervousSystem.formatForAI(signal)
+      
+      // Add as a "system" message (appears as user to trigger AI response)
+      const systemMessage: Message = {
+        id: `pain-${signal.id}`,
+        role: 'user',
+        content: errorMessage,
+      }
+      
+      setMessages(prev => [...prev, systemMessage])
+      
+      // Trigger AI response to fix the error
+      setAgentStatus(selectedAgent, 'working', `Auto-fixing: ${signal.type}`)
+      handleSubmitMessage(errorMessage, selectedAgent)
+    }
+
+    window.addEventListener('torbit-pain-signal', handlePain as EventListener)
+    return () => window.removeEventListener('torbit-pain-signal', handlePain as EventListener)
+  }, [selectedAgent, handleSubmitMessage, setAgentStatus])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim()) return
@@ -431,20 +519,20 @@ export default function ChatPanel() {
 
   return (
     <motion.div
-      className="h-full bg-black/60 border-l border-white/5 flex flex-col"
+      className="h-full bg-neutral-900/80 border-l border-neutral-800 flex flex-col"
       animate={{ width: chatCollapsed ? 48 : 400 }}
       transition={{ duration: 0.2 }}
       style={{ fontFamily: "'Space Grotesk', sans-serif" }}
     >
       {/* Header */}
-      <div className="h-12 border-b border-white/5 flex items-center justify-between px-4">
+      <div className="h-12 border-b border-neutral-800 flex items-center justify-between px-4">
         <AnimatePresence mode="wait">
           {!chatCollapsed && (
             <motion.span
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="text-white/60 text-sm font-medium"
+              className="text-neutral-300 text-sm font-medium"
             >
               Agent Console
             </motion.span>
@@ -453,7 +541,7 @@ export default function ChatPanel() {
         
         <button
           onClick={toggleChat}
-          className="w-6 h-6 flex items-center justify-center text-white/40 hover:text-white/80 transition-colors"
+          className="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-300 transition-colors"
         >
           <svg 
             className={`w-4 h-4 transition-transform duration-200 ${chatCollapsed ? 'rotate-180' : ''}`}
@@ -479,8 +567,8 @@ export default function ChatPanel() {
               <div className="h-full flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-3xl mb-3 opacity-20">💬</div>
-                  <p className="text-white/30 text-sm">Describe what you want to build</p>
-                  <p className="text-white/20 text-xs mt-1">The agents will take it from there</p>
+                  <p className="text-neutral-400 text-sm">Describe what you want to build</p>
+                  <p className="text-neutral-500 text-xs mt-1">The agents will take it from there</p>
                 </div>
               </div>
             )}
@@ -494,8 +582,8 @@ export default function ChatPanel() {
               >
                 {message.role === 'user' ? (
                   <div className="flex justify-end">
-                    <div className="max-w-[85%] bg-[#00ff41]/10 border border-[#00ff41]/20 rounded-2xl rounded-br-md px-4 py-3">
-                      <p className="text-white/90 text-sm whitespace-pre-wrap">{message.content}</p>
+                    <div className="max-w-[85%] bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-br-md px-4 py-3">
+                      <p className="text-neutral-100 text-sm whitespace-pre-wrap">{message.content}</p>
                     </div>
                   </div>
                 ) : (
@@ -538,7 +626,7 @@ export default function ChatPanel() {
                         )}
                         {/* Token usage display */}
                         {message.usage && (
-                          <span className="text-white/30 text-xs ml-auto">
+                          <span className="text-neutral-500 text-xs ml-auto">
                             {message.usage.inputTokens + message.usage.outputTokens} tokens · ${message.usage.estimatedCost.toFixed(4)}
                           </span>
                         )}
@@ -582,8 +670,8 @@ export default function ChatPanel() {
                       
                       {/* Text response */}
                       {(message.content && !message.error && !message.retrying) && (
-                        <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-md px-4 py-3">
-                          <p className="text-sm whitespace-pre-wrap text-white/80">
+                        <div className="bg-neutral-800/50 border border-neutral-700/50 rounded-2xl rounded-tl-md px-4 py-3">
+                          <p className="text-sm whitespace-pre-wrap text-neutral-200">
                             {message.content}
                           </p>
                         </div>
@@ -591,8 +679,8 @@ export default function ChatPanel() {
                       
                       {/* Thinking state */}
                       {!message.content && !message.error && !message.retrying && !message.toolCalls?.length && (
-                        <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-md px-4 py-3">
-                          <p className="text-sm text-white/40">Thinking...</p>
+                        <div className="bg-neutral-800/50 border border-neutral-700/50 rounded-2xl rounded-tl-md px-4 py-3">
+                          <p className="text-sm text-neutral-400">Thinking...</p>
                         </div>
                       )}
                     </div>
@@ -613,30 +701,8 @@ export default function ChatPanel() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="p-4 border-t border-white/5"
+            className="p-4 border-t border-neutral-800"
           >
-            {/* Agent Selector */}
-            <div className="flex gap-1 mb-3 overflow-x-auto pb-1 custom-scrollbar">
-              {(Object.keys(AGENT_ICONS) as AgentId[]).map((agent) => (
-                <button
-                  key={agent}
-                  type="button"
-                  onClick={() => setSelectedAgent(agent)}
-                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 shrink-0 ${
-                    selectedAgent === agent
-                      ? 'bg-white/10 border border-white/20'
-                      : 'bg-transparent border border-transparent hover:bg-white/5'
-                  }`}
-                  style={{
-                    color: selectedAgent === agent ? AGENT_COLORS[agent] : 'rgba(255,255,255,0.4)',
-                  }}
-                >
-                  <span>{AGENT_ICONS[agent]}</span>
-                  <span className="capitalize">{agent}</span>
-                </button>
-              ))}
-            </div>
-
             <div className="relative">
               <textarea
                 value={input}
@@ -647,11 +713,11 @@ export default function ChatPanel() {
                     handleSubmit(e)
                   }
                 }}
-                placeholder={`Ask ${selectedAgent} to help you build...`}
+                placeholder="What would you like to build?"
                 rows={1}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12
-                  text-white/90 text-sm placeholder:text-white/20 resize-none
-                  focus:outline-none focus:border-[#00ff41]/30 transition-colors"
+                className="w-full bg-neutral-800/50 border border-neutral-700 rounded-xl px-4 py-3 pr-12
+                  text-neutral-100 text-sm placeholder:text-neutral-500 resize-none
+                  focus:outline-none focus:border-blue-500/50 transition-colors"
               />
               <button
                 type="submit"
@@ -659,8 +725,8 @@ export default function ChatPanel() {
                 className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg
                   flex items-center justify-center transition-all ${
                     input.trim() && !isLoading
-                      ? 'bg-[#00ff41] text-black hover:bg-[#00ff41]/90'
-                      : 'bg-white/5 text-white/20 cursor-not-allowed'
+                      ? 'bg-blue-600 text-white hover:bg-blue-500'
+                      : 'bg-neutral-700/50 text-neutral-500 cursor-not-allowed'
                   }`}
               >
                 {isLoading ? (
@@ -677,7 +743,7 @@ export default function ChatPanel() {
               </button>
             </div>
             
-            <p className="text-white/20 text-xs mt-3 text-center">
+            <p className="text-neutral-500 text-xs mt-3 text-center">
               Enter to send · Shift+Enter for new line
             </p>
           </motion.form>

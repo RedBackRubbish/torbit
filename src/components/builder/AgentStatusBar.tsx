@@ -38,8 +38,8 @@ export default function AgentStatusBar() {
                 isActive
                   ? 'border-transparent z-10'
                   : isComplete
-                  ? 'border-[#00ff41]/30 bg-[#00ff41]/10'
-                  : 'border-white/5 bg-white/5'
+                  ? 'border-green-500/30 bg-green-500/10'
+                  : 'border-neutral-700 bg-neutral-800/50'
               }`}
               style={{ 
                 backgroundColor: isActive ? `${agent.color}20` : undefined,
@@ -49,7 +49,7 @@ export default function AgentStatusBar() {
               transition={{ duration: 1.5, repeat: Infinity }}
             >
               <span 
-                className={`${isActive ? '' : isComplete ? 'text-[#00ff41]/60' : 'text-white/20'}`}
+                className={`${isActive ? '' : isComplete ? 'text-green-500/60' : 'text-neutral-500'}`}
                 style={{ color: isActive ? agent.color : undefined }}
               >
                 {AGENT_ICONS[agent.id]}
@@ -69,22 +69,22 @@ export default function AgentStatusBar() {
       </div>
       
       {/* Divider */}
-      <div className="w-px h-5 bg-white/10" />
+      <div className="w-px h-5 bg-neutral-700" />
       
       {/* Status text */}
       {isGenerating ? (
         <div className="flex items-center gap-2">
           <motion.div
-            className="w-1.5 h-1.5 rounded-full bg-[#00ff41]"
+            className="w-1.5 h-1.5 rounded-full bg-blue-500"
             animate={{ opacity: [1, 0.3, 1] }}
             transition={{ duration: 1, repeat: Infinity }}
           />
-          <span className="text-xs text-white/50">
+          <span className="text-xs text-neutral-400">
             {workingAgent ? (
               <>
                 <span style={{ color: workingAgent.color }}>{workingAgent.name}</span>
                 {' · '}
-                <span className="text-white/30">{workingAgent.currentTask || 'Working...'}</span>
+                <span className="text-neutral-500">{workingAgent.currentTask || 'Working...'}</span>
               </>
             ) : (
               'Processing...'
@@ -92,10 +92,10 @@ export default function AgentStatusBar() {
           </span>
         </div>
       ) : (
-        <span className="text-xs text-white/30">
+        <span className="text-xs text-neutral-500">
           {activeAgents.length > 0 ? (
             <>
-              <span className="text-[#00ff41]">{activeAgents.length}</span> agent{activeAgents.length > 1 ? 's' : ''} active
+              <span className="text-blue-400">{activeAgents.length}</span> agent{activeAgents.length > 1 ? 's' : ''} active
             </>
           ) : (
             'Ready'

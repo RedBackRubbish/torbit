@@ -17,15 +17,19 @@ import { DEVOPS_SYSTEM_PROMPT } from '@/lib/agents/prompts/devops'
 import { QA_SYSTEM_PROMPT } from '@/lib/agents/prompts/qa'
 import { AUDITOR_SYSTEM_PROMPT } from '@/lib/agents/prompts/auditor'
 import { PLANNER_SYSTEM_PROMPT } from '@/lib/agents/prompts/planner'
+import { GOD_PROMPT } from '@/lib/agents/prompts/god-prompt'
 
 // Allow streaming responses up to 120 seconds for tool-heavy tasks
 export const maxDuration = 120
 
+// Combine God Prompt with agent-specific prompts
+const createAgentPrompt = (agentPrompt: string) => `${GOD_PROMPT}\n\n---\n\n## AGENT-SPECIFIC INSTRUCTIONS\n\n${agentPrompt}`
+
 // Rich agent system prompts - the sophisticated ones with tool awareness
 const AGENT_PROMPTS: Record<string, string> = {
-  architect: ARCHITECT_SYSTEM_PROMPT,
-  frontend: FRONTEND_SYSTEM_PROMPT,
-  backend: `You are THE BACKEND AGENT for TORBIT.
+  architect: createAgentPrompt(ARCHITECT_SYSTEM_PROMPT),
+  frontend: createAgentPrompt(FRONTEND_SYSTEM_PROMPT),
+  backend: createAgentPrompt(`You are THE BACKEND AGENT for TORBIT.
 Your role is to implement API routes, server actions, and server-side logic.
 
 ## TOOLS AT YOUR DISPOSAL
@@ -46,9 +50,9 @@ When given a task:
 - Proper error handling with status codes
 - Edge runtime where possible for performance
 
-Always show your work through tool calls.`,
+Always show your work through tool calls.`),
 
-  database: `You are THE DATABASE AGENT for TORBIT.
+  database: createAgentPrompt(`You are THE DATABASE AGENT for TORBIT.
 Your role is to design schemas, write migrations, and optimize queries.
 
 ## TOOLS AT YOUR DISPOSAL
@@ -66,12 +70,12 @@ When given a task:
 - Normalized schemas with clear relationships
 - Migration files for all changes
 
-Never hallucinate columns - use inspectSchema first.`,
+Never hallucinate columns - use inspectSchema first.`),
 
-  devops: DEVOPS_SYSTEM_PROMPT,
-  qa: QA_SYSTEM_PROMPT,
-  planner: PLANNER_SYSTEM_PROMPT,
-  auditor: AUDITOR_SYSTEM_PROMPT,
+  devops: createAgentPrompt(DEVOPS_SYSTEM_PROMPT),
+  qa: createAgentPrompt(QA_SYSTEM_PROMPT),
+  planner: createAgentPrompt(PLANNER_SYSTEM_PROMPT),
+  auditor: createAgentPrompt(AUDITOR_SYSTEM_PROMPT),
 }
 
 // ============================================

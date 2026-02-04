@@ -2,50 +2,45 @@
 @import "tailwindcss";
 
 /* ========================================
-   TORBIT - Premium Design System
+   TORBIT - Modern Design System
    ======================================== */
 
 @theme inline {
-  /* Matrix Green Palette */
-  --color-matrix-50: #e8ffe8;
-  --color-matrix-100: #c1ffc1;
-  --color-matrix-200: #8aff8a;
-  --color-matrix-300: #4dff4d;
-  --color-matrix-400: #00ff41;
-  --color-matrix-500: #00d835;
-  --color-matrix-600: #00b32b;
-  --color-matrix-700: #008f22;
-  --color-matrix-800: #006b1a;
-  --color-matrix-900: #004711;
-  --color-matrix-950: #002208;
+  /* Primary Blue Palette */
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  --color-primary-950: #172554;
 
-  /* Void Black Palette */
-  --color-void-50: #1a1a1a;
-  --color-void-100: #141414;
-  --color-void-200: #0f0f0f;
-  --color-void-300: #0a0a0a;
-  --color-void-400: #080808;
-  --color-void-500: #050505;
-  --color-void-600: #030303;
-  --color-void-700: #020202;
-  --color-void-800: #010101;
-  --color-void-900: #000000;
-  --color-void-950: #000000;
+  /* Neutral Palette */
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f4f4f5;
+  --color-neutral-200: #e4e4e7;
+  --color-neutral-300: #d4d4d8;
+  --color-neutral-400: #a1a1aa;
+  --color-neutral-500: #71717a;
+  --color-neutral-600: #52525b;
+  --color-neutral-700: #3f3f46;
+  --color-neutral-800: #27272a;
+  --color-neutral-900: #18181b;
+  --color-neutral-950: #09090b;
 
-  /* Cyber Cyan */
-  --color-cyber-400: #00f5ff;
-  --color-cyber-500: #00d4dd;
-  --color-cyber-600: #00b3bb;
-
-  /* Glitch Red */
-  --color-glitch-400: #ff0040;
-  --color-glitch-500: #cc0033;
-  --color-glitch-600: #990026;
+  /* Accent Colors */
+  --color-accent-cyan: #06b6d4;
+  --color-accent-purple: #8b5cf6;
+  --color-accent-amber: #f59e0b;
 
   /* Semantic */
-  --color-success: #00ff41;
-  --color-warning: #ffff00;
-  --color-error: #ff0040;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
 
   /* Typography */
   --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
@@ -59,25 +54,25 @@
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-matrix-700) var(--color-void-900);
+  scrollbar-color: var(--color-neutral-700) var(--color-neutral-950);
 }
 
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 *::-webkit-scrollbar-track {
-  background: var(--color-void-900);
+  background: transparent;
 }
 
 *::-webkit-scrollbar-thumb {
-  background: var(--color-matrix-700);
-  border-radius: 4px;
+  background: var(--color-neutral-700);
+  border-radius: 3px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--color-matrix-500);
+  background: var(--color-neutral-600);
 }
 
 html {
@@ -85,16 +80,16 @@ html {
 }
 
 body {
-  background: var(--color-void-900);
-  color: var(--color-matrix-400);
-  font-family: var(--font-mono);
+  background: var(--color-neutral-950);
+  color: var(--color-neutral-200);
+  font-family: var(--font-sans);
   min-height: 100vh;
   overflow-x: hidden;
 }
 
 ::selection {
-  background: var(--color-matrix-400);
-  color: var(--color-void-900);
+  background: var(--color-primary-500);
+  color: white;
 }
 
 /* ========================================
@@ -194,22 +189,22 @@ body {
    ======================================== */
 
 .text-glow-sm {
-  text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+  text-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
 }
 
 .text-glow-md {
   text-shadow: 
-    0 0 10px rgba(0, 255, 65, 0.5),
-    0 0 20px rgba(0, 255, 65, 0.3),
-    0 0 40px rgba(0, 255, 65, 0.2);
+    0 0 10px rgba(59, 130, 246, 0.5),
+    0 0 20px rgba(59, 130, 246, 0.3),
+    0 0 40px rgba(59, 130, 246, 0.2);
 }
 
 .text-glow-lg {
   text-shadow: 
-    0 0 10px rgba(0, 255, 65, 0.6),
-    0 0 30px rgba(0, 255, 65, 0.4),
-    0 0 60px rgba(0, 255, 65, 0.3),
-    0 0 100px rgba(0, 255, 65, 0.2);
+    0 0 10px rgba(59, 130, 246, 0.6),
+    0 0 30px rgba(59, 130, 246, 0.4),
+    0 0 60px rgba(59, 130, 246, 0.3),
+    0 0 100px rgba(59, 130, 246, 0.2);
 }
 
 /* ========================================
