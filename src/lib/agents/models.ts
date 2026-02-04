@@ -33,8 +33,8 @@ export interface ModelConfig {
 export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'claude-opus': {
     provider: 'claude-opus',
-    model: 'claude-sonnet-4-20250514', // Using Sonnet as Opus proxy until Opus 4 available
-    description: 'Best reasoning - system design, complex debugging',
+    model: 'claude-opus-4-20250514',
+    description: 'Boss brain - plans builds, orchestrates architecture',
     costTier: 'premium',
     inputCostPer1k: 0.015,
     outputCostPer1k: 0.075,
@@ -42,7 +42,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'claude-sonnet': {
     provider: 'claude-sonnet',
     model: 'claude-sonnet-4-20250514',
-    description: 'Balanced - code generation, standard tasks',
+    description: 'Executor - code generation, implements the plan',
     costTier: 'standard',
     inputCostPer1k: 0.003,
     outputCostPer1k: 0.015,
@@ -71,16 +71,19 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
 
 /**
  * Default model for each agent - optimized for their specialty
+ * 
+ * OPUS 4.5 = The Boss (plans everything)
+ * SONNET 4.5 = The Executor (builds what Opus plans)
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  architect: 'claude-sonnet',    // Sonnet for planning (smart but fast enough)
-  frontend: 'gemini-flash',      // Flash for fast code generation
-  backend: 'gemini-flash',       // Flash for fast code generation
-  database: 'gemini-flash',      // Flash for schema generation
-  devops: 'gemini-flash',        // Config files, speed matters
-  qa: 'gemini-flash',            // Test generation, high volume
-  planner: 'claude-sonnet',      // Planning needs reasoning
-  auditor: 'claude-sonnet',      // QA needs reasoning
+  architect: 'claude-opus',      // OPUS plans the build
+  planner: 'claude-opus',        // OPUS for strategic planning
+  frontend: 'claude-sonnet',     // SONNET executes frontend code
+  backend: 'claude-sonnet',      // SONNET executes backend code
+  database: 'claude-sonnet',     // SONNET executes database work
+  devops: 'claude-sonnet',       // SONNET handles devops
+  qa: 'claude-sonnet',           // SONNET writes tests
+  auditor: 'claude-sonnet',      // SONNET reviews code
 }
 
 // ============================================
