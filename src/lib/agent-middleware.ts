@@ -1,5 +1,5 @@
 import { useFuelStore } from '@/store/fuel'
-import { useTimeline, TOOL_TO_AGENT, TOOL_FUEL_COSTS, type AgentType } from '@/store/timeline'
+import { useTimeline, TOOL_TO_AGENT, TOOL_FUEL_COSTS } from '@/store/timeline'
 
 // ============================================================================
 // AGENT MIDDLEWARE - The Nervous System
@@ -265,7 +265,7 @@ export function wrapToolHandler<T>(
   handler: (context: ToolCallContext) => Promise<T>
 ): (context: ToolCallContext) => Promise<T> {
   return async (context: ToolCallContext): Promise<T> => {
-    const stepId = onToolCallStart(context)
+    const _stepId = onToolCallStart(context)
     
     try {
       const result = await handler(context)

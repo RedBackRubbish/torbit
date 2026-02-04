@@ -47,6 +47,7 @@ const MatrixRain = memo(function MatrixRain({
   const animationRef = useRef<number | null>(null)
   const dropsRef = useRef<Drop[]>([])
   const lastTimeRef = useRef<number>(0)
+  const animateRef = useRef<((timestamp: number) => void) | null>(null)
 
   const getRandomChar = useCallback(() => {
     return MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]
@@ -146,18 +147,23 @@ const MatrixRain = memo(function MatrixRain({
     })
   }, [fontSize, speed, getRandomChar, color])
 
-  const animate = useCallback((timestamp: number) => {
-    const canvas = canvasRef.current
-    if (!canvas || !active) return
+  // Store animate in ref to avoid self-reference in useCallback
+  useEffect(() => {
+    animateRef.current = (timestamp: number) => {
+      const canvas = canvasRef.current
+      if (!canvas || !active) return
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
 
-    const deltaTime = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 16.67 : 1
-    lastTimeRef.current = timestamp
+      const deltaTime = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 16.67 : 1
+      lastTimeRef.current = timestamp
 
-    draw(ctx, canvas.width, canvas.height, deltaTime)
-    animationRef.current = requestAnimationFrame(animate)
+      draw(ctx, canvas.width, canvas.height, deltaTime)
+      if (animateRef.current) {
+        animationRef.current = requestAnimationFrame(animateRef.current)
+      }
+    }
   }, [active, draw])
 
   useEffect(() => {
@@ -191,8 +197,8 @@ const MatrixRain = memo(function MatrixRain({
   }, [initDrops])
 
   useEffect(() => {
-    if (active) {
-      animationRef.current = requestAnimationFrame(animate)
+    if (active && animateRef.current) {
+      animationRef.current = requestAnimationFrame(animateRef.current)
     }
 
     return () => {
@@ -200,7 +206,7 @@ const MatrixRain = memo(function MatrixRain({
         cancelAnimationFrame(animationRef.current)
       }
     }
-  }, [active, animate])
+  }, [active])
 
   return (
     <canvas

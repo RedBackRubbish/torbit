@@ -7,8 +7,8 @@ import {
   calculateCost, 
   AGENT_MODEL_MAP,
   MODEL_CONFIGS,
-  type ModelProvider 
 } from '@/lib/agents/models'
+import { chatRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 
 // Import rich agent prompts
 import { ARCHITECT_SYSTEM_PROMPT } from '@/lib/agents/prompts/architect'
@@ -174,6 +174,16 @@ interface StreamChunk {
 const MAX_RETRIES = 3
 
 export async function POST(req: Request) {
+  // ========================================================================
+  // RATE LIMITING - Protect against abuse
+  // ========================================================================
+  const clientIP = getClientIP(req)
+  const rateLimitResult = chatRateLimiter.check(clientIP)
+  
+  if (!rateLimitResult.success) {
+    return rateLimitResponse(rateLimitResult)
+  }
+
   try {
     const { messages, agentId = 'architect', projectId = 'default', userId = 'anonymous' } = await req.json()
 
@@ -187,8 +197,6 @@ export async function POST(req: Request) {
     
     // Create execution context for tools - persists across this request
     const executionContext = createExecutionContext(projectId, userId)
-
-    console.log(`[TORBIT] Agent: ${agentId} | Complexity: ${complexity} | Model: ${MODEL_CONFIGS[modelProvider].model} | Tools: ${Object.keys(agentTools).length}`)
 
     // Create a TransformStream for custom streaming with tool execution
     const encoder = new TextEncoder()

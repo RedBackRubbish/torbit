@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import type { WebContainer, WebContainerProcess } from '@webcontainer/api'
+import type { WebContainer } from '@webcontainer/api'
 import { getWebContainer, isWebContainerSupported } from '@/lib/webcontainer'
 import { useTerminalStore } from '@/store/terminal'
 import { useBuilderStore } from '@/store/builder'
@@ -48,11 +48,15 @@ interface WebContainerProviderProps {
 
 export function WebContainerProvider({ children }: WebContainerProviderProps) {
   const [container, setContainer] = useState<WebContainer | null>(null)
-  const [isBooting, setIsBooting] = useState(true)
+  const [isSupported] = useState(() => typeof window !== 'undefined' && isWebContainerSupported())
+  // Initialize with correct values based on support
+  const [isBooting, setIsBooting] = useState(() => typeof window !== 'undefined' && isWebContainerSupported())
   const [isReady, setIsReady] = useState(false)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isSupported] = useState(() => typeof window !== 'undefined' && isWebContainerSupported())
+  const [error, setError] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return isWebContainerSupported() ? null : 'WebContainer requires SharedArrayBuffer. Check browser/headers.'
+  })
   
   const { addLog, addCommand, setRunning, setExitCode } = useTerminalStore()
   const { files } = useBuilderStore()
@@ -60,8 +64,6 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
   // Boot WebContainer on mount
   useEffect(() => {
     if (!isSupported) {
-      setError('WebContainer requires SharedArrayBuffer. Check browser/headers.')
-      setIsBooting(false)
       return
     }
 

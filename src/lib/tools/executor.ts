@@ -1159,7 +1159,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     try {
       const lines = existingContent.split('\n')
       const patchLines = patch.split('\n')
-      let resultLines = [...lines]
+      const resultLines = [...lines]
       let offset = 0
       
       for (let i = 0; i < patchLines.length; i++) {

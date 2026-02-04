@@ -16,8 +16,7 @@ const Hero = memo(function Hero() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle waitlist signup
-    console.log('Waitlist signup:', email)
+    // TODO: Implement waitlist signup API call
   }
 
   return (

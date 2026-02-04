@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef } from 'react'
-import { ExecutorService, type ExecutionResult } from '@/services/executor'
+import { ExecutorService } from '@/services/executor'
 import { useTerminalStore } from '@/store/terminal'
 import { useTimeline } from '@/store/timeline'
 

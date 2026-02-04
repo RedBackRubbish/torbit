@@ -87,7 +87,6 @@ export class ExecutorService {
     }
     
     // 4. Log the intent (Ghost Text in terminal)
-    console.log(`[Executor] 🤖 ${toolName}`, args)
     terminal.addLog(`🤖 Executing: ${toolName}`, 'info')
 
     try {
@@ -229,10 +228,8 @@ export class ExecutorService {
           
           const process = await container.spawn('npm', cmdArgs)
           
-          let processOutput = ''
           const outputStream = new WritableStream({
             write(data) {
-              processOutput += data
               terminal.addLog(data, 'output')
               
               // NERVOUS SYSTEM: Check for pain in npm output

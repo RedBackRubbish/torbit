@@ -108,7 +108,7 @@ export const useFuelStore = create<FuelState & FuelActions>()(
       // PRE-FLIGHT ESTIMATION
       // ============================================
       
-      estimateCost: (complexity, description) => {
+      estimateCost: (complexity, _description) => {
         const range = COMPLEXITY_COSTS[complexity]
         set((state) => {
           state.ghostUsage = Math.round((range.min + range.max) / 2)

@@ -34,6 +34,14 @@ export default function PremiumHero() {
   const [isTypingPlaceholder, setIsTypingPlaceholder] = useState(true)
   const inputRef = useRef<HTMLInputElement>(null)
   
+  // Pre-generate random values for particles (up to 20) - generated once on mount
+  const [particleRandoms] = useState(() => 
+    Array.from({ length: 20 }, () => ({
+      xOffset: Math.random() * 100,
+      durationOffset: Math.random(),
+    }))
+  )
+  
   // Mouse tracking for logo glow
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
@@ -73,9 +81,12 @@ export default function PremiumHero() {
         }, 30)
         return () => clearTimeout(timer)
       } else {
-        // Move to next example
-        setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDER_EXAMPLES.length)
-        setIsTypingPlaceholder(true)
+        // Move to next example - defer to next frame to avoid synchronous setState in effect
+        const timer = setTimeout(() => {
+          setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDER_EXAMPLES.length)
+          setIsTypingPlaceholder(true)
+        }, 0)
+        return () => clearTimeout(timer)
       }
     }
   }, [displayPlaceholder, isTypingPlaceholder, placeholderIndex, prompt])
@@ -265,7 +276,7 @@ export default function PremiumHero() {
                           key={i}
                           className="absolute w-1 h-1 bg-[#00ff41] rounded-full"
                           initial={{ 
-                            x: Math.random() * 100 + '%', 
+                            x: particleRandoms[i].xOffset + '%', 
                             y: '100%',
                             opacity: 0 
                           }}
@@ -274,7 +285,7 @@ export default function PremiumHero() {
                             opacity: [0, 1, 0],
                           }}
                           transition={{
-                            duration: 2 + Math.random(),
+                            duration: 2 + particleRandoms[i].durationOffset,
                             repeat: Infinity,
                             delay: i * 0.1,
                             ease: "easeOut"
@@ -405,7 +416,7 @@ export default function PremiumHero() {
                     { value: '2,400+', label: 'Apps Built' },
                     { value: '<60s', label: 'Avg Deploy Time' },
                     { value: '99.9%', label: 'Uptime' },
-                  ].map((stat, i) => (
+                  ].map((stat) => (
                     <div key={stat.label} className="text-center">
                       <div 
                         className="text-xl md:text-2xl font-light text-white/40"

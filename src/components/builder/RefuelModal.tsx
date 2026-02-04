@@ -86,9 +86,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
     setIsProcessing(true)
 
     // TODO: In production, integrate with Stripe Checkout
-    // For now, simulate payment processing
-    console.log(`[RefuelModal] Processing $${pack.price} for ${pack.amount} fuel...`)
-
+    // Simulate payment processing
     await new Promise(resolve => setTimeout(resolve, 1500))
 
     // Optimistic update - instant gratification!

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act } from '@testing-library/react'
 
 // Mock ExecutorService
 vi.mock('@/services/executor', () => ({
@@ -32,7 +32,7 @@ vi.mock('@/store/fuel', () => ({
   }),
 }))
 
-import { useToolExecutor, type ToolCallEvent } from './useToolExecutor'
+import { useToolExecutor, type ToolCallEvent, type ToolResultEvent } from './useToolExecutor'
 import { ExecutorService } from '@/services/executor'
 
 describe('useToolExecutor', () => {
@@ -62,7 +62,7 @@ describe('useToolExecutor', () => {
         args: { path: 'test.ts', content: 'hello' },
       }
 
-      let toolResult: any
+      let toolResult: ToolResultEvent
       await act(async () => {
         toolResult = await result.current.executeToolCall(toolCall)
       })
@@ -96,7 +96,7 @@ describe('useToolExecutor', () => {
         args: { path: 'bad.ts', content: '' },
       }
 
-      let toolResult: any
+      let toolResult: ToolResultEvent
       await act(async () => {
         toolResult = await result.current.executeToolCall(toolCall)
       })
@@ -116,7 +116,7 @@ describe('useToolExecutor', () => {
         args: { path: 'test.ts', content: 'hello' },
       }
 
-      let toolResult: any
+      let toolResult: ToolResultEvent
       await act(async () => {
         toolResult = await result.current.executeToolCall(toolCall)
       })
@@ -135,7 +135,7 @@ describe('useToolExecutor', () => {
         { id: 'batch-2', name: 'createFile', args: { path: 'b.ts', content: 'b' } },
       ]
 
-      let results: any
+      let results: ToolResultEvent[]
       await act(async () => {
         results = await result.current.executeToolBatch(toolCalls)
       })
@@ -160,7 +160,7 @@ describe('useToolExecutor', () => {
         { id: 'batch-3', name: 'createFile', args: { path: 'c.ts', content: 'c' } },
       ]
 
-      let results: any
+      let results: ToolResultEvent[]
       await act(async () => {
         results = await result.current.executeToolBatch(toolCalls)
       })
@@ -193,7 +193,7 @@ describe('useToolExecutor', () => {
       }
 
       // Start execution (don't await)
-      let promise: Promise<any>
+      let promise: Promise<ToolResultEvent>
       act(() => {
         promise = result.current.executeToolCall(toolCall)
       })

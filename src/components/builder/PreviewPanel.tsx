@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import { useBuilderStore } from '@/store/builder'
@@ -38,10 +38,21 @@ export default function PreviewPanel() {
     mobile: '375px',
   }
 
-  // Auto-show terminal when there's activity
+  // Track previous terminal lines length
+  const prevLinesLength = useRef(terminalLines.length)
+  
+  // Auto-show terminal when there's NEW activity during boot
+  // Using requestAnimationFrame to defer setState and satisfy react-hooks/set-state-in-effect
   useEffect(() => {
-    if (terminalLines.length > 0 && isBooting) {
-      setShowTerminal(true)
+    const hasNewActivity = terminalLines.length > prevLinesLength.current
+    prevLinesLength.current = terminalLines.length
+    
+    if (hasNewActivity && isBooting) {
+      // Defer the setState to next frame to avoid synchronous setState in effect
+      const frameId = requestAnimationFrame(() => {
+        setShowTerminal(true)
+      })
+      return () => cancelAnimationFrame(frameId)
     }
   }, [terminalLines.length, isBooting])
 

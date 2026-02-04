@@ -179,7 +179,7 @@ const initialState: BuilderState = {
 // ============================================
 
 export const useBuilderStore = create<BuilderState & BuilderActions>()(
-  immer((set, get) => ({
+  immer((set, _get) => ({
     ...initialState,
 
     initProject: (prompt) => {

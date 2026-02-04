@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { WebContainer } from '@webcontainer/api'
 
 // Mock dependencies
 vi.mock('@/lib/webcontainer', () => ({
@@ -49,7 +50,7 @@ describe('WebContainer Module', () => {
         mount: vi.fn(),
       }
 
-      vi.mocked(getWebContainer).mockResolvedValue(mockContainer as any)
+      vi.mocked(getWebContainer).mockResolvedValue(mockContainer as unknown as WebContainer)
 
       const container = await getWebContainer()
 
@@ -60,7 +61,7 @@ describe('WebContainer Module', () => {
 
     it('should return the same instance on multiple calls (singleton)', async () => {
       const mockContainer = { id: 'singleton-instance' }
-      vi.mocked(getWebContainer).mockResolvedValue(mockContainer as any)
+      vi.mocked(getWebContainer).mockResolvedValue(mockContainer as unknown as WebContainer)
 
       const first = await getWebContainer()
       const second = await getWebContainer()

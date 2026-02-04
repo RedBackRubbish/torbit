@@ -42,11 +42,14 @@ export interface UseWebContainerReturn {
 
 export function useWebContainer(): UseWebContainerReturn {
   const [container, setContainer] = useState<WebContainer | null>(null)
-  const [isBooting, setIsBooting] = useState(true)
+  const [isSupported] = useState(() => isWebContainerSupported())
+  // Initialize with proper error state based on support
+  const [isBooting, setIsBooting] = useState(() => isWebContainerSupported())
   const [isReady, setIsReady] = useState(false)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isSupported] = useState(() => isWebContainerSupported())
+  const [error, setError] = useState<string | null>(() => 
+    isWebContainerSupported() ? null : 'WebContainer not supported in this browser. Requires SharedArrayBuffer.'
+  )
   
   const activeProcesses = useRef<WebContainerProcess[]>([])
   const { addLog, addCommand, setRunning, setExitCode } = useTerminalStore()
@@ -56,8 +59,6 @@ export function useWebContainer(): UseWebContainerReturn {
   // ========================================================================
   useEffect(() => {
     if (!isSupported) {
-      setError('WebContainer not supported in this browser. Requires SharedArrayBuffer.')
-      setIsBooting(false)
       return
     }
 

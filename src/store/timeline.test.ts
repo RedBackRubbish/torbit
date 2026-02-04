@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useTimeline, type TimelineStep, type AgentType, type StepStatus } from './timeline'
+import { useTimeline, type AgentType, type StepStatus } from './timeline'
 
 describe('TimelineStore', () => {
   beforeEach(() => {

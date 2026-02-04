@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Define mock container at the top level
 const mockFs = {

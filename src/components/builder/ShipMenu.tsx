@@ -50,13 +50,11 @@ export default function ShipMenu() {
   const handleGitHubPR = () => {
     setIsOpen(false)
     // TODO: Trigger syncToGithub tool
-    console.log('Opening PR on GitHub...')
   }
 
   const handleDownloadZip = () => {
     setIsOpen(false)
     // TODO: Package all virtual files and download
-    console.log('Downloading project as ZIP...')
   }
 
   return (

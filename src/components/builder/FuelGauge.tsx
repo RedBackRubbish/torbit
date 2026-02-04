@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useFuelStore } from '@/store/fuel'
 import RefuelModal from './RefuelModal'
