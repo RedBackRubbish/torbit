@@ -25,11 +25,9 @@ export type KnowledgeEventType =
   | 'FACT_VALIDATED'
   | 'FACT_REJECTED'
   | 'FACT_CACHED'
-  | 'SUGGESTION_GENERATED'
-  | 'SUGGESTION_OFFERED'
-  | 'SUGGESTION_APPROVED'
-  | 'SUGGESTION_ACCEPTED'
-  | 'SUGGESTION_REJECTED'
+  | 'SUGGESTION_OFFERED'      // User sees suggestion
+  | 'SUGGESTION_ACCEPTED'     // User clicked Apply
+  | 'SUGGESTION_DISMISSED'    // User clicked Dismiss (logged once, never shown again)
   | 'KNOWLEDGE_CACHE_CLEARED'
   | 'KNOWLEDGE_CONTEXT_CREATED'
 
@@ -81,36 +79,26 @@ export interface FactCachedPayload {
   cacheSize: number
 }
 
-export interface SuggestionGeneratedPayload {
-  suggestionId: string
-  category: string
-  sourceFactIds: string[]
-}
-
 export interface SuggestionOfferedPayload {
   suggestionId: string
   title: string
+  why: string
+  impact: 'low' | 'medium' | 'high'
   category: string
   confidence: number
-  relevance: string
-}
-
-export interface SuggestionApprovedPayload {
-  suggestionId: string
-  approvedBy: 'strategist'
-  rationale: string
 }
 
 export interface SuggestionAcceptedPayload {
   suggestionId: string
-  acceptedBy: string
-  willApply: boolean
+  title: string
+  triggeredFlow: 'strategist-review' | 'consent' | 'apply'
 }
 
-export interface SuggestionRejectedPayload {
+export interface SuggestionDismissedPayload {
   suggestionId: string
-  rejectedBy: string
-  reason: string
+  title: string
+  // Logged once, never shown again for this project
+  permanent: true
 }
 
 export interface KnowledgeCacheClearedPayload {
@@ -254,67 +242,46 @@ export function createSuggestionOfferedEvent(
     payload: {
       suggestionId: suggestion.id,
       title: suggestion.title,
+      why: suggestion.why,
+      impact: suggestion.impact,
       category: suggestion.category,
       confidence: suggestion.confidence,
-      relevance: suggestion.relevance,
     },
   }
 }
 
 /**
- * Create suggestion approved event
- */
-export function createSuggestionApprovedEvent(
-  suggestionId: string,
-  rationale: string
-): KnowledgeLedgerEvent {
-  return {
-    id: `sa-${Date.now()}`,
-    timestamp: new Date().toISOString(),
-    eventType: 'SUGGESTION_APPROVED',
-    category: 'knowledge',
-    actor: 'strategist',
-    payload: {
-      suggestionId,
-      approvedBy: 'strategist',
-      rationale,
-    },
-  }
-}
-
-/**
- * Create suggestion accepted event
+ * Create suggestion accepted event (user clicked Apply)
  */
 export function createSuggestionAcceptedEvent(
   suggestionId: string,
-  acceptedBy: string,
-  willApply: boolean
+  title: string,
+  triggeredFlow: 'strategist-review' | 'consent' | 'apply'
 ): KnowledgeLedgerEvent {
   return {
     id: `sac-${Date.now()}`,
     timestamp: new Date().toISOString(),
     eventType: 'SUGGESTION_ACCEPTED',
     category: 'knowledge',
-    actor: acceptedBy,
-    payload: { suggestionId, acceptedBy, willApply },
+    actor: 'user',
+    payload: { suggestionId, title, triggeredFlow },
   }
 }
 
 /**
- * Create suggestion rejected event
+ * Create suggestion dismissed event (logged once, never shown again)
  */
-export function createSuggestionRejectedEvent(
+export function createSuggestionDismissedEvent(
   suggestionId: string,
-  rejectedBy: string,
-  reason: string
+  title: string
 ): KnowledgeLedgerEvent {
   return {
-    id: `sr-${Date.now()}`,
+    id: `sd-${Date.now()}`,
     timestamp: new Date().toISOString(),
-    eventType: 'SUGGESTION_REJECTED',
+    eventType: 'SUGGESTION_DISMISSED',
     category: 'knowledge',
-    actor: rejectedBy,
-    payload: { suggestionId, rejectedBy, reason },
+    actor: 'user',
+    payload: { suggestionId, title, permanent: true },
   }
 }
 

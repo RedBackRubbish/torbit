@@ -55,7 +55,7 @@ export interface KnowledgeSource {
   /**
    * How often to refresh
    */
-  updateCadence: 'hourly' | 'daily' | 'weekly'
+  updateCadence: 'hourly' | 'daily' | 'weekly' | 'monthly' | 'quarterly'
   
   /**
    * Trust level
@@ -71,6 +71,13 @@ export interface KnowledgeSource {
    * Is this source active?
    */
   enabled: boolean
+  
+  /**
+   * Tier level:
+   * - 1: Always Allowed (defines platform reality)
+   * - 2: Suggestion-Only (never auto-applied, strategist must approve)
+   */
+  tier: 1 | 2
 }
 
 // ============================================
@@ -182,6 +189,8 @@ export type SuggestionCategory =
   | 'architecture'    // Architecture pattern
   | 'best-practice'   // General best practice
 
+export type ImpactLevel = 'low' | 'medium' | 'high'
+
 export interface Suggestion {
   /**
    * Unique suggestion identifier
@@ -189,19 +198,19 @@ export interface Suggestion {
   id: string
   
   /**
-   * Short title
+   * Short title (displayed to user)
    */
   title: string
   
   /**
-   * Detailed description
+   * Why this is suggested (1 line)
    */
-  description: string
+  why: string
   
   /**
-   * Why this is suggested
+   * Impact level
    */
-  rationale: string
+  impact: ImpactLevel
   
   /**
    * Category
@@ -209,12 +218,8 @@ export interface Suggestion {
   category: SuggestionCategory
   
   /**
-   * Relevance to current context
-   */
-  relevance: 'high' | 'medium' | 'low'
-  
-  /**
-   * Confidence in this suggestion
+   * Confidence in this suggestion (0-1)
+   * Threshold: 0.8 minimum to show
    */
   confidence: number
   
@@ -225,9 +230,9 @@ export interface Suggestion {
   
   /**
    * Is this optional?
-   * @default true - Suggestions never auto-apply
+   * ALWAYS true - Suggestions never auto-apply
    */
-  optional: boolean
+  optional: true
   
   /**
    * Was this accepted by user?
@@ -235,7 +240,13 @@ export interface Suggestion {
   accepted?: boolean
   
   /**
+   * Was this dismissed by user?
+   */
+  dismissed?: boolean
+  
+  /**
    * Was this reviewed by Strategist?
+   * Required before application
    */
   strategistApproved?: boolean
 }
@@ -275,31 +286,33 @@ export interface KnowledgeQuery {
 // KNOWLEDGE CONTEXT
 // ============================================
 
+export type ProjectType = 'saas' | 'mobile-app' | 'api' | 'landing' | 'ecommerce' | 'dashboard'
+
 export interface KnowledgeContext {
   /**
-   * Relevant facts for this context
+   * User's intent/prompt
    */
-  facts: TrendFact[]
+  intent: string
   
   /**
-   * Generated suggestions
+   * Detected project type
    */
-  suggestions: Suggestion[]
+  projectType?: ProjectType
   
   /**
-   * Summary for the Planner
+   * Relevant domains detected
    */
-  summary: string
+  relevantDomains: string[]
+  
+  /**
+   * Current environment
+   */
+  environment: 'local' | 'staging' | 'production'
   
   /**
    * When this context was generated
    */
   generatedAt: string
-  
-  /**
-   * Sources consulted
-   */
-  sources: string[]
 }
 
 // ============================================

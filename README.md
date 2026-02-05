@@ -441,33 +441,58 @@ Immutable, append-only record of every integration action:
 
 **Torbit may sense the world. Torbit may not blindly react to it.**
 
-Stay current on frameworks and SDKs without breaking determinism:
+#### Approved Sources (Tiered)
 
-| Principle | Implementation |
-|-----------|----------------|
-| **Approved sources only** | Framework changelogs, official docs, release feeds, curated blogs, security advisories. NO Reddit, Medium, random SEO blogs. |
-| **Conditional fetching** | Before planning, not during execution. Time-bound cache (24hr). Read-only. |
-| **Trend extraction** | Produces facts, not decisions. Confidence scores on all facts. |
-| **Governance check** | Strategist evaluates before application. Environment & policy honored. |
-| **Optional suggestions** | Never auto-apply. Strategist approval required. Logged to ledger. |
+| Tier | Sources | Rule |
+|------|---------|------|
+| **Tier 1** | React, Next.js, Expo, Node.js, TypeScript | Always allowed |
+| **Tier 1** | Vercel, Apple, Google, AWS, Cloudflare | Platform reality |
+| **Tier 1** | Stripe, Clerk, Supabase, Sentry, SendGrid | Integration truth |
+| **Tier 1** | npm advisories, GitHub Security, CVEs | Security facts |
+| **Tier 2** | RFCs, W3C drafts, roadmap posts | Suggestion-only |
+| **Forbidden** | Reddit, Medium, Dev.to, HN, Twitter, YouTube | Hard ban |
 
-**Approved Source Classes:**
-- ✓ Framework changelogs (Next.js, React, Expo, Vercel)
-- ✓ Official docs (Stripe, Google, Apple)
-- ✓ Release feeds (GitHub releases, RFCs)
-- ✓ Curated blogs (Vercel, React, AWS)
-- ✓ Security advisories (CVE, npm advisories)
-- ✗ Reddit, Medium, random SEO blogs, Twitter
+#### Suggestion UX (Locked)
 
-**Knowledge workflow:**
-1. Context created from user intent
-2. Relevant facts queried from cache
-3. Suggestions generated (all `optional: true`)
-4. Filtered for environment (production = high confidence only)
-5. Prioritized (security first, then relevance)
-6. Offered to user (never auto-applied)
-7. Strategist reviews before application
-8. All events logged to ledger
+```
+────────────────────────────────
+Torbit:
+"I'll build this using Next.js App Router."
+
+▶ Suggestions (optional):
+• Add authentication (common for SaaS apps)
+• Enable Stripe test mode
+• Add error tracking (Sentry)
+[Apply] [Dismiss]
+────────────────────────────────
+```
+
+| Rule | Enforcement |
+|------|-------------|
+| Max 3 suggestions | Hard limit |
+| Confidence >= 0.8 | Threshold |
+| Default: collapsed | UX |
+| Never auto-apply | Governance |
+| Strategist approval | Required |
+
+**User actions:**
+- **Apply** → Triggers integration flow (Manifest → Governance → Consent)
+- **Dismiss** → Logged once, never shown again for this project
+- **Ignore** → No penalty, no re-surface
+
+#### Knowledge Boundary (Charter)
+
+| ✅ Allowed | ❌ Forbidden |
+|-----------|-------------|
+| Stable defaults | Opinionated trends |
+| Deprecations | Community sentiment |
+| Security facts | Experimental tech* |
+| Vendor best practices | Forecasts |
+
+*Unless user explicitly opts in: "use experimental"
+
+**Correct tone:** "I'll use the current production default."
+**Forbidden tone:** "This is the hottest new framework."
 
 ### Evidence Bundles
 

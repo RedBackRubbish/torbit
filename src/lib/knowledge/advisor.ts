@@ -1,23 +1,42 @@
 /**
  * TORBIT - Suggestion Advisor
  * 
- * Produces CONTEXTUAL, OPTIONAL suggestions.
+ * PRODUCTION DOCTRINE - LOCKED
  * 
- * Critical constraints:
- * - Suggestions NEVER auto-apply
- * - All suggestions are optional: true
- * - Strategist must approve before application
- * - Respects environment & policy
- * - All suggestions logged to ledger
+ * Torbit never nags.
+ * Torbit never auto-adds.
+ * Torbit never surprises.
+ * 
+ * MAX 3 SUGGESTIONS - each with:
+ * - Why (1 line)
+ * - Impact (Low / Medium / High)
+ * - Default state: collapsed
  */
 
 import type { 
   TrendFact, 
   Suggestion, 
   KnowledgeContext,
-  SuggestionCategory 
+  SuggestionCategory,
+  ImpactLevel,
+  ProjectType,
 } from './types'
-import { validateSuggestion } from './validator'
+import { isAllowedKnowledge } from './charter'
+import { getSource } from './sources'
+
+// ============================================
+// CONFIGURATION
+// ============================================
+
+/**
+ * Maximum suggestions to show (HARD LIMIT)
+ */
+export const MAX_SUGGESTIONS = 3
+
+/**
+ * Minimum confidence to show suggestion
+ */
+export const MIN_CONFIDENCE = 0.8
 
 // ============================================
 // SUGGESTION GENERATION
@@ -25,31 +44,29 @@ import { validateSuggestion } from './validator'
 
 /**
  * Generate suggestions from trend facts
+ * Returns MAX 3 suggestions, confidence >= 0.8
  */
 export function generateSuggestions(
   facts: TrendFact[],
   context: KnowledgeContext
 ): Suggestion[] {
-  const suggestions: Suggestion[] = []
+  // Filter facts by confidence
+  const qualifiedFacts = facts.filter(f => f.confidence >= MIN_CONFIDENCE)
   
-  // Generate from high-relevance facts first
-  const sortedFacts = [...facts].sort((a, b) => {
-    const relevanceOrder = { high: 0, medium: 1, low: 2 }
-    return relevanceOrder[a.relevance] - relevanceOrder[b.relevance]
-  })
+  // Generate candidate suggestions
+  const candidates: Suggestion[] = []
   
-  for (const fact of sortedFacts) {
+  for (const fact of qualifiedFacts) {
     const suggestion = factToSuggestion(fact, context)
-    if (suggestion) {
-      const validation = validateSuggestion(suggestion, context)
-      if (validation.valid) {
-        suggestions.push(suggestion)
-      }
+    if (suggestion && suggestion.confidence >= MIN_CONFIDENCE) {
+      candidates.push(suggestion)
     }
   }
   
-  // Limit suggestions to prevent overwhelm
-  return suggestions.slice(0, 5)
+  // Prioritize and limit to MAX_SUGGESTIONS
+  const prioritized = prioritizeSuggestions(candidates, context)
+  
+  return prioritized.slice(0, MAX_SUGGESTIONS)
 }
 
 /**
@@ -59,33 +76,36 @@ function factToSuggestion(
   fact: TrendFact,
   context: KnowledgeContext
 ): Suggestion | null {
-  const category = detectCategory(fact)
-  if (!category) return null
-  
-  const suggestion: Suggestion = {
-    id: `suggestion-${fact.id}-${Date.now()}`,
-    title: generateTitle(fact, category),
-    description: fact.description,
-    rationale: generateRationale(fact, context),
-    category,
-    relevance: fact.relevance,
-    confidence: fact.confidence,
-    sourceFactIds: [fact.id],
-    // CRITICAL: Always optional, never pre-accepted
-    optional: true,
-    accepted: false,
-    strategistApproved: false,
+  // Validate knowledge is allowed
+  if (!isAllowedKnowledge(fact.topic, fact.sourceId)) {
+    return null
   }
   
-  return suggestion
+  const category = detectCategory(fact)
+  const impact = detectImpact(fact)
+  const why = generateWhy(fact, context)
+  
+  return {
+    id: `sug-${fact.id.slice(0, 8)}-${Date.now()}`,
+    title: generateTitle(fact, category),
+    why,
+    impact,
+    category,
+    confidence: fact.confidence,
+    sourceFactIds: [fact.id],
+    // CRITICAL: Always optional, never auto-apply
+    optional: true,
+    accepted: false,
+    dismissed: false,
+    strategistApproved: false,
+  }
 }
 
 /**
  * Detect suggestion category from fact
  */
-function detectCategory(fact: TrendFact): SuggestionCategory | null {
+function detectCategory(fact: TrendFact): SuggestionCategory {
   const tags = fact.tags.map(t => t.toLowerCase())
-  const topic = fact.topic.toLowerCase()
   
   if (tags.includes('security') || tags.includes('vulnerability')) {
     return 'security'
@@ -99,67 +119,96 @@ function detectCategory(fact: TrendFact): SuggestionCategory | null {
     return 'architecture'
   }
   
-  if (tags.includes('performance') || topic.includes('performance')) {
+  if (tags.includes('performance')) {
     return 'performance'
-  }
-  
-  if (tags.includes('best-practice') || tags.includes('recommendation')) {
-    return 'best-practice'
   }
   
   if (fact.domain.includes('payment') || 
       fact.domain.includes('auth') || 
-      fact.domain.includes('database')) {
+      fact.domain.includes('database') ||
+      fact.domain.includes('email') ||
+      fact.domain.includes('analytics')) {
     return 'integration'
   }
   
-  return 'best-practice' // Default
+  return 'best-practice'
 }
 
 /**
- * Generate a user-friendly title
+ * Detect impact level
+ */
+function detectImpact(fact: TrendFact): ImpactLevel {
+  // Security = always high
+  if (fact.tags.includes('security')) {
+    return 'high'
+  }
+  
+  // Breaking changes = high
+  if (fact.tags.includes('breaking-change')) {
+    return 'high'
+  }
+  
+  // Version updates based on relevance
+  if (fact.relevance === 'high') {
+    return 'medium'
+  }
+  
+  return 'low'
+}
+
+/**
+ * Generate "Why" line (1 sentence max)
+ */
+function generateWhy(fact: TrendFact, context: KnowledgeContext): string {
+  const source = getSource(fact.sourceId)
+  const sourceName = source?.name || 'Official source'
+  
+  // Security
+  if (fact.tags.includes('security')) {
+    return `Security advisory from ${sourceName}.`
+  }
+  
+  // Deprecation
+  if (fact.tags.includes('deprecation')) {
+    return `Deprecated per ${sourceName}.`
+  }
+  
+  // Project-type specific
+  if (context.projectType) {
+    return `Common for ${formatProjectType(context.projectType)} apps.`
+  }
+  
+  // Default
+  return `Recommended by ${sourceName}.`
+}
+
+function formatProjectType(type: ProjectType): string {
+  const names: Record<ProjectType, string> = {
+    'saas': 'SaaS',
+    'mobile-app': 'mobile',
+    'api': 'API',
+    'landing': 'landing page',
+    'ecommerce': 'e-commerce',
+    'dashboard': 'dashboard',
+  }
+  return names[type] || type
+}
+
+/**
+ * Generate suggestion title
  */
 function generateTitle(fact: TrendFact, category: SuggestionCategory): string {
-  const prefix = {
-    security: '🔐 Security:',
-    framework: '📦 Update:',
-    architecture: '🏗️ Architecture:',
-    performance: '⚡ Performance:',
-    'best-practice': '✨ Best Practice:',
-    integration: '🔌 Integration:',
+  // Keep it short - no emojis in title
+  switch (category) {
+    case 'security':
+      return fact.topic
+    case 'integration':
+      return `Add ${fact.domain}`
+    case 'framework':
+      return fact.topic
+    default:
+      return fact.topic.slice(0, 50)
   }
-  
-  return `${prefix[category]} ${fact.topic}`
-}
-
-/**
- * Generate rationale explaining why this is suggested
- */
-function generateRationale(fact: TrendFact, context: KnowledgeContext): string {
-  const lines = []
-  
-  // Explain source
-  lines.push(`Detected from ${fact.sourceId}.`)
-  
-  // Explain relevance
-  if (fact.relevance === 'high') {
-    lines.push(`This has high relevance to your current work.`)
-  }
-  
-  // Explain confidence
-  lines.push(`Confidence: ${Math.round(fact.confidence * 100)}%.`)
-  
-  // Add implications
-  if (fact.implications && fact.implications.length > 0) {
-    lines.push(`Consider: ${fact.implications[0]}`)
-  }
-  
-  // Add production-readiness note
-  if (!fact.productionReady) {
-    lines.push(`⚠️ Not yet production-ready.`)
-  }
-  
-  return lines.join(' ')
 }
 
 // ============================================
@@ -167,7 +216,7 @@ function generateRationale(fact: TrendFact, context: KnowledgeContext): string {
 // ============================================
 
 /**
- * Prioritize suggestions based on context
+ * Prioritize suggestions
  */
 export function prioritizeSuggestions(
   suggestions: Suggestion[],
@@ -178,10 +227,10 @@ export function prioritizeSuggestions(
     if (a.category === 'security' && b.category !== 'security') return -1
     if (b.category === 'security' && a.category !== 'security') return 1
     
-    // Then by relevance
-    const relevanceOrder = { high: 0, medium: 1, low: 2 }
-    const relevanceDiff = relevanceOrder[a.relevance] - relevanceOrder[b.relevance]
-    if (relevanceDiff !== 0) return relevanceDiff
+    // Then by impact
+    const impactOrder: Record<ImpactLevel, number> = { high: 0, medium: 1, low: 2 }
+    const impactDiff = impactOrder[a.impact] - impactOrder[b.impact]
+    if (impactDiff !== 0) return impactDiff
     
     // Then by confidence
     return b.confidence - a.confidence
@@ -189,112 +238,120 @@ export function prioritizeSuggestions(
 }
 
 // ============================================
-// SUGGESTION FILTERING
+// SUGGESTION TRIGGERS
+// Only show if conditions met
 // ============================================
 
 /**
- * Filter suggestions for current environment
+ * Check if suggestions should appear
  */
-export function filterForEnvironment(
-  suggestions: Suggestion[],
-  environment: 'local' | 'staging' | 'production'
-): Suggestion[] {
-  if (environment === 'production') {
-    // Production: only security and high-confidence
-    return suggestions.filter(s => 
-      s.category === 'security' || 
-      (s.confidence >= 0.85 && s.relevance === 'high')
-    )
+export function shouldShowSuggestions(context: KnowledgeContext): boolean {
+  // Must have detected project type
+  if (!context.projectType) {
+    return false
   }
   
-  if (environment === 'staging') {
-    // Staging: security + high relevance
-    return suggestions.filter(s => 
-      s.category === 'security' || s.relevance !== 'low'
-    )
+  // Must have relevant domains
+  if (context.relevantDomains.length === 0) {
+    return false
   }
   
-  // Local: all suggestions
-  return suggestions
+  // Production environment = more restrictive
+  if (context.environment === 'production') {
+    // Only security suggestions in production
+    return false
+  }
+  
+  return true
+}
+
+/**
+ * Detect project type from intent
+ */
+export function detectProjectType(intent: string): ProjectType | undefined {
+  const lower = intent.toLowerCase()
+  
+  if (lower.includes('saas') || lower.includes('subscription') || lower.includes('dashboard with auth')) {
+    return 'saas'
+  }
+  
+  if (lower.includes('mobile') || lower.includes('ios') || lower.includes('android') || lower.includes('app store')) {
+    return 'mobile-app'
+  }
+  
+  if (lower.includes('api') || lower.includes('backend') || lower.includes('rest') || lower.includes('graphql')) {
+    return 'api'
+  }
+  
+  if (lower.includes('landing') || lower.includes('marketing') || lower.includes('homepage')) {
+    return 'landing'
+  }
+  
+  if (lower.includes('ecommerce') || lower.includes('e-commerce') || lower.includes('shop') || lower.includes('store')) {
+    return 'ecommerce'
+  }
+  
+  if (lower.includes('dashboard') || lower.includes('admin') || lower.includes('analytics')) {
+    return 'dashboard'
+  }
+  
+  return undefined
 }
 
 // ============================================
-// SUGGESTION FORMATTING
+// SUGGESTION ACTIONS
 // ============================================
 
 /**
- * Format suggestions for display
+ * Apply suggestion (triggers integration flow)
+ * Manifest → Governance → Consent
  */
-export function formatSuggestions(suggestions: Suggestion[]): string {
-  if (suggestions.length === 0) {
-    return 'No suggestions available.'
-  }
-  
-  const lines = ['───────────────────────────────────']
-  lines.push('📋 CONTEXTUAL SUGGESTIONS')
-  lines.push('   (All suggestions are optional)')
-  lines.push('───────────────────────────────────')
-  
-  for (let i = 0; i < suggestions.length; i++) {
-    const s = suggestions[i]
-    lines.push('')
-    lines.push(`[${i + 1}] ${s.title}`)
-    lines.push(`    ${s.description}`)
-    lines.push(`    → ${s.rationale}`)
-    
-    if (!s.strategistApproved) {
-      lines.push(`    ⏳ Pending strategist review`)
+export function applySuggestion(suggestion: Suggestion): {
+  success: boolean
+  nextStep: 'strategist-review' | 'consent' | 'apply'
+} {
+  // Must be approved by strategist first
+  if (!suggestion.strategistApproved) {
+    return {
+      success: false,
+      nextStep: 'strategist-review',
     }
   }
   
-  lines.push('')
-  lines.push('───────────────────────────────────')
-  lines.push('💡 To apply: Request strategist approval')
-  lines.push('───────────────────────────────────')
+  // Then needs user consent (via integration manifest flow)
+  return {
+    success: true,
+    nextStep: 'consent',
+  }
+}
+
+/**
+ * Dismiss suggestion (logged once, never shown again for this project)
+ */
+export function dismissSuggestion(suggestion: Suggestion): Suggestion {
+  return {
+    ...suggestion,
+    dismissed: true,
+  }
+}
+
+/**
+ * Format suggestions for inline display
+ */
+export function formatSuggestionsInline(suggestions: Suggestion[]): string {
+  if (suggestions.length === 0) {
+    return ''
+  }
+  
+  const lines: string[] = []
+  lines.push('Suggestions (optional):')
+  
+  for (const s of suggestions.slice(0, MAX_SUGGESTIONS)) {
+    const impactBadge = s.impact === 'high' ? '⚠️' : s.impact === 'medium' ? '•' : '○'
+    lines.push(`${impactBadge} ${s.title} (${s.why})`)
+  }
+  
+  lines.push('[Apply] [Dismiss]')
   
   return lines.join('\n')
-}
-
-// ============================================
-// SUGGESTION STATE
-// ============================================
-
-/**
- * Mark suggestion as approved by strategist
- */
-export function approveSuggestion(suggestion: Suggestion): Suggestion {
-  return {
-    ...suggestion,
-    strategistApproved: true,
-    // Still not accepted - user must explicitly accept
-    accepted: false,
-  }
-}
-
-/**
- * Accept suggestion (after strategist approval)
- */
-export function acceptSuggestion(suggestion: Suggestion): Suggestion {
-  if (!suggestion.strategistApproved) {
-    throw new Error('Cannot accept suggestion without strategist approval')
-  }
-  
-  return {
-    ...suggestion,
-    accepted: true,
-  }
-}
-
-/**
- * Reject suggestion
- */
-export function rejectSuggestion(
-  suggestion: Suggestion,
-  reason: string
-): Suggestion & { rejectionReason: string } {
-  return {
-    ...suggestion,
-    accepted: false,
-    rejectionReason: reason,
-  }
 }

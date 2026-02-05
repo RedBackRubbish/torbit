@@ -1,49 +1,49 @@
 /**
  * TORBIT - Knowledge System
  * 
- * Governed Knowledge Awareness Layer
+ * PRODUCTION DOCTRINE - LOCKED
  * 
  * "Torbit may sense the world. Torbit may not blindly react to it."
  * 
- * Core Principles:
- * ────────────────
- * 1. APPROVED SOURCES ONLY
- *    - Framework changelogs (Next.js, React, Expo)
- *    - Official documentation (Stripe, Supabase, Clerk)
- *    - Release feeds (GitHub releases, RFCs)
- *    - Curated blogs (Vercel, React, AWS)
- *    - Security advisories (CVE, npm advisories)
- *    - NO Reddit, Medium, random SEO blogs, Twitter
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │                    KNOWLEDGE PERIMETER                      │
+ * ├─────────────────────────────────────────────────────────────┤
+ * │                                                             │
+ * │  ✅ TIER 1 - ALWAYS ALLOWED                                 │
+ * │  ├─ Frameworks: React, Next.js, Expo, Node.js, TypeScript   │
+ * │  ├─ Platforms: Vercel, Apple, Google, AWS, Cloudflare       │
+ * │  ├─ Integrations: Stripe, Clerk, Supabase, SendGrid, etc.   │
+ * │  └─ Security: npm advisories, GitHub advisories, CVEs       │
+ * │                                                             │
+ * │  ⚠️ TIER 2 - SUGGESTION ONLY (Strategist must approve)      │
+ * │  ├─ RFCs (React, TC39)                                      │
+ * │  ├─ Official roadmap posts                                  │
+ * │  └─ W3C drafts                                              │
+ * │                                                             │
+ * │  ❌ FORBIDDEN - HARD BAN                                    │
+ * │  ├─ Reddit, Medium, Dev.to, Hacker News                     │
+ * │  ├─ Twitter / X, YouTube                                    │
+ * │  ├─ "Top 10" articles, SEO blogs, Personal blogs            │
+ * │  └─ Opinion ≠ production truth                              │
+ * │                                                             │
+ * └─────────────────────────────────────────────────────────────┘
  * 
- * 2. CONDITIONAL FETCHING
- *    - Before planning, not during execution
- *    - Time-bound cache (24hr default)
- *    - Read-only, does not alter code
+ * SUGGESTION RULES (HARD):
+ * - Max 3 suggestions
+ * - Confidence >= 0.8
+ * - Default: collapsed
+ * - Never auto-apply
+ * - Strategist approval required
  * 
- * 3. TREND EXTRACTION, NOT ADOPTION
- *    - Produces facts, not decisions
- *    - Confidence scores on all facts
- *    - Relevance assessed per context
- * 
- * 4. GOVERNANCE CHECK BEFORE USE
- *    - Facts validated before caching
- *    - Suggestions validated before offering
- *    - Strategist approves before application
- *    - Environment & policy restrictions honored
- * 
- * 5. SUGGESTIONS NEVER AUTO-APPLY
- *    - optional: true (always)
- *    - accepted: false (until explicit)
- *    - strategistApproved: required for application
- * 
- * 6. EVERYTHING LOGGED
- *    - KNOWLEDGE_FETCH events
- *    - FACT_DETECTED, FACT_VALIDATED events
- *    - SUGGESTION_OFFERED, SUGGESTION_ACCEPTED events
- *    - Full audit trail for compliance
+ * KNOWLEDGE BOUNDARY:
+ * ✅ Stable defaults, deprecations, security facts, vendor best practices
+ * ❌ Opinionated trends, community sentiment, experimental tech, forecasts
  */
 
-// Types
+// ============================================
+// TYPES
+// ============================================
+
 export type {
   KnowledgeSource,
   SourceType,
@@ -52,26 +52,80 @@ export type {
   KnowledgeCache,
   Suggestion,
   SuggestionCategory,
+  ImpactLevel,
   KnowledgeQuery,
   KnowledgeContext,
+  ProjectType,
   KnowledgeApplication,
 } from './types'
 
-// Approved Sources Registry
 export {
-  APPROVED_SOURCES,
+  DEFAULT_CACHE_TTL,
+  EMPTY_CACHE,
+} from './types'
+
+// ============================================
+// APPROVED SOURCES (Tiered)
+// ============================================
+
+export {
+  // Tier 1: Always Allowed
+  TIER1_SOURCES,
   FRAMEWORK_SOURCES,
-  DOCUMENTATION_SOURCES,
-  BLOG_SOURCES,
-  ADVISORY_SOURCES,
+  PLATFORM_SOURCES,
+  INTEGRATION_SOURCES,
+  SECURITY_SOURCES,
+  // Tier 2: Suggestion Only
+  TIER2_SOURCES,
+  // Combined
+  APPROVED_SOURCES,
+  // Forbidden
+  FORBIDDEN_SOURCES,
+  FORBIDDEN_PATTERNS,
+  // Operations
   getSource,
   getSourcesByDomain,
   getSourcesByType,
+  getSourcesByTier,
   isApprovedSource,
+  isForbiddenSource,
+  hasForbiddenReferences,
+  validateSourceUrl,
   detectDomains,
 } from './sources'
 
-// Time-Bound Cache
+// ============================================
+// KNOWLEDGE CHARTER (Boundary Rules)
+// ============================================
+
+export {
+  // Allowed knowledge types
+  STABLE_DEFAULTS,
+  // Forbidden knowledge types
+  FORBIDDEN_KNOWLEDGE_TYPES,
+  // Validation
+  isForbiddenKnowledge,
+  isAllowedKnowledge,
+  // Speech patterns
+  CORRECT_SPEECH,
+  FORBIDDEN_SPEECH,
+  validateSpeech,
+  // Experimental opt-in
+  EXPERIMENTAL_OPT_IN_PHRASES,
+  hasExperimentalOptIn,
+} from './charter'
+
+export type {
+  DeprecationKnowledge,
+  SecurityKnowledge,
+  BestPracticeKnowledge,
+  ForbiddenKnowledgeType,
+} from './charter'
+
+// ============================================
+// CACHE
+// ============================================
+
 export {
   getCache,
   isCacheStale,
@@ -89,13 +143,19 @@ export {
   getCacheStats,
 } from './cache'
 
-// Trend Summarizer
+// ============================================
+// SUMMARIZER
+// ============================================
+
 export {
   extractFacts,
   generateSummary,
 } from './summarizer'
 
-// Validator
+// ============================================
+// VALIDATOR
+// ============================================
+
 export type { ValidationResult } from './validator'
 export {
   validateFact,
@@ -105,18 +165,30 @@ export {
   validatePolicyCompliance,
 } from './validator'
 
-// Suggestion Advisor
+// ============================================
+// ADVISOR (Suggestion Generation)
+// ============================================
+
 export {
+  // Constants
+  MAX_SUGGESTIONS,
+  MIN_CONFIDENCE,
+  // Generation
   generateSuggestions,
   prioritizeSuggestions,
-  filterForEnvironment,
-  formatSuggestions,
-  approveSuggestion,
-  acceptSuggestion,
-  rejectSuggestion,
+  // Triggers
+  shouldShowSuggestions,
+  detectProjectType,
+  // Actions
+  applySuggestion,
+  dismissSuggestion,
+  formatSuggestionsInline,
 } from './advisor'
 
-// Ledger Events
+// ============================================
+// LEDGER EVENTS
+// ============================================
+
 export type {
   KnowledgeEventType,
   KnowledgeLedgerEvent,
@@ -124,9 +196,8 @@ export type {
   KnowledgeFetchCompletedPayload,
   FactDetectedPayload,
   SuggestionOfferedPayload,
-  SuggestionApprovedPayload,
   SuggestionAcceptedPayload,
-  SuggestionRejectedPayload,
+  SuggestionDismissedPayload,
 } from './ledger-events'
 
 export {
@@ -137,7 +208,6 @@ export {
   createFactValidatedEvent,
   createFactRejectedEvent,
   createSuggestionOfferedEvent,
-  createSuggestionApprovedEvent,
   createSuggestionAcceptedEvent,
   createSuggestionRejectedEvent,
   createContextCreatedEvent,
@@ -149,14 +219,18 @@ export {
 } from './ledger-events'
 
 // ============================================
-// KNOWLEDGE WORKFLOW
+// MAIN WORKFLOW
 // ============================================
 
 import type { KnowledgeContext, Suggestion, TrendFact } from './types'
 import { queryFacts, addFacts } from './cache'
 import { extractFacts, generateSummary } from './summarizer'
 import { validateFacts, validatePolicyCompliance } from './validator'
-import { generateSuggestions, filterForEnvironment, prioritizeSuggestions } from './advisor'
+import { 
+  generateSuggestions, 
+  shouldShowSuggestions,
+  MAX_SUGGESTIONS,
+} from './advisor'
 import { 
   createContextCreatedEvent,
   createFactDetectedEvent,
@@ -166,13 +240,9 @@ import {
 } from './ledger-events'
 
 /**
- * Main knowledge workflow
+ * Process knowledge context and generate suggestions
  * 
- * 1. Create context from user intent
- * 2. Query cached facts for relevant domains
- * 3. Generate suggestions
- * 4. Filter for environment
- * 5. Return prioritized suggestions
+ * Returns max 3 suggestions, confidence >= 0.8
  */
 export function processKnowledgeContext(
   context: KnowledgeContext
@@ -180,14 +250,18 @@ export function processKnowledgeContext(
   facts: TrendFact[]
   suggestions: Suggestion[]
   summary: string
+  shouldShow: boolean
 } {
   // Log context creation
   logKnowledgeEvent(createContextCreatedEvent(context))
   
+  // Check if we should show suggestions at all
+  const shouldShow = shouldShowSuggestions(context)
+  
   // Query relevant facts from cache
   const facts = queryFacts({
     domains: context.relevantDomains,
-    minConfidence: context.environment === 'production' ? 0.85 : 0.5,
+    minConfidence: 0.8, // Locked threshold
     productionReadyOnly: context.environment === 'production',
   })
   
@@ -197,18 +271,15 @@ export function processKnowledgeContext(
     return result.valid
   })
   
-  // Generate suggestions
-  let suggestions = generateSuggestions(validFacts, context)
-  
-  // Filter for environment
-  suggestions = filterForEnvironment(suggestions, context.environment)
-  
-  // Prioritize
-  suggestions = prioritizeSuggestions(suggestions, context)
-  
-  // Log suggestions offered
-  for (const suggestion of suggestions) {
-    logKnowledgeEvent(createSuggestionOfferedEvent(suggestion))
+  // Generate suggestions (max 3)
+  let suggestions: Suggestion[] = []
+  if (shouldShow) {
+    suggestions = generateSuggestions(validFacts, context)
+    
+    // Log each suggestion offered
+    for (const suggestion of suggestions) {
+      logKnowledgeEvent(createSuggestionOfferedEvent(suggestion))
+    }
   }
   
   // Generate summary
@@ -218,6 +289,7 @@ export function processKnowledgeContext(
     facts: validFacts,
     suggestions,
     summary,
+    shouldShow,
   }
 }
 
