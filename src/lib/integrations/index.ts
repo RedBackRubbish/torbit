@@ -103,3 +103,42 @@ export { sentryManifest } from "./sentry/manifest";
 // Manifests - Storage
 export { s3Manifest } from "./aws-s3/manifest";
 export { r2Manifest } from "./cloudflare-r2/manifest";
+
+// Health Check System
+export {
+  // Types
+  type HealthStatus,
+  type IssueType,
+  type DriftIssue,
+  type MissingPackageIssue,
+  type OrphanPackageIssue,
+  type DeprecationIssue,
+  type SecurityIssue,
+  type PeerMismatchIssue,
+  type HealthIssue,
+  type HealthReport,
+  type IntegrationHealth,
+  type PackageHealth,
+  type HealthCheckTrigger,
+  type HealthCheckOptions,
+  type HealthFix,
+  type HealthCheckResult,
+  type TriggerContext,
+  type DeprecatedPackage,
+  // Core checker
+  checkIntegrationHealth,
+  isHealthy,
+  formatHealthSummary,
+  // Triggers
+  onProjectLoad,
+  onPreExport,
+  onPreDeploy,
+  onManualCheck,
+  shouldBlock,
+  getBlockMessage,
+  createTriggerContext,
+  // Deprecation registry
+  DEPRECATED_PACKAGES,
+  checkDeprecation,
+  getDeprecations,
+} from "./health";
