@@ -89,7 +89,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'kimi': {
     provider: 'kimi',
     model: 'moonshotai/kimi-k2.5',
-    description: 'Kimi K2.5 - Fullstack Core (Backend + Database), Complex Planning',
+    description: 'Kimi K2.5 - Builder Boss (Planner + Architect + Backend/DB)',
     costTier: 'standard',
     inputCostPer1k: 0.00045,
     outputCostPer1k: 0.0025,
@@ -106,48 +106,68 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * MODEL HIERARCHY & GOVERNANCE:
  * ═══════════════════════════════════════════════════════════════
  * 
+ * GOVERNANCE LAYER (<10% combined tokens)
+ * ───────────────────────────────────────
  * STRATEGIST (GPT-5.2) - Plan Validator
  *   → Reviews/validates plans from Planner
  *   → NEVER the first mover - only approves/vetoes/amends
  *   → Read-only access, produces verdicts not code
- * 
- * PLANNER (Kimi K2.5) - Complex Planning
- *   → Dependency mapping, multi-step orchestration
- *   → 256K context for full codebase understanding
- *   → Self-directed agent swarm paradigm
- * 
- * ARCHITECT (Gemini Pro) - System Design
- *   → System architecture, file structure
- *   → High-level component organization
- * 
- * BUILDERS - Execution
- *   → Frontend: Claude Sonnet 4.5 (precision UI, pixel-perfect)
- *   → Fullstack Core (Backend + Database): Kimi K2.5
- *     • Owns full data layer vertically
- *     • Schema + API in sync (no drift)
- *     • Query optimization (knows access patterns)
- * 
- * FAST OPS (Gemini Flash) - Iteration
- *   → DevOps, QA loops, cheap iteration
  * 
  * AUDITOR (Claude Opus 4.5) - Quality Gate
  *   → Deep inspection, critical path safety
  *   → JUDGES ONLY - does not fix freely
  *   → Different brain than builders (catches what they miss)
  * 
+ * KIMI BUILDER BOSS (3 roles, 1 brain, 0 handoff errors)
+ * ───────────────────────────────────────────────────────
+ * PLANNER (Kimi K2.5) - Orchestration
+ *   → Designs API contracts, dependency mapping
+ *   → 256K context for full codebase understanding
+ *   → Leaves "BUILDER CONTEXT" summary for next role
+ * 
+ * ARCHITECT (Kimi K2.5) - System Design
+ *   → File structure knowing the API contract
+ *   → Same context window as Planner (zero handoff loss)
+ *   → High-level component organization
+ * 
+ * BACKEND/DB (Kimi K2.5) - Implementation
+ *   → Implements knowing both plan AND structure
+ *   → Schema + API stay in sync (no drift)
+ *   → Query optimization (knows access patterns)
+ * 
+ * WHY KIMI DOMINATES BUILD PATH:
+ *   • Context coherence: Same session across roles
+ *   • Cost: 3 Kimi roles cheaper than 1 Opus role
+ *   • Speed: No "review previous agent's work" delays
+ * 
+ * NON-KIMI BUILDERS
+ * ─────────────────
+ * FRONTEND (Claude Sonnet 4.5)
+ *   → Visual/spatial reasoning - different modality
+ *   → Precision UI, pixel-perfect implementation
+ * 
+ * FAST OPS (Gemini 3 Flash)
+ *   → DevOps, QA loops - speed > reasoning
+ *   → Cheap iteration, self-healing tests
+ * 
  * COST RULE: GPT-5.2 + Opus combined < 10% of total tokens
  * ═══════════════════════════════════════════════════════════════
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  architect: 'gemini-pro',       // System design, file structure
-  planner: 'kimi',               // Complex planning, dependency mapping (Kimi K2.5)
-  strategist: 'gpt-5.2',         // Plan VALIDATION (reviews planner output)
-  frontend: 'claude-sonnet',     // Precision UI builds
-  backend: 'kimi',               // Fullstack Core: APIs + business logic (Kimi K2.5)
-  database: 'kimi',              // Merged with backend: schemas + queries (Kimi K2.5)
+  // KIMI BUILDER BOSS - 3 roles, 1 brain, 0 handoff errors
+  planner: 'kimi',               // Orchestration, API contracts (Kimi K2.5)
+  architect: 'kimi',             // System design, file structure (Kimi K2.5)
+  backend: 'kimi',               // APIs + business logic (Kimi K2.5)
+  database: 'kimi',              // Schemas + queries (Kimi K2.5)
+  
+  // NON-KIMI BUILDERS - different modalities
+  frontend: 'claude-sonnet',     // Visual/spatial reasoning
   devops: 'gemini-flash',        // Fast config/deploy loops
   qa: 'gemini-flash',            // Quick test cycles
-  auditor: 'claude-opus',        // Deep inspection, quality gate (JUDGE ONLY)
+  
+  // GOVERNANCE - must be different brain (<10% tokens)
+  strategist: 'gpt-5.2',         // Plan VALIDATION only
+  auditor: 'claude-opus',        // Quality gate JUDGE only
 }
 
 // ============================================
