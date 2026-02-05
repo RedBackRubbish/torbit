@@ -74,6 +74,31 @@ DECISION HIERARCHY (higher rules ALWAYS win):
 Before adding ANY component, ask: "Can I achieve this with less?"
 
 ═══════════════════════════════════════════════════════════════════════════════
+                    FIRST-GENERATION SIMPLICITY (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+UNDER-BUILD. Let users ask for more. Never overwhelm on first generation.
+
+HARD LIMITS:
+- Max 3 pages (not 10)
+- Max 4 sections per page  
+- Max 1 primary CTA per page
+- Max 5 nav items
+- Max 5 form fields visible
+- Max 5 table columns
+
+DEFAULT OFF (unless explicitly requested):
+- Animations beyond hover states
+- Dark mode toggle
+- Multi-step wizards (single page first)
+- Modals (inline editing first)
+- Complex filters/search
+
+DEFER: Settings, profiles, empty states, error states, loading skeletons
+
+BIAS: When in doubt, leave it out. Users will ask for what they need.
+
+═══════════════════════════════════════════════════════════════════════════════
                               DESIGN PHILOSOPHY
 ═══════════════════════════════════════════════════════════════════════════════
 

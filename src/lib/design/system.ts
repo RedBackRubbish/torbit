@@ -441,6 +441,115 @@ export const DRIBBBLE_BANS = [
 ] as const
 
 // ============================================================================
+// OUTCOME SCORING (INTERNAL ONLY)
+// ============================================================================
+// Silent scoring system. If score < threshold, simplify again.
+// Never exposed to users. Just makes generations converge toward "obvious".
+
+export const OUTCOME_SCORING = {
+  dimensions: {
+    clarity: {
+      weight: 0.4,
+      description: 'Is the purpose immediately understandable?',
+      signals: {
+        positive: [
+          'Single clear headline',
+          'One obvious primary action',
+          'Scannable content structure',
+          'No competing elements',
+        ],
+        negative: [
+          'Multiple CTAs fighting for attention',
+          'Wall of text',
+          'Unclear hierarchy',
+          'Too many visual elements',
+        ],
+      },
+    },
+    hierarchy: {
+      weight: 0.3,
+      description: 'Is there a clear visual order?',
+      signals: {
+        positive: [
+          'Size contrast between levels',
+          'Color/opacity for importance',
+          'Consistent spacing rhythm',
+          'F or Z reading pattern',
+        ],
+        negative: [
+          'Everything same size',
+          'Flat visual weight',
+          'Inconsistent spacing',
+          'No focal point',
+        ],
+      },
+    },
+    restraint: {
+      weight: 0.3,
+      description: 'Has unnecessary been removed?',
+      signals: {
+        positive: [
+          'Generous whitespace',
+          'Minimal color palette',
+          'No decorative elements',
+          'Content-first layout',
+        ],
+        negative: [
+          'Decorative noise',
+          'Multiple accent colors',
+          'Cramped spacing',
+          'Style over substance',
+        ],
+      },
+    },
+  },
+  threshold: 0.7, // Below this = simplify again
+  action: 'If any dimension scores low, ask: "What can I remove?"',
+} as const
+
+// ============================================================================
+// FIRST-GENERATION SIMPLICITY BIAS
+// ============================================================================
+// Hard rule: First generation should UNDER-build. Let users ask for more.
+// Never overwhelm. Never over-deliver. Start minimal, iterate up.
+
+export const FIRST_GENERATION_RULES = {
+  principle: 'Under-build on first generation. Let users ask for more.',
+  
+  maxElements: {
+    pages: 3,           // Start with 3 pages max, not 10
+    sectionsPerPage: 4, // 4 sections max per page
+    ctasPerPage: 1,     // One primary CTA per page
+    navItems: 5,        // 5 nav items max
+    formFields: 5,      // 5 form fields max visible
+    tableColumns: 5,    // 5 table columns max
+    cardVariants: 2,    // 2 card styles max (primary, secondary)
+  },
+  
+  defaultOff: [
+    'Animations beyond hover states',
+    'Dark mode toggle (unless requested)',
+    'Multi-step wizards (single page first)',
+    'Modals (inline editing first)',
+    'Tabs (single view first)',
+    'Filters (show all first)',
+    'Pagination (simple list first)',
+    'Search (unless core feature)',
+  ],
+  
+  defer: [
+    'Settings pages',
+    'Profile pages',
+    'Empty states',
+    'Error states',
+    'Loading skeletons',
+    'Mobile nav variations',
+  ],
+  
+  bias: 'When in doubt, leave it out. Users will ask for what they need.',
+} as const
+
+// ============================================================================
 // HIGH-END PATTERNS
 // ============================================================================
 // What makes apps feel premium
@@ -630,6 +739,43 @@ Before completing, run this mental checklist:
 4. Are there competing colors or accents? → Reduce to one
 5. Would a senior designer at Linear approve this? → If not, iterate
 
+OUTCOME SCORING (internal check):
+- Clarity (40%): Is purpose immediately understandable?
+- Hierarchy (30%): Is there clear visual order?
+- Restraint (30%): Has unnecessary been removed?
+
+If any dimension feels weak → simplify before finishing.
+
+═══════════════════════════════════════════════════════════════════════════════
+                     FIRST-GENERATION SIMPLICITY (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+This is a FIRST GENERATION. Under-build. Let users ask for more.
+
+LIMITS FOR FIRST GENERATION:
+- Max 3 pages (not 10)
+- Max 4 sections per page
+- Max 1 primary CTA per page
+- Max 5 nav items
+- Max 5 form fields visible
+- Max 5 table columns
+
+DEFAULT OFF (unless explicitly requested):
+- Animations beyond hover states
+- Dark mode toggle
+- Multi-step wizards
+- Modals (use inline editing)
+- Tabs (single view first)
+- Complex filters
+
+DEFER FOR LATER:
+- Settings pages
+- Profile pages
+- Empty states
+- Error states
+- Loading skeletons
+
+When in doubt, leave it out. Users will ask for what they need.
 The best designs don't look fancy. They look OBVIOUS.
 `
 }
