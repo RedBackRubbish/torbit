@@ -437,6 +437,38 @@ Immutable, append-only record of every integration action:
 - Compliance reports on export
 - SOC2/audit-ready evidence bundles
 
+### Knowledge Awareness
+
+**Torbit may sense the world. Torbit may not blindly react to it.**
+
+Stay current on frameworks and SDKs without breaking determinism:
+
+| Principle | Implementation |
+|-----------|----------------|
+| **Approved sources only** | Framework changelogs, official docs, release feeds, curated blogs, security advisories. NO Reddit, Medium, random SEO blogs. |
+| **Conditional fetching** | Before planning, not during execution. Time-bound cache (24hr). Read-only. |
+| **Trend extraction** | Produces facts, not decisions. Confidence scores on all facts. |
+| **Governance check** | Strategist evaluates before application. Environment & policy honored. |
+| **Optional suggestions** | Never auto-apply. Strategist approval required. Logged to ledger. |
+
+**Approved Source Classes:**
+- ✓ Framework changelogs (Next.js, React, Expo, Vercel)
+- ✓ Official docs (Stripe, Google, Apple)
+- ✓ Release feeds (GitHub releases, RFCs)
+- ✓ Curated blogs (Vercel, React, AWS)
+- ✓ Security advisories (CVE, npm advisories)
+- ✗ Reddit, Medium, random SEO blogs, Twitter
+
+**Knowledge workflow:**
+1. Context created from user intent
+2. Relevant facts queried from cache
+3. Suggestions generated (all `optional: true`)
+4. Filtered for environment (production = high confidence only)
+5. Prioritized (security first, then relevance)
+6. Offered to user (never auto-applied)
+7. Strategist reviews before application
+8. All events logged to ledger
+
 ### Evidence Bundles
 
 Export compliance evidence alongside your app:
@@ -449,6 +481,7 @@ Export compliance evidence alongside your app:
 ├── POLICY_SNAPSHOT.json     # Policy at export time
 ├── ENVIRONMENT_PROFILE.json # Environment rules at export
 ├── HEALTH_STATUS.json       # Health status at export
+├── KNOWLEDGE_EVENTS.json    # Knowledge usage audit trail
 └── MANIFEST.json            # File inventory with hashes
 ```
 
@@ -483,6 +516,7 @@ Strategist:         ✓ PASSED
 - [x] **Integration Health** - Drift detection, deprecation tracking
 - [x] **Audit Ledger** - Immutable provenance trail
 - [x] **Evidence Bundles** - SOC2-ready compliance exports
+- [x] **Knowledge Awareness** - Governed trend sensing, approved sources only
 - [ ] **Persistent Projects** - Save/load to cloud storage
 - [ ] **Git Integration** - Commit, push, pull from IDE
 - [ ] **Deployment** - One-click deploy to Vercel/Netlify
