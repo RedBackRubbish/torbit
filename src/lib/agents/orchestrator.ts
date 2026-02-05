@@ -542,6 +542,86 @@ export class TorbitOrchestrator {
   }
   
   /**
+   * ARCHITECT INTEGRITY CHECK
+   * 
+   * Uses Strategist (GPT-5.2) to validate Architect's file structure
+   * BEFORE Backend starts building. Catches structural issues early.
+   * 
+   * Questions Strategist answers:
+   * - Is responsibility clearly separated?
+   * - Are there unnecessary abstractions?
+   * - Does file layout match intent?
+   * 
+   * Returns: APPROVED / AMENDMENTS / REJECTED
+   */
+  async runArchitectIntegrityCheck(
+    architectOutput: string,
+    originalRequest: string
+  ): Promise<{
+    verdict: 'APPROVED' | 'AMENDMENTS' | 'REJECTED'
+    issues?: string[]
+    amendments?: string[]
+  }> {
+    const checkPrompt = `
+You are validating the ARCHITECT's file structure before Backend implementation begins.
+
+═══ ORIGINAL USER REQUEST ═══
+${originalRequest}
+
+═══ ARCHITECT'S PROPOSED STRUCTURE ═══
+${architectOutput}
+
+═══ YOUR TASK ═══
+Evaluate the proposed structure. Answer these questions:
+
+1. RESPONSIBILITY SEPARATION
+   - Is each file's job clear and single-purpose?
+   - Are there redundant files doing the same thing?
+
+2. ABSTRACTION LEVEL
+   - Are there unnecessary abstractions for this scope?
+   - Is anything over-engineered?
+
+3. FILE LAYOUT SANITY
+   - Does the structure match the user's request?
+   - Are related files co-located?
+   - Does it follow Next.js App Router conventions?
+
+4. BOUNDARY CLEANLINESS
+   - Are component boundaries logical?
+   - Is state scoped appropriately?
+
+OUTPUT your verdict in the exact format from your system prompt.
+`
+
+    const result = await this.executeAgent('strategist', checkPrompt, { modelTier: 'sonnet' })
+    
+    // Parse Strategist's response for verdict
+    const output = result.output.toUpperCase()
+    
+    if (output.includes('REJECTED')) {
+      const reasonMatch = result.output.match(/REASON:\s*(.+?)(?:\n|$)/i)
+      return {
+        verdict: 'REJECTED',
+        issues: reasonMatch ? [reasonMatch[1].trim()] : ['Structure rejected by Strategist'],
+      }
+    }
+    
+    if (output.includes('AMENDMENTS')) {
+      const amendmentsMatch = result.output.match(/AMENDMENTS?:\s*([\s\S]+?)(?:RATIONALE|$)/i)
+      const amendments = amendmentsMatch 
+        ? amendmentsMatch[1].split('\n').filter(l => l.trim().match(/^\d+\./)).map(l => l.trim())
+        : []
+      return {
+        verdict: 'AMENDMENTS',
+        amendments: amendments.length > 0 ? amendments : ['Review suggested amendments'],
+      }
+    }
+    
+    return { verdict: 'APPROVED' }
+  }
+  
+  /**
    * Full orchestration: Plan → Execute → Audit
    * Now powered by Kimi K2.5 intelligent routing!
    */
@@ -597,6 +677,51 @@ export class TorbitOrchestrator {
       Break it down into steps and identify which agents should handle each step.
       ${routing ? `\nRouting analysis suggests: ${routing.reasoning}` : ''}
     `, { modelTier: planModelTier })
+    
+    // 3.5 ARCHITECT INTEGRITY CHECK - Strategist validates structure before Backend builds
+    // This catches structural issues early, with a different brain (GPT-5.2)
+    if (plan.success) {
+      const integrityCheck = await this.runArchitectIntegrityCheck(plan.output, userPrompt)
+      
+      if (integrityCheck.verdict === 'REJECTED') {
+        // Structure rejected - return early with clear feedback
+        return {
+          plan: {
+            ...plan,
+            success: false,
+            output: `Architect structure REJECTED by Strategist: ${integrityCheck.issues?.join(', ') || 'Structure validation failed'}`,
+          },
+          execution: [],
+          audit: {
+            passed: false,
+            gates: {
+              visual: { passed: false, issues: ['Architect Integrity Check failed'] },
+              functional: { passed: false, issues: integrityCheck.issues || [] },
+              hygiene: { passed: true, issues: [] },
+              security: { passed: true, issues: [] },
+            },
+          },
+          routing: routing ?? undefined,
+          preflight: preflightResult,
+        }
+      }
+      
+      if (integrityCheck.verdict === 'AMENDMENTS') {
+        // Amendments requested - re-run Architect with feedback
+        const amendedPlan = await this.executeAgent('architect', `
+          Your previous plan was reviewed by the Strategist who requested these amendments:
+          ${integrityCheck.amendments?.join('\n') || 'Review and improve structure'}
+          
+          Original request: "${userPrompt}"
+          
+          Please revise your plan incorporating these amendments.
+        `, { modelTier: planModelTier })
+        
+        // Replace plan with amended version
+        Object.assign(plan, amendedPlan)
+      }
+      // APPROVED: continue to execution
+    }
     
     // 4. Execute with appropriate agents (Kimi-routed or heuristic fallback)
     const execution: AgentResult[] = []
