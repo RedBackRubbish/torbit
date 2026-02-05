@@ -399,14 +399,15 @@ export default function PremiumHero() {
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="flex items-center justify-center gap-2 mt-3 text-xs"
+                        className="flex flex-col items-center gap-1 mt-3 text-xs"
                       >
-                        <span className="text-white/30">Building with:</span>
-                        <span className="text-white/60">
-                          {selectedCapabilities.map(id => getCapabilityById(id)?.label).join(' · ')}
-                        </span>
-                        <span className="text-white/20">·</span>
-                        <span className="text-emerald-400/60 text-[11px]">simulated</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white/30">Capabilities:</span>
+                          <span className="text-white/60">
+                            {selectedCapabilities.map(id => getCapabilityById(id)?.label).join(' · ')}
+                          </span>
+                        </div>
+                        <span className="text-white/25 text-[11px]">Simulated during build</span>
                       </motion.div>
                     )}
                   </AnimatePresence>
