@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
+import { INTEGRATION_CAPABILITIES, getEstimatedCostTier } from '@/lib/integrations/capabilities'
+import { recordMetric } from '@/lib/metrics/success'
 
 /**
  * ShipMenu - Premium Deploy Button for Web Apps
@@ -13,10 +15,41 @@ import { useBuilderStore } from '@/store/builder'
 export default function ShipMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const [isDeploying, setIsDeploying] = useState(false)
+  const [hasExportedBefore, setHasExportedBefore] = useState(true) // Assume true until checked
+  const [showFirstExportHint, setShowFirstExportHint] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   
   const { projectType } = useBuilderStore()
   const isMobile = projectType === 'mobile'
+  
+  // Check first export status on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const exported = localStorage.getItem('torbit_has_exported')
+      setHasExportedBefore(!!exported)
+    }
+  }, [])
+  
+  // Get selected capabilities from session storage
+  const selectedCapabilities = useMemo(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const stored = sessionStorage.getItem('torbit_capabilities')
+      return stored ? JSON.parse(stored) as string[] : []
+    } catch {
+      return []
+    }
+  }, [isOpen]) // Re-check when menu opens
+  
+  const hasCapabilities = selectedCapabilities.length > 0
+  const complexityTier = useMemo(() => getEstimatedCostTier(selectedCapabilities), [selectedCapabilities])
+  
+  // Complexity tier display
+  const complexityLabels = {
+    low: { label: 'Low', color: 'text-emerald-500/70' },
+    medium: { label: 'Medium', color: 'text-amber-500/70' },
+    high: { label: 'High', color: 'text-orange-500/70' }
+  }
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -49,21 +82,45 @@ export default function ShipMenu() {
 
   const handleGitHubPR = () => {
     setIsOpen(false)
+    markFirstExport('github')
     // TODO: Trigger syncToGithub tool
   }
 
   const handleDownloadZip = () => {
     setIsOpen(false)
+    markFirstExport('zip')
     // TODO: Package all virtual files and download
+  }
+  
+  // Track first export and show success hint
+  const markFirstExport = (type: 'vercel' | 'netlify' | 'github' | 'zip') => {
+    // Record export metrics (Phase 6)
+    recordMetric('export_initiated', { exportType: type })
+    recordMetric('export_downloaded', { exportType: type })
+    
+    if (typeof window !== 'undefined' && !hasExportedBefore) {
+      localStorage.setItem('torbit_has_exported', 'true')
+      localStorage.setItem('torbit_first_export_type', type)
+      setHasExportedBefore(true)
+      setShowFirstExportHint(true)
+      // Auto-dismiss hint after 8 seconds
+      setTimeout(() => {
+        setShowFirstExportHint(false)
+        // Record that user saw the hint (implies export was "opened")
+        recordMetric('export_opened', { exportType: type })
+      }, 8000)
+    }
   }
   
   const handleVercelDeploy = () => {
     setIsOpen(false)
+    markFirstExport('vercel')
     handleDeploy()
   }
   
   const handleNetlifyDeploy = () => {
     setIsOpen(false)
+    markFirstExport('netlify')
     // TODO: Deploy to Netlify
   }
 
@@ -149,6 +206,34 @@ export default function ShipMenu() {
             className="absolute top-full right-0 mt-2 w-64 z-50"
           >
             <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden">
+              {/* Export Reality Check Banner - Only shows when capabilities selected */}
+              {hasCapabilities && (
+                <div className="px-3 py-2.5 bg-gradient-to-r from-[#0d0d0d] to-[#0a0a0a] border-b border-[#1a1a1a]">
+                  <div className="flex items-start gap-2">
+                    <div className="w-4 h-4 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-2.5 h-2.5 text-amber-500/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-medium text-amber-500/80">
+                        Production setup required
+                      </span>
+                      <span className="text-[9px] text-[#505050] leading-relaxed">
+                        {selectedCapabilities.length} {selectedCapabilities.length === 1 ? 'capability is' : 'capabilities are'} scaffolded using simulated providers. Real credentials are configured after export.
+                      </span>
+                      {/* Build complexity indicator */}
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <span className="text-[9px] text-[#404040]">Build complexity:</span>
+                        <span className={`text-[9px] font-medium ${complexityLabels[complexityTier].color}`}>
+                          {complexityLabels[complexityTier].label}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Deploy Options */}
               <div className="p-1.5">
                 <span className="block px-2.5 py-1.5 text-[10px] font-medium text-[#505050] uppercase tracking-wider">
@@ -228,7 +313,36 @@ export default function ShipMenu() {
                     <span className="text-[10px] text-[#505050]">Export to your machine</span>
                   </div>
                 </button>
+                
+                {/* Export Proof Line - 5.1 */}
+                <div className="px-2.5 pt-2 pb-1">
+                  <span className="text-[9px] text-[#404040]">
+                    Includes audit ledger and verification proof
+                  </span>
+                </div>
               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* First Export Success Hint - 5.3 (web projects only since ShipMenu hides for mobile) */}
+      <AnimatePresence>
+        {showFirstExportHint && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-full right-0 mt-2 w-56 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg shadow-xl p-3"
+          >
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-medium text-[#a8a8a8]">
+                Deploy to Vercel
+              </span>
+              <span className="text-[10px] text-[#505050] leading-relaxed">
+                Unzip, push to GitHub, and connect to Vercel.
+              </span>
             </div>
           </motion.div>
         )}

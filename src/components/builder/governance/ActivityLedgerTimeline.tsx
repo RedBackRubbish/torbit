@@ -210,9 +210,26 @@ function ProofDetails({ phase, entry }: ProofDetailsProps) {
       {phase === 'build' && (
         <>
           {proof.artifactCount !== undefined && (
-            <ProofRow label="Artifacts" value={`${proof.artifactCount} files`} />
+            <ProofRow label="Governed artifacts" value={`${proof.artifactCount} files`} />
           )}
-          {proof.filesGenerated && proof.filesGenerated.length > 0 && (
+          
+          {/* Capability-grouped artifacts */}
+          {proof.capabilityArtifacts && proof.capabilityArtifacts.length > 0 && (
+            <div className="pt-2 space-y-2">
+              <div className="text-[10px] text-[#505050] uppercase tracking-wide">
+                By Capability
+              </div>
+              {proof.capabilityArtifacts.map((cap, i) => (
+                <CapabilityArtifactGroup key={i} capability={cap.capability} files={cap.files} />
+              ))}
+              <div className="text-[9px] text-[#404040] italic pt-1 border-t border-[#1a1a1a]">
+                Artifacts are immutable once verified
+              </div>
+            </div>
+          )}
+          
+          {/* Fallback: show flat file list if no capability grouping */}
+          {!proof.capabilityArtifacts && proof.filesGenerated && proof.filesGenerated.length > 0 && (
             <div className="pt-1">
               {proof.filesGenerated.slice(0, 5).map((file, i) => (
                 <div key={i} className="text-[10px] text-[#505050] font-mono truncate">
@@ -258,6 +275,12 @@ function ProofDetails({ phase, entry }: ProofDetailsProps) {
               value={proof.includesProof ? 'Included' : 'Not included'} 
             />
           )}
+          {proof.capabilitiesIncluded && proof.capabilitiesIncluded.length > 0 && (
+            <ProofRow 
+              label="Capabilities" 
+              value={`${proof.capabilitiesIncluded.length} scaffolded`} 
+            />
+          )}
         </>
       )}
       
@@ -289,6 +312,61 @@ function ProofRow({ label, value, mono, valueClass }: ProofRowProps) {
       <span className={`text-[10px] ${valueClass || 'text-[#606060]'} ${mono ? 'font-mono' : ''} text-right`}>
         {value}
       </span>
+    </div>
+  )
+}
+
+// Collapsible capability artifact group
+interface CapabilityArtifactGroupProps {
+  capability: string
+  files: string[]
+}
+
+function CapabilityArtifactGroup({ capability, files }: CapabilityArtifactGroupProps) {
+  const [expanded, setExpanded] = useState(false)
+  
+  // Format capability name for display
+  const formatCapability = (cap: string) => {
+    return cap.charAt(0).toUpperCase() + cap.slice(1).replace(/-/g, ' ')
+  }
+  
+  return (
+    <div className="border-l border-[#1a1a1a] pl-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-[10px] text-[#606060] hover:text-[#808080] transition-colors w-full text-left"
+      >
+        <motion.span
+          animate={{ rotate: expanded ? 90 : 0 }}
+          transition={{ duration: 0.15 }}
+          className="text-[8px]"
+        >
+          ▶
+        </motion.span>
+        <span className="font-medium">{formatCapability(capability)}</span>
+        <span className="text-[#404040]">·</span>
+        <span className="text-[#505050]">{files.length} files</span>
+      </button>
+      
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-1 pl-3 space-y-0.5">
+              {files.map((file, i) => (
+                <div key={i} className="text-[9px] text-[#505050] font-mono truncate">
+                  {file}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
+import { recordMetric } from '@/lib/metrics/success'
 
 // ============================================================================
 // ACTIVITY LEDGER STORE
@@ -28,6 +29,11 @@ export interface LedgerEntry {
     // Build phase
     artifactCount?: number
     filesGenerated?: string[]
+    // Capability artifact attribution
+    capabilityArtifacts?: {
+      capability: string
+      files: string[]
+    }[]
     
     // Verify phase
     auditorVerdict?: 'passed' | 'failed'
@@ -37,6 +43,15 @@ export interface LedgerEntry {
     // Export phase
     exportFormat?: string
     includesProof?: boolean
+    capabilitiesIncluded?: string[]
+    
+    // Native wrapper export (Phase 8 - unused until then)
+    nativeWrapper?: {
+      platform: 'ios' | 'android'
+      wrapper: 'capacitor'
+      bundleId: string
+      capabilities: string[]
+    }
   }
 }
 
@@ -48,10 +63,14 @@ export interface LedgerState {
 export interface LedgerActions {
   // Record immutable events (past-tense)
   recordIntent: (intentHash: string) => void
-  recordArtifactsGenerated: (artifactCount: number, files: string[]) => void
+  recordArtifactsGenerated: (
+    artifactCount: number, 
+    files: string[], 
+    capabilityArtifacts?: { capability: string; files: string[] }[]
+  ) => void
   recordVerificationPassed: (runtimeHash: string, dependencyLockHash: string) => void
   recordVerificationFailed: () => void
-  recordExport: (format: string, includesProof: boolean) => void
+  recordExport: (format: string, includesProof: boolean, capabilitiesIncluded?: string[]) => void
   
   // UI State
   setExpanded: (expanded: boolean) => void
@@ -94,6 +113,9 @@ export const useLedger = create<LedgerState & LedgerActions>()(
         // Don't duplicate
         if (state.entries.some(e => e.phase === 'describe')) return
         
+        // Record metric (Phase 6) - build starts when intent is recorded
+        recordMetric('build_started')
+        
         state.entries.push({
           id: `ledger-${++entryCounter}-${Date.now()}`,
           phase: 'describe',
@@ -106,10 +128,13 @@ export const useLedger = create<LedgerState & LedgerActions>()(
       })
     },
     
-    recordArtifactsGenerated: (artifactCount, files) => {
+    recordArtifactsGenerated: (artifactCount, files, capabilityArtifacts) => {
       set((state) => {
         // Don't duplicate
         if (state.entries.some(e => e.phase === 'build')) return
+        
+        // Record metric (Phase 6)
+        recordMetric('build_completed', { artifactCount })
         
         state.entries.push({
           id: `ledger-${++entryCounter}-${Date.now()}`,
@@ -119,6 +144,7 @@ export const useLedger = create<LedgerState & LedgerActions>()(
           proof: {
             artifactCount,
             filesGenerated: files.slice(0, 10), // Limit for display
+            capabilityArtifacts,
           },
         })
       })
@@ -128,6 +154,9 @@ export const useLedger = create<LedgerState & LedgerActions>()(
       set((state) => {
         // Don't duplicate
         if (state.entries.some(e => e.phase === 'verify')) return
+        
+        // Record metric (Phase 6)
+        recordMetric('build_verified')
         
         state.entries.push({
           id: `ledger-${++entryCounter}-${Date.now()}`,
@@ -160,7 +189,7 @@ export const useLedger = create<LedgerState & LedgerActions>()(
       })
     },
     
-    recordExport: (format, includesProof) => {
+    recordExport: (format, includesProof, capabilitiesIncluded) => {
       set((state) => {
         // Allow multiple exports (each is a separate event)
         state.entries.push({
@@ -171,6 +200,7 @@ export const useLedger = create<LedgerState & LedgerActions>()(
           proof: {
             exportFormat: format,
             includesProof,
+            capabilitiesIncluded,
           },
         })
       })

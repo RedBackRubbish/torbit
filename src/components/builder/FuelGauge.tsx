@@ -6,6 +6,25 @@ import { useFuelStore } from '@/store/fuel'
 import RefuelModal from './RefuelModal'
 
 /**
+ * TierBadge - Shows current subscription tier
+ */
+function TierBadge() {
+  const { tier } = useFuelStore()
+  
+  const config = {
+    standard: { label: 'Free', color: 'text-neutral-500', bg: 'bg-neutral-800' },
+    pro: { label: 'Pro', color: 'text-[#c0c0c0]', bg: 'bg-[#c0c0c0]/10' },
+    enterprise: { label: 'Team', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+  }[tier] || { label: 'Free', color: 'text-neutral-500', bg: 'bg-neutral-800' }
+  
+  return (
+    <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${config.bg} ${config.color}`}>
+      {config.label}
+    </span>
+  )
+}
+
+/**
  * FuelGauge - Clean, minimal token/credit display
  */
 export default function FuelGauge() {
@@ -120,6 +139,17 @@ export default function FuelGauge() {
                 transition={{ duration: 0.15 }}
                 className="absolute top-full right-0 mt-2 w-64 p-4 bg-[#050505] border border-[#1a1a1a] rounded-xl shadow-xl z-50"
               >
+                {/* Tier Badge */}
+                <div className="flex items-center justify-between mb-3 pb-3 border-b border-[#1a1a1a]">
+                  <TierBadge />
+                  <a 
+                    href="/dashboard/billing" 
+                    className="text-[10px] text-[#505050] hover:text-[#808080] transition-colors"
+                  >
+                    Manage →
+                  </a>
+                </div>
+                
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
                   <span className={`text-[12px] font-medium ${statusConfig.color}`}>

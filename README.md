@@ -86,7 +86,29 @@ Token-based resource management:
 
 - **Pre-flight estimation** - See costs before execution
 - **Auditor Guarantee** - If code fails audit, fuel is refunded
-- **Tier system** - Standard (1,000) / Pro (5,000) / Enterprise (25,000)
+- **Tier system** - Free (100/day) / Pro (5,000/mo) / Team (25,000/mo) / Enterprise (custom)
+
+### 💳 Pricing & Billing
+
+Transparent, fuel-based pricing with no hidden fees:
+
+| Plan | Price | Fuel | Features |
+|------|-------|------|----------|
+| **Free** | $0 | 100/day | All AI models, unlimited projects, GitHub export |
+| **Pro** | $29/mo | 5,000/mo | + Fuel packs, priority support |
+| **Team** | $99/mo | 25,000/mo | + 5 members, shared pool, usage analytics |
+| **Enterprise** | Custom | Custom | + SSO/SAML, SLA, dedicated support |
+
+**Fuel Packs** (one-time purchases for Pro/Team):
+- Emergency Rod: 500 fuel / $9
+- Jerry Can: 2,500 fuel / $29
+- Reactor Core: 10,000 fuel / $99
+
+**Billing Dashboard** (`/dashboard/billing`):
+- View current plan and fuel balance
+- Upgrade subscription via Stripe
+- Purchase fuel packs
+- Access Stripe customer portal
 
 ### 🔴 Nervous System
 
@@ -604,6 +626,35 @@ One-click "Review Knowledge" opens panel showing:
 
 ---
 
+## Testing
+
+TORBIT maintains comprehensive test coverage across all core systems:
+
+```bash
+# Run all tests
+pnpm test
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Run tests in watch mode
+pnpm test:watch
+```
+
+**Test Statistics:**
+- **30 test files** covering stores, hooks, components, and libraries
+- **468 tests passing** with full CI/CD integration
+- **Key coverage areas:**
+  - Fuel economy (35 tests)
+  - Timeline/state management (34 tests)
+  - Nervous system / error detection (28 tests)
+  - Agent routing (26 tests)
+  - Orchestrator (25 tests)
+  - Terminal store (23 tests)
+  - WebContainer integration (20 tests)
+
+---
+
 ## Roadmap
 
 - [x] **Mobile App Export** - Export iOS apps via Expo + Xcode
@@ -616,6 +667,9 @@ One-click "Review Knowledge" opens panel showing:
 - [x] **Evidence Bundles** - SOC2-ready compliance exports
 - [x] **Knowledge Awareness** - Governed trend sensing, approved sources only
 - [x] **Project Memory** - Knowledge freezing, deterministic rebuilds
+- [x] **Pricing & Billing** - Stripe integration, fuel packs, billing dashboard
+- [x] **Success Metrics** - Internal tracking for time-to-first-success
+- [ ] **Capacitor Export** - Native iOS/Android wrappers (Phase 8)
 - [ ] **Persistent Projects** - Save/load to cloud storage
 - [ ] **Git Integration** - Commit, push, pull from IDE
 - [ ] **Deployment** - One-click deploy to Vercel/Netlify

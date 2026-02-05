@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { 
   Rocket, 
   Apple, 
@@ -30,6 +30,7 @@ import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 import { PreflightChecklist } from './PreflightChecklist'
 import { GovernanceResolved } from './governance'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
+import { recordMetric } from '@/lib/metrics/success'
 
 type ExportStatus = 'idle' | 'validating' | 'preflight' | 'exporting' | 'complete' | 'error'
 
@@ -47,11 +48,20 @@ export function PublishPanel() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
   const [result, setResult] = useState<ExportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isFirstExport, setIsFirstExport] = useState(false)
   
   const { files, projectType, capabilities, projectName } = useBuilderStore()
   
   const isMobile = projectType === 'mobile'
   const hasFiles = files.length > 0
+  
+  // Check first export status on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const exported = localStorage.getItem('torbit_has_exported_mobile')
+      setIsFirstExport(!exported)
+    }
+  }, [])
   
   // Build config once
   const config = useMemo(() => ({
@@ -122,6 +132,16 @@ export function PublishPanel() {
       const blob = await createExportZip(bundle)
       const filename = `${config.appName.replace(/\s+/g, '-')}-iOS-Export.zip`
       downloadBlob(blob, filename)
+      
+      // Record export metrics (Phase 6)
+      recordMetric('export_initiated', { exportType: 'xcode' })
+      recordMetric('export_downloaded', { exportType: 'xcode' })
+      
+      // Track first export for mobile
+      if (typeof window !== 'undefined' && isFirstExport) {
+        localStorage.setItem('torbit_has_exported_mobile', 'true')
+        setIsFirstExport(false)
+      }
       
       setStatus('complete')
       setResult({
@@ -266,6 +286,37 @@ export function PublishPanel() {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Export Mode - Capacitor teaser */}
+                  <div className="pt-2 border-t border-neutral-800">
+                    <p className="text-neutral-600 text-xs uppercase tracking-wider px-1 mb-2">Export Mode</p>
+                    
+                    {/* Current: Expo (selected) */}
+                    <div className="flex items-center gap-3 p-3 bg-neutral-900 border border-neutral-700 rounded-lg mb-2">
+                      <div className="w-4 h-4 rounded-full border-2 border-blue-500 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-neutral-300 text-sm font-medium">Expo</span>
+                        <span className="text-neutral-500 text-xs ml-2">Recommended</span>
+                      </div>
+                    </div>
+                    
+                    {/* Future: Capacitor (disabled) */}
+                    <button 
+                      disabled
+                      onClick={() => recordMetric('feature_interest_capacitor')}
+                      className="group w-full flex items-center gap-3 p-3 bg-neutral-900/50 border border-neutral-800 rounded-lg opacity-50 cursor-not-allowed relative"
+                      title="Native shell export with audited permissions. Available after launch."
+                    >
+                      <div className="w-4 h-4 rounded-full border-2 border-neutral-600" />
+                      <div className="flex-1 text-left">
+                        <span className="text-neutral-500 text-sm font-medium">Capacitor</span>
+                        <span className="text-neutral-600 text-xs ml-2">Native shell</span>
+                      </div>
+                      <span className="text-[10px] text-neutral-600 uppercase tracking-wide">Soon</span>
+                    </button>
+                  </div>
                 </>
               )}
               
@@ -377,6 +428,13 @@ export function PublishPanel() {
                         Exported At
                       </div>
                       <span className="text-neutral-300 text-sm">{result.exportedAt}</span>
+                    </div>
+                    
+                    {/* Export Proof Line - 5.1 */}
+                    <div className="pt-2 mt-2 border-t border-neutral-800">
+                      <span className="text-[10px] text-neutral-600">
+                        Includes audit ledger and verification proof
+                      </span>
                     </div>
                   </div>
                   

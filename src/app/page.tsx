@@ -1,4 +1,4 @@
-import { PremiumHero } from '@/components/landing'
+import { PremiumHero, PricingSection } from '@/components/landing'
 
 export default function Home() {
   return (
@@ -17,6 +17,7 @@ export default function Home() {
       {/* Main Content */}
       <main className="relative z-10">
         <PremiumHero />
+        <PricingSection />
       </main>
     </div>
   )
