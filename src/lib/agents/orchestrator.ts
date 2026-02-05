@@ -22,6 +22,7 @@ import { checkCircuitBreaker, calculateFuelCost, useFuelStore, type ModelTier as
 // Agent prompts
 import { AUDITOR_SYSTEM_PROMPT } from './prompts/auditor'
 import { ARCHITECT_SYSTEM_PROMPT } from './prompts/architect'
+import { BACKEND_SYSTEM_PROMPT } from './prompts/backend'
 import { PLANNER_SYSTEM_PROMPT } from './prompts/planner'
 import { STRATEGIST_SYSTEM_PROMPT } from './prompts/strategist'
 import { FRONTEND_SYSTEM_PROMPT } from './prompts/frontend'
@@ -141,13 +142,13 @@ function mapComplexityToLegacy(complexity: RoutingDecision['complexity']): 'high
 const AGENT_PROMPTS: Record<AgentId, string> = {
   architect: ARCHITECT_SYSTEM_PROMPT,
   frontend: FRONTEND_SYSTEM_PROMPT,
-  backend: `You are THE BACKEND AGENT. You build APIs, business logic, and server-side code...`,
-  database: `You are THE DATABASE AGENT. You design schemas, write migrations, and optimize queries...`,
+  backend: BACKEND_SYSTEM_PROMPT,           // Kimi K2.5: Fullstack Core (API + schemas)
+  database: BACKEND_SYSTEM_PROMPT,          // Merged with backend - same prompt
   devops: DEVOPS_SYSTEM_PROMPT,
   qa: QA_SYSTEM_PROMPT,
-  planner: PLANNER_SYSTEM_PROMPT,
-  strategist: STRATEGIST_SYSTEM_PROMPT, // GPT-5.2: Reviews plans, NEVER first mover
-  auditor: AUDITOR_SYSTEM_PROMPT,        // Opus: Judges quality, NEVER executes fixes
+  planner: PLANNER_SYSTEM_PROMPT,           // Kimi K2.5: Complex planning, dependency mapping
+  strategist: STRATEGIST_SYSTEM_PROMPT,     // GPT-5.2: Reviews plans, NEVER first mover
+  auditor: AUDITOR_SYSTEM_PROMPT,           // Opus: Judges quality, NEVER executes fixes
 }
 
 // ============================================

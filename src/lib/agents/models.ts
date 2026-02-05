@@ -88,11 +88,11 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   },
   'kimi': {
     provider: 'kimi',
-    model: 'moonshotai/kimi-k2-instruct',
-    description: 'Kimi K2.5 - multilingual powerhouse, complex reasoning',
+    model: 'moonshotai/kimi-k2.5',
+    description: 'Kimi K2.5 - Fullstack Core (Backend + Database), Complex Planning',
     costTier: 'standard',
-    inputCostPer1k: 0.0014,
-    outputCostPer1k: 0.0055,
+    inputCostPer1k: 0.00045,
+    outputCostPer1k: 0.0025,
   },
 }
 
@@ -111,17 +111,21 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  *   → NEVER the first mover - only approves/vetoes/amends
  *   → Read-only access, produces verdicts not code
  * 
- * PLANNER (Gemini Pro) - Plan Creator  
- *   → Creates plans, delegates to specialists
- *   → First mover for orchestration
+ * PLANNER (Kimi K2.5) - Complex Planning
+ *   → Dependency mapping, multi-step orchestration
+ *   → 256K context for full codebase understanding
+ *   → Self-directed agent swarm paradigm
  * 
  * ARCHITECT (Gemini Pro) - System Design
  *   → System architecture, file structure
- *   → Orchestrates multi-file builds
+ *   → High-level component organization
  * 
- * BUILDERS (Sonnet/Kimi) - Execution
- *   → Frontend: Claude Sonnet 4.5 (precision UI)
- *   → Backend: Kimi K2.5 (heavy API logic)
+ * BUILDERS - Execution
+ *   → Frontend: Claude Sonnet 4.5 (precision UI, pixel-perfect)
+ *   → Fullstack Core (Backend + Database): Kimi K2.5
+ *     • Owns full data layer vertically
+ *     • Schema + API in sync (no drift)
+ *     • Query optimization (knows access patterns)
  * 
  * FAST OPS (Gemini Flash) - Iteration
  *   → DevOps, QA loops, cheap iteration
@@ -129,20 +133,18 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * AUDITOR (Claude Opus 4.5) - Quality Gate
  *   → Deep inspection, critical path safety
  *   → JUDGES ONLY - does not fix freely
- *   → Produces verdicts + bounded recommendations
- *   → ❌ No endless iteration
- *   → ❌ No refactoring large surfaces
+ *   → Different brain than builders (catches what they miss)
  * 
  * COST RULE: GPT-5.2 + Opus combined < 10% of total tokens
  * ═══════════════════════════════════════════════════════════════
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  architect: 'gemini-pro',       // System design, orchestration
-  planner: 'gemini-pro',         // Plan CREATION (not validation)
+  architect: 'gemini-pro',       // System design, file structure
+  planner: 'kimi',               // Complex planning, dependency mapping (Kimi K2.5)
   strategist: 'gpt-5.2',         // Plan VALIDATION (reviews planner output)
   frontend: 'claude-sonnet',     // Precision UI builds
-  backend: 'kimi',               // Heavy API/backend execution
-  database: 'gemini-pro',        // Large schema context
+  backend: 'kimi',               // Fullstack Core: APIs + business logic (Kimi K2.5)
+  database: 'kimi',              // Merged with backend: schemas + queries (Kimi K2.5)
   devops: 'gemini-flash',        // Fast config/deploy loops
   qa: 'gemini-flash',            // Quick test cycles
   auditor: 'claude-opus',        // Deep inspection, quality gate (JUDGE ONLY)
