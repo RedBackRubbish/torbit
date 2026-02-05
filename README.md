@@ -320,6 +320,10 @@ The Auditor implements a "hold and finalize" pattern:
 
 Users only pay for working code.
 
+### Security
+
+Torbit never commits or echoes secrets to the filesystem or terminal output. API keys are server-side only.
+
 ---
 
 ## Tech Stack
