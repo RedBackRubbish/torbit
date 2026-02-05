@@ -45,6 +45,7 @@ const TIERS: PricingTier[] = [
     features: [
       'All AI models',
       'Unlimited projects',
+      'Live preview in browser',
       'Export to GitHub',
       'Audit ledger included',
     ],
@@ -60,10 +61,9 @@ const TIERS: PricingTier[] = [
     fuelNote: 'per month',
     description: 'For builders who ship regularly.',
     features: [
-      'All AI models',
-      'Unlimited projects',
-      'Export to GitHub',
-      'Audit ledger included',
+      'Everything in Free',
+      'Export to Xcode (iOS)',
+      'Deploy to Vercel & Netlify',
       'Buy fuel packs anytime',
       'Priority support',
     ],
