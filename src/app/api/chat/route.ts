@@ -19,6 +19,7 @@ import { AUDITOR_SYSTEM_PROMPT } from '@/lib/agents/prompts/auditor'
 import { PLANNER_SYSTEM_PROMPT } from '@/lib/agents/prompts/planner'
 import { GOD_PROMPT } from '@/lib/agents/prompts/god-prompt'
 import { getMobileSystemPrompt } from '@/lib/mobile/prompts'
+import { getDesignGuidance } from '@/lib/design/system'
 import type { MobileCapabilities, MobileProjectConfig } from '@/lib/mobile/types'
 import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 
@@ -229,7 +230,15 @@ export async function POST(req: Request) {
       }
       systemPrompt = getMobileSystemPrompt(mobileConfig)
     } else {
-      systemPrompt = AGENT_PROMPTS[agentId] || AGENT_PROMPTS.architect
+      // Get base agent prompt
+      const basePrompt = AGENT_PROMPTS[agentId] || AGENT_PROMPTS.architect
+      
+      // Inject design guidance based on user's message
+      const userMessage = messages[messages.length - 1]?.content || ''
+      const designGuidance = getDesignGuidance(userMessage)
+      
+      // Combine base prompt with design guidance
+      systemPrompt = `${basePrompt}\n\n${designGuidance}`
     }
     const complexity = analyzeTaskComplexity(messages)
     const model = getModelForTask(agentId as AgentId, complexity)
