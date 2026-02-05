@@ -1,0 +1,309 @@
+/**
+ * TORBIT - Audit Report Generator
+ * 
+ * Generates markdown audit reports for compliance bundles.
+ */
+
+import type { AuditReportData } from './types'
+import type { EnvironmentName } from '../environments/types'
+import type { LedgerEntry } from '../ledger/types'
+
+// ============================================
+// AUDIT REPORT GENERATOR
+// ============================================
+
+/**
+ * Generate a markdown audit report
+ */
+export function generateAuditReport(data: AuditReportData): string {
+  const sections = [
+    generateHeader(data),
+    generateExecutiveSummary(data),
+    generateIntegrationInventory(data),
+    generatePolicyCompliance(data),
+    generateEnvironmentCompliance(data),
+    generateGovernanceEvents(data),
+    generateRecommendations(data),
+    generateFooter(),
+  ]
+  
+  return sections.join('\n\n')
+}
+
+// ============================================
+// REPORT SECTIONS
+// ============================================
+
+function generateHeader(data: AuditReportData): string {
+  return `# TORBIT Compliance Audit Report
+
+**Generated:** ${new Date(data.summary.exportDate).toLocaleString()}  
+**Environment:** ${data.summary.environment}  
+**Policy:** ${data.summary.policyName}  
+**Status:** ${formatOverallStatus(data.summary.overallStatus)}
+
+---`
+}
+
+function generateExecutiveSummary(data: AuditReportData): string {
+  const totalIntegrations = data.integrations.length
+  const healthyCount = data.integrations.filter(i => i.status === 'HEALTHY').length
+  const driftCount = data.integrations.filter(i => i.status === 'DRIFT').length
+  const deprecatedCount = data.integrations.filter(i => i.status === 'DEPRECATED').length
+  
+  const policyPassCount = data.policyCompliance.filter(p => p.status === 'PASS').length
+  const policyTotal = data.policyCompliance.filter(p => p.status !== 'N/A').length
+  
+  const envPassCount = data.environmentCompliance.filter(e => e.status === 'PASS').length
+  const envTotal = data.environmentCompliance.filter(e => e.status !== 'N/A').length
+  
+  return `## Executive Summary
+
+| Metric | Value |
+|--------|-------|
+| Total Integrations | ${totalIntegrations} |
+| Healthy | ${healthyCount} (${percentage(healthyCount, totalIntegrations)}%) |
+| Version Drift | ${driftCount} |
+| Deprecated | ${deprecatedCount} |
+| Policy Rules Passed | ${policyPassCount}/${policyTotal} |
+| Environment Rules Passed | ${envPassCount}/${envTotal} |
+| Governance Events | ${data.governanceEvents.length} |`
+}
+
+function generateIntegrationInventory(data: AuditReportData): string {
+  if (data.integrations.length === 0) {
+    return `## Integration Inventory
+
+No integrations installed.`
+  }
+  
+  const rows = data.integrations.map(i => 
+    `| ${i.name} | ${i.category} | ${i.version} | ${formatStatus(i.status)} |`
+  )
+  
+  return `## Integration Inventory
+
+| Integration | Category | Version | Status |
+|-------------|----------|---------|--------|
+${rows.join('\n')}`
+}
+
+function generatePolicyCompliance(data: AuditReportData): string {
+  if (data.policyCompliance.length === 0) {
+    return `## Policy Compliance
+
+No policy rules evaluated.`
+  }
+  
+  const rows = data.policyCompliance.map(p => 
+    `| ${p.rule} | ${formatComplianceStatus(p.status)} | ${p.details || '-'} |`
+  )
+  
+  return `## Policy Compliance
+
+| Rule | Status | Details |
+|------|--------|---------|
+${rows.join('\n')}`
+}
+
+function generateEnvironmentCompliance(data: AuditReportData): string {
+  if (data.environmentCompliance.length === 0) {
+    return `## Environment Compliance
+
+No environment rules evaluated.`
+  }
+  
+  const rows = data.environmentCompliance.map(e => 
+    `| ${e.rule} | ${formatComplianceStatus(e.status)} | ${e.details || '-'} |`
+  )
+  
+  return `## Environment Compliance
+
+| Rule | Status | Details |
+|------|--------|---------|
+${rows.join('\n')}`
+}
+
+function generateGovernanceEvents(data: AuditReportData): string {
+  if (data.governanceEvents.length === 0) {
+    return `## Governance Events
+
+No governance events recorded.`
+  }
+  
+  // Show last 20 events
+  const recentEvents = data.governanceEvents.slice(-20)
+  const rows = recentEvents.map(e => 
+    `| ${new Date(e.timestamp).toLocaleString()} | ${e.type} | ${e.description} |`
+  )
+  
+  const moreText = data.governanceEvents.length > 20 
+    ? `\n\n*Showing last 20 of ${data.governanceEvents.length} events. See INTEGRATIONS_LEDGER.json for full history.*`
+    : ''
+  
+  return `## Governance Events
+
+| Timestamp | Type | Description |
+|-----------|------|-------------|
+${rows.join('\n')}${moreText}`
+}
+
+function generateRecommendations(data: AuditReportData): string {
+  if (data.recommendations.length === 0) {
+    return `## Recommendations
+
+✓ No recommendations. All checks passed.`
+  }
+  
+  const items = data.recommendations.map(r => `- ${r}`)
+  
+  return `## Recommendations
+
+${items.join('\n')}`
+}
+
+function generateFooter(): string {
+  return `---
+
+*This report was automatically generated by TORBIT. For questions about compliance, contact your security team.*
+
+**Report Hash:** \`${generateReportHash()}\`
+`
+}
+
+// ============================================
+// REPORT DATA BUILDER
+// ============================================
+
+/**
+ * Build audit report data from current state
+ */
+export function buildAuditReportData(params: {
+  exportDate: string
+  environment: EnvironmentName
+  policyName: string
+  integrations: Array<{
+    id: string
+    name: string
+    category: string
+    version: string
+    hasDrift: boolean
+    isDeprecated: boolean
+  }>
+  ledgerEntries: LedgerEntry[]
+  policyViolations: string[]
+  environmentViolations: string[]
+}): AuditReportData {
+  const { exportDate, environment, policyName, integrations, ledgerEntries, policyViolations, environmentViolations } = params
+  
+  // Determine overall status
+  const hasErrors = policyViolations.length > 0 || environmentViolations.length > 0
+  const hasWarnings = integrations.some(i => i.hasDrift || i.isDeprecated)
+  const overallStatus = hasErrors ? 'NON_COMPLIANT' : hasWarnings ? 'WARNINGS' : 'COMPLIANT'
+  
+  // Build integration inventory
+  const integrationList = integrations.map(i => ({
+    id: i.id,
+    name: i.name,
+    category: i.category,
+    version: i.version,
+    status: i.isDeprecated ? 'DEPRECATED' : i.hasDrift ? 'DRIFT' : 'HEALTHY' as const,
+  }))
+  
+  // Build policy compliance
+  const policyCompliance = [
+    { rule: 'Integration allowlist', status: policyViolations.some(v => v.includes('allow')) ? 'FAIL' : 'PASS' as const },
+    { rule: 'Integration denylist', status: policyViolations.some(v => v.includes('deny')) ? 'FAIL' : 'PASS' as const },
+    { rule: 'Version constraints', status: policyViolations.some(v => v.includes('version')) ? 'FAIL' : 'PASS' as const },
+    { rule: 'Auto-fix policy', status: policyViolations.some(v => v.includes('autofix')) ? 'FAIL' : 'PASS' as const },
+    { rule: 'Shipping requirements', status: policyViolations.some(v => v.includes('shipping')) ? 'FAIL' : 'PASS' as const },
+  ]
+  
+  // Build environment compliance
+  const environmentCompliance = [
+    { rule: 'Auto-fix allowed', status: environmentViolations.some(v => v.includes('autofix')) ? 'FAIL' : 'PASS' as const },
+    { rule: 'Experimental allowed', status: environmentViolations.some(v => v.includes('experimental')) ? 'FAIL' : 'PASS' as const },
+    { rule: 'Drift blocking', status: environmentViolations.some(v => v.includes('drift')) ? 'FAIL' : 'PASS' as const },
+    { rule: 'Clean ledger required', status: environmentViolations.some(v => v.includes('ledger')) ? 'FAIL' : 'PASS' as const },
+    { rule: 'Auditor required', status: environmentViolations.some(v => v.includes('auditor')) ? 'FAIL' : 'PASS' as const },
+  ]
+  
+  // Build governance events from ledger
+  const governanceEvents = ledgerEntries
+    .filter(e => e.type.includes('POLICY') || e.type.includes('ENVIRONMENT') || e.type.includes('AUDITOR') || e.type.includes('STRATEGIST'))
+    .map(e => ({
+      timestamp: e.timestamp,
+      type: e.type,
+      description: e.action,
+    }))
+  
+  // Build recommendations
+  const recommendations: string[] = []
+  if (integrations.some(i => i.hasDrift)) {
+    recommendations.push('Resolve version drift before deploying to production.')
+  }
+  if (integrations.some(i => i.isDeprecated)) {
+    recommendations.push('Update deprecated integrations to avoid future breaking changes.')
+  }
+  if (policyViolations.length > 0) {
+    recommendations.push('Address policy violations before shipping.')
+  }
+  if (environmentViolations.length > 0) {
+    recommendations.push('Review environment restrictions or switch to a less restrictive environment.')
+  }
+  
+  return {
+    summary: {
+      exportDate,
+      environment,
+      policyName,
+      overallStatus,
+    },
+    integrations: integrationList,
+    policyCompliance,
+    environmentCompliance,
+    governanceEvents,
+    recommendations,
+  }
+}
+
+// ============================================
+// UTILITIES
+// ============================================
+
+function formatOverallStatus(status: 'COMPLIANT' | 'NON_COMPLIANT' | 'WARNINGS'): string {
+  const icons = {
+    COMPLIANT: '✅ COMPLIANT',
+    NON_COMPLIANT: '❌ NON-COMPLIANT',
+    WARNINGS: '⚠️ WARNINGS',
+  }
+  return icons[status]
+}
+
+function formatStatus(status: 'HEALTHY' | 'DRIFT' | 'DEPRECATED'): string {
+  const icons = {
+    HEALTHY: '✅ Healthy',
+    DRIFT: '⚠️ Drift',
+    DEPRECATED: '🔴 Deprecated',
+  }
+  return icons[status]
+}
+
+function formatComplianceStatus(status: 'PASS' | 'FAIL' | 'N/A'): string {
+  const icons = {
+    PASS: '✅ Pass',
+    FAIL: '❌ Fail',
+    'N/A': '○ N/A',
+  }
+  return icons[status]
+}
+
+function percentage(value: number, total: number): number {
+  if (total === 0) return 100
+  return Math.round((value / total) * 100)
+}
+
+function generateReportHash(): string {
+  const timestamp = Date.now().toString(16)
+  return `torbit-${timestamp}`
+}

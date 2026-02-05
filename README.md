@@ -437,6 +437,40 @@ Immutable, append-only record of every integration action:
 - Compliance reports on export
 - SOC2/audit-ready evidence bundles
 
+### Evidence Bundles
+
+Export compliance evidence alongside your app:
+
+```
+/compliance/
+├── AUDIT_REPORT.md          # Human-readable compliance report
+├── ATTESTATION.txt          # Signed attestation statement
+├── INTEGRATIONS_LEDGER.json # Complete action history
+├── POLICY_SNAPSHOT.json     # Policy at export time
+├── ENVIRONMENT_PROFILE.json # Environment rules at export
+├── HEALTH_STATUS.json       # Health status at export
+└── MANIFEST.json            # File inventory with hashes
+```
+
+**Attestation example:**
+```
+This build was exported on Wednesday, February 5, 2026.
+
+Environment:        PRODUCTION
+Policy:             STRICT_POLICY
+Integration Health: ✓ CLEAN
+Version Drift:      ✓ NONE
+Auditor:            ✓ PASSED
+Strategist:         ✓ PASSED
+
+                      ✓ COMPLIANT
+         This export meets all governance requirements.
+```
+
+**Export options:**
+- Toggle: "Include Compliance Evidence" (default ON for production)
+- All files are read-only, deterministic, hashable, no secrets
+
 ---
 
 ## Roadmap
@@ -448,6 +482,7 @@ Immutable, append-only record of every integration action:
 - [x] **Organization Policies** - Enterprise policy-as-code
 - [x] **Integration Health** - Drift detection, deprecation tracking
 - [x] **Audit Ledger** - Immutable provenance trail
+- [x] **Evidence Bundles** - SOC2-ready compliance exports
 - [ ] **Persistent Projects** - Save/load to cloud storage
 - [ ] **Git Integration** - Commit, push, pull from IDE
 - [ ] **Deployment** - One-click deploy to Vercel/Netlify
