@@ -11,6 +11,8 @@ import { InspectorView, type ActivityEntry } from './governance'
 import { TorbitLogo } from '@/components/ui/TorbitLogo'
 import { useWebContainerContext } from '@/providers/WebContainerProvider'
 import { VerificationDetailDrawer, type VerificationData } from './governance/VerificationDetailDrawer'
+import { ActivityLedgerTimeline } from './governance/ActivityLedgerTimeline'
+import { useLedger, generateLedgerHash } from '@/store/ledger'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
@@ -32,6 +34,14 @@ export default function ChatPanel() {
   const [showVerificationDrawer, setShowVerificationDrawer] = useState(false)
   
   const { isBooting, isReady, serverUrl, error, verification } = useWebContainerContext()
+  
+  // Activity Ledger
+  const { 
+    recordIntent, 
+    recordArtifactsGenerated, 
+    recordVerificationPassed,
+    getPhaseStatus,
+  } = useLedger()
   
   const { 
     chatCollapsed, 
@@ -255,6 +265,40 @@ export default function ChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // ============================================================================
+  // Activity Ledger Recording
+  // ============================================================================
+  
+  // Record intent when user submits first message
+  useEffect(() => {
+    if (messages.length > 0 && getPhaseStatus('describe') === 'pending') {
+      const userMessage = messages.find(m => m.role === 'user')
+      if (userMessage?.content) {
+        recordIntent(generateLedgerHash(userMessage.content))
+      }
+    }
+  }, [messages, getPhaseStatus, recordIntent])
+  
+  // Record artifacts generated when files are added
+  useEffect(() => {
+    if (files.length > 0 && getPhaseStatus('build') === 'pending' && !isLoading) {
+      recordArtifactsGenerated(
+        files.length,
+        files.map(f => f.path)
+      )
+    }
+  }, [files, getPhaseStatus, isLoading, recordArtifactsGenerated])
+  
+  // Record verification passed when server is ready
+  useEffect(() => {
+    if (serverUrl && verification.containerHash && verification.lockfileHash && getPhaseStatus('verify') === 'pending') {
+      recordVerificationPassed(
+        verification.containerHash,
+        verification.lockfileHash
+      )
+    }
+  }, [serverUrl, verification, getPhaseStatus, recordVerificationPassed])
+
   // Auto-fix errors
   useEffect(() => {
     const handlePain = (e: CustomEvent<PainSignal>) => {
@@ -380,6 +424,9 @@ export default function ChatPanel() {
               hasFiles={files.length > 0}
               onOpenVerification={() => setShowVerificationDrawer(true)}
             />
+            
+            {/* Activity Ledger Timeline - Below status rail, above input */}
+            <ActivityLedgerTimeline className="mt-2 pt-2 border-t border-[#101010]" />
           </motion.div>
         )}
       </AnimatePresence>
