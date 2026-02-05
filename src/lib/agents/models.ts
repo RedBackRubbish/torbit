@@ -89,7 +89,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'kimi': {
     provider: 'kimi',
     model: 'moonshotai/kimi-k2.5',
-    description: 'Kimi K2.5 - Builder Boss (Planner + Architect + Backend/DB)',
+    description: 'Kimi K2.5 - Planner + Fullstack Core (Backend/DB)',
     costTier: 'standard',
     inputCostPer1k: 0.00045,
     outputCostPer1k: 0.0025,
@@ -118,31 +118,24 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  *   → JUDGES ONLY - does not fix freely
  *   → Different brain than builders (catches what they miss)
  * 
- * KIMI BUILDER BOSS (3 roles, 1 brain, 0 handoff errors)
- * ───────────────────────────────────────────────────────
+ * BUILDER LAYER (Cognitive Diversity)
+ * ────────────────────────────────────
  * PLANNER (Kimi K2.5) - Orchestration
  *   → Designs API contracts, dependency mapping
  *   → 256K context for full codebase understanding
- *   → Leaves "BUILDER CONTEXT" summary for next role
+ *   → Leaves "BUILDER CONTEXT" summary for handoffs
  * 
- * ARCHITECT (Kimi K2.5) - System Design
- *   → File structure knowing the API contract
- *   → Same context window as Planner (zero handoff loss)
- *   → High-level component organization
+ * ARCHITECT (Gemini 3 Pro) - System Design [DIFFERENT BRAIN]
+ *   → File structure, component organization
+ *   → Different perspective catches Planner blind spots
+ *   → Validates structure before implementation
  * 
- * BACKEND/DB (Kimi K2.5) - Implementation
- *   → Implements knowing both plan AND structure
+ * FULLSTACK CORE (Kimi K2.5) - Implementation
+ *   → Backend + Database merged vertical
  *   → Schema + API stay in sync (no drift)
  *   → Query optimization (knows access patterns)
  * 
- * WHY KIMI DOMINATES BUILD PATH:
- *   • Context coherence: Same session across roles
- *   • Cost: 3 Kimi roles cheaper than 1 Opus role
- *   • Speed: No "review previous agent's work" delays
- * 
- * NON-KIMI BUILDERS
- * ─────────────────
- * FRONTEND (Claude Sonnet 4.5)
+ * FRONTEND (Claude Sonnet 4.5) - UI [DIFFERENT BRAIN]
  *   → Visual/spatial reasoning - different modality
  *   → Precision UI, pixel-perfect implementation
  * 
@@ -150,18 +143,20 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  *   → DevOps, QA loops - speed > reasoning
  *   → Cheap iteration, self-healing tests
  * 
+ * COGNITIVE DIVERSITY RULE:
+ *   Planner → Architect → Backend uses 2 different brains
+ *   Same blind spot won't propagate through entire pipeline
+ * 
  * COST RULE: GPT-5.2 + Opus combined < 10% of total tokens
  * ═══════════════════════════════════════════════════════════════
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  // KIMI BUILDER BOSS - 3 roles, 1 brain, 0 handoff errors
+  // BUILDER LAYER - cognitive diversity
   planner: 'kimi',               // Orchestration, API contracts (Kimi K2.5)
-  architect: 'kimi',             // System design, file structure (Kimi K2.5)
+  architect: 'gemini-pro',       // System design - DIFFERENT BRAIN from Planner
   backend: 'kimi',               // APIs + business logic (Kimi K2.5)
   database: 'kimi',              // Schemas + queries (Kimi K2.5)
-  
-  // NON-KIMI BUILDERS - different modalities
-  frontend: 'claude-sonnet',     // Visual/spatial reasoning
+  frontend: 'claude-sonnet',     // Visual/spatial reasoning - DIFFERENT BRAIN
   devops: 'gemini-flash',        // Fast config/deploy loops
   qa: 'gemini-flash',            // Quick test cycles
   
