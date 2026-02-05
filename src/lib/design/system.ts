@@ -241,13 +241,13 @@ export const ANTI_PATTERNS = [
 // Senior designers spend more time removing than adding.
 
 export const DESIGN_DECISION_HIERARCHY = [
-  'Clarity over density — if it's not immediately understandable, simplify',
-  'Structure before decoration — layout and hierarchy first, styling second',
-  'Fewer components over richer components — one good component beats three mediocre ones',
-  'Remove before adding — can you achieve the same with less?',
-  'One primary action per screen — don't compete for attention',
-  'Obvious over clever — if you need to explain it, redesign it',
-  'Content before chrome — UI should serve content, not overshadow it',
+  'Clarity over density - if it is not immediately understandable, simplify',
+  'Structure before decoration - layout and hierarchy first, styling second',
+  'Fewer components over richer components - one good component beats three mediocre ones',
+  'Remove before adding - can you achieve the same with less?',
+  'One primary action per screen - do not compete for attention',
+  'Obvious over clever - if you need to explain it, redesign it',
+  'Content before chrome - UI should serve content, not overshadow it',
 ] as const
 
 // ============================================================================
@@ -639,13 +639,15 @@ export function getDesignGuidance(userPrompt: string): string {
   const lowerPrompt = userPrompt.toLowerCase()
   
   // Detect style from user prompt
-  let preset = DESIGN_PRESETS.premiumDark
+  let presetKey: keyof typeof DESIGN_PRESETS = 'premiumDark'
   
   if (lowerPrompt.includes('light') || lowerPrompt.includes('clean') || lowerPrompt.includes('minimal')) {
-    preset = DESIGN_PRESETS.cleanLight
+    presetKey = 'cleanLight'
   } else if (lowerPrompt.includes('saas') || lowerPrompt.includes('dashboard') || lowerPrompt.includes('enterprise')) {
-    preset = DESIGN_PRESETS.saasProf
+    presetKey = 'saasProf'
   }
+  
+  const preset = DESIGN_PRESETS[presetKey]
   
   // Detect screen intent and density
   const screenIntent = detectScreenIntent(userPrompt)

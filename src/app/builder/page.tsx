@@ -45,9 +45,21 @@ function BuilderPageContent() {
 
   useEffect(() => {
     const storedPrompt = sessionStorage.getItem('torbit_prompt')
+    const storedCapabilityContext = sessionStorage.getItem('torbit_capability_context')
+    
     if (storedPrompt && !prompt) {
-      initProject(storedPrompt)
+      // If capabilities were selected, enhance the prompt with context
+      const enhancedPrompt = storedCapabilityContext 
+        ? `${storedPrompt}\n\n${storedCapabilityContext}`
+        : storedPrompt
+      
+      initProject(enhancedPrompt)
+      
+      // Clean up session storage
       sessionStorage.removeItem('torbit_prompt')
+      sessionStorage.removeItem('torbit_platform')
+      sessionStorage.removeItem('torbit_capabilities')
+      sessionStorage.removeItem('torbit_capability_context')
     }
   }, [initProject, prompt])
 

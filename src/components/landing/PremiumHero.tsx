@@ -5,6 +5,21 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { TorbitLogo } from '@/components/ui/TorbitLogo'
+import { 
+  CreditCard, Shield, Database, Mail, Sparkles, HardDrive, MapPin, BarChart3, Plus, X, ChevronDown
+} from 'lucide-react'
+import { 
+  INTEGRATION_CAPABILITIES, 
+  PRIMARY_CAPABILITIES, 
+  SECONDARY_CAPABILITIES,
+  getCapabilityContext,
+  type IntegrationCapability 
+} from '@/lib/integrations/capabilities'
+
+// Icon mapping
+const CAPABILITY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  CreditCard, Shield, Database, Mail, Sparkles, HardDrive, MapPin, BarChart3
+}
 
 const PLACEHOLDER_EXAMPLES = [
   "A SaaS dashboard with user analytics...",
@@ -28,9 +43,32 @@ export default function PremiumHero() {
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [displayPlaceholder, setDisplayPlaceholder] = useState('')
   const [isTypingPlaceholder, setIsTypingPlaceholder] = useState(true)
+  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([])
+  const [showMoreCapabilities, setShowMoreCapabilities] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const moreRef = useRef<HTMLDivElement>(null)
   
   const isLoggedIn = !authLoading && !!user
+
+  // Close "More" dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
+        setShowMoreCapabilities(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const toggleCapability = (id: string) => {
+    setSelectedCapabilities(prev => 
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    )
+  }
+
+  const getCapabilityById = (id: string): IntegrationCapability | undefined => 
+    INTEGRATION_CAPABILITIES.find(c => c.id === id)
 
   useEffect(() => {
     const timer = setTimeout(() => setShowContent(true), 400)
@@ -75,6 +113,8 @@ export default function PremiumHero() {
       if (prompt.trim()) {
         sessionStorage.setItem('torbit_prompt', prompt)
         sessionStorage.setItem('torbit_platform', platform)
+        sessionStorage.setItem('torbit_capabilities', JSON.stringify(selectedCapabilities))
+        sessionStorage.setItem('torbit_capability_context', getCapabilityContext(selectedCapabilities))
         router.push('/builder')
       }
     }
@@ -85,6 +125,8 @@ export default function PremiumHero() {
     if (prompt.trim()) {
       sessionStorage.setItem('torbit_prompt', prompt)
       sessionStorage.setItem('torbit_platform', platform)
+      sessionStorage.setItem('torbit_capabilities', JSON.stringify(selectedCapabilities))
+      sessionStorage.setItem('torbit_capability_context', getCapabilityContext(selectedCapabilities))
       router.push('/builder')
     }
   }
@@ -255,6 +297,120 @@ export default function PremiumHero() {
                     </button>
                   </div>
                 </form>
+
+                {/* Capability Chips */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5, delay: 0.35 }}
+                  className="mt-4"
+                >
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {/* Primary capabilities */}
+                    {PRIMARY_CAPABILITIES.map(id => {
+                      const cap = getCapabilityById(id)
+                      if (!cap) return null
+                      const Icon = CAPABILITY_ICONS[cap.icon]
+                      const isSelected = selectedCapabilities.includes(id)
+                      
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => toggleCapability(id)}
+                          className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-white/10 text-white border border-white/20'
+                              : 'bg-white/[0.03] text-white/40 border border-white/[0.06] hover:bg-white/[0.06] hover:text-white/60 hover:border-white/10'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <X className="w-3 h-3" />
+                          ) : (
+                            <Plus className="w-3 h-3 opacity-50 group-hover:opacity-100" />
+                          )}
+                          {Icon && <Icon className="w-3.5 h-3.5" />}
+                          {cap.label}
+                        </button>
+                      )
+                    })}
+                    
+                    {/* More dropdown */}
+                    <div ref={moreRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowMoreCapabilities(!showMoreCapabilities)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium 
+                          bg-white/[0.03] text-white/40 border border-white/[0.06] 
+                          hover:bg-white/[0.06] hover:text-white/60 hover:border-white/10 transition-all"
+                      >
+                        More
+                        <ChevronDown className={`w-3 h-3 transition-transform ${showMoreCapabilities ? 'rotate-180' : ''}`} />
+                      </button>
+                      
+                      <AnimatePresence>
+                        {showMoreCapabilities && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute top-full mt-2 right-0 z-50 min-w-[160px] 
+                              bg-neutral-900 border border-white/10 rounded-xl p-1.5 shadow-xl"
+                          >
+                            {SECONDARY_CAPABILITIES.map(id => {
+                              const cap = getCapabilityById(id)
+                              if (!cap) return null
+                              const Icon = CAPABILITY_ICONS[cap.icon]
+                              const isSelected = selectedCapabilities.includes(id)
+                              
+                              return (
+                                <button
+                                  key={id}
+                                  type="button"
+                                  onClick={() => toggleCapability(id)}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                    isSelected
+                                      ? 'bg-white/10 text-white'
+                                      : 'text-white/50 hover:bg-white/[0.06] hover:text-white/80'
+                                  }`}
+                                >
+                                  {Icon && <Icon className="w-3.5 h-3.5" />}
+                                  {cap.label}
+                                  {isSelected && (
+                                    <svg className="w-3.5 h-3.5 ml-auto text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                  
+                  {/* Selected capabilities indicator */}
+                  <AnimatePresence>
+                    {selectedCapabilities.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="flex items-center justify-center gap-2 mt-3 text-xs"
+                      >
+                        <span className="text-white/30">Building with:</span>
+                        <span className="text-white/60">
+                          {selectedCapabilities.map(id => getCapabilityById(id)?.label).join(' · ')}
+                        </span>
+                        <span className="text-white/20">·</span>
+                        <span className="text-emerald-400/60 text-[11px]">simulated</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
 
                 {/* Trust Indicators Below Input */}
                 <motion.div
