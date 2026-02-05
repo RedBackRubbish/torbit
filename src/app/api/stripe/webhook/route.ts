@@ -157,14 +157,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const status = mapStripeStatus(subscription.status)
         const tier = subscription.metadata?.tier as SubscriptionTier || 'pro'
 
+        // Get period dates from the first subscription item (new Stripe API)
+        const firstItem = subscription.items.data[0]
+        const currentPeriodStart = firstItem?.current_period_start
+        const currentPeriodEnd = firstItem?.current_period_end
+
         await supabase
           .from('subscriptions')
           .update({
             status,
             tier,
-            stripe_price_id: subscription.items.data[0]?.price.id,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            stripe_price_id: firstItem?.price.id,
+            current_period_start: currentPeriodStart 
+              ? new Date(currentPeriodStart * 1000).toISOString() 
+              : undefined,
+            current_period_end: currentPeriodEnd 
+              ? new Date(currentPeriodEnd * 1000).toISOString() 
+              : undefined,
             cancel_at_period_end: subscription.cancel_at_period_end,
             monthly_fuel_allowance: TIER_CONFIG[tier].fuelAllowance,
           })
@@ -210,8 +219,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice
         
-        // Skip if not a subscription invoice
-        if (!invoice.subscription) break
+        // Skip if not a subscription invoice (new Stripe API uses parent.subscription_details)
+        const subscriptionId = invoice.parent?.subscription_details?.subscription
+        if (!subscriptionId) break
 
         const { data: customerRecord } = await supabase
           .from('stripe_customers')
@@ -253,7 +263,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
         
-        if (!invoice.subscription) break
+        // Skip if not a subscription invoice (new Stripe API uses parent.subscription_details)
+        const subscriptionId = invoice.parent?.subscription_details?.subscription
+        if (!subscriptionId) break
 
         const { data: customerRecord } = await supabase
           .from('stripe_customers')
@@ -298,6 +310,11 @@ async function handleSubscriptionCreated(
   tier: SubscriptionTier
 ) {
   const fuelAllowance = TIER_CONFIG[tier].fuelAllowance
+  
+  // Get period dates from the first subscription item (new Stripe API)
+  const firstItem = subscription.items.data[0]
+  const currentPeriodStart = firstItem?.current_period_start
+  const currentPeriodEnd = firstItem?.current_period_end
 
   // Update or create subscription record
   await supabase
@@ -305,12 +322,16 @@ async function handleSubscriptionCreated(
     .upsert({
       user_id: userId,
       stripe_subscription_id: subscription.id,
-      stripe_price_id: subscription.items.data[0]?.price.id,
+      stripe_price_id: firstItem?.price.id,
       tier,
       status: mapStripeStatus(subscription.status),
       monthly_fuel_allowance: fuelAllowance,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      current_period_start: currentPeriodStart 
+        ? new Date(currentPeriodStart * 1000).toISOString()
+        : new Date().toISOString(),
+      current_period_end: currentPeriodEnd 
+        ? new Date(currentPeriodEnd * 1000).toISOString()
+        : new Date().toISOString(),
       cancel_at_period_end: subscription.cancel_at_period_end,
       trial_end: subscription.trial_end 
         ? new Date(subscription.trial_end * 1000).toISOString() 

@@ -9,6 +9,7 @@ import { useTerminalStore } from '@/store/terminal'
 import { NervousSystem } from '@/lib/nervous-system'
 import { IPhoneFrame, BrowserFrame } from './DeviceFrame'
 import { DEVICE_PRESETS } from '@/lib/mobile/types'
+import { TorbitSpinner, TorbitLogo } from '@/components/ui/TorbitLogo'
 
 // ============================================================================
 // Device Preset Selector
@@ -104,11 +105,12 @@ const CodeEditor = dynamic(() => import('./CodeEditor'), {
  * PreviewPanel - Clean, minimal preview with WebContainer
  */
 export default function PreviewPanel() {
-  const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, projectType } = useBuilderStore()
+  const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, projectType, chatInput, isGenerating } = useBuilderStore()
   const { isBooting, isReady, serverUrl, error, isSupported } = useWebContainer()
   const terminalLines = useTerminalStore((s) => s.lines)
-  const [showTerminal, setShowTerminal] = useState(false)
+  const [showRuntimeLog, setShowRuntimeLog] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const wasBootingRef = useRef(false)
   
   useEffect(() => {
     setIsMounted(true)
@@ -122,17 +124,29 @@ export default function PreviewPanel() {
 
   const prevLinesLength = useRef(terminalLines.length)
   
+  // Auto-expand during boot, auto-collapse after environment verified
   useEffect(() => {
     const hasNewActivity = terminalLines.length > prevLinesLength.current
     prevLinesLength.current = terminalLines.length
     
+    // Expand during boot
     if (hasNewActivity && isBooting) {
+      wasBootingRef.current = true
       const frameId = requestAnimationFrame(() => {
-        setShowTerminal(true)
+        setShowRuntimeLog(true)
       })
       return () => cancelAnimationFrame(frameId)
     }
-  }, [terminalLines.length, isBooting])
+    
+    // Auto-collapse 1.5s after environment is ready
+    if (wasBootingRef.current && isReady && !isBooting) {
+      wasBootingRef.current = false
+      const timeout = setTimeout(() => {
+        setShowRuntimeLog(false)
+      }, 1500)
+      return () => clearTimeout(timeout)
+    }
+  }, [terminalLines.length, isBooting, isReady])
 
   return (
     <div className="flex-1 flex flex-col bg-[#000000] overflow-hidden">
@@ -181,19 +195,19 @@ export default function PreviewPanel() {
 
             {/* Right Controls */}
             <div className="flex items-center gap-1.5">
-              {/* Terminal toggle */}
+              {/* Runtime Log toggle */}
               <button
-                onClick={() => setShowTerminal(!showTerminal)}
+                onClick={() => setShowRuntimeLog(!showRuntimeLog)}
                 className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-all ${
-                  showTerminal
+                  showRuntimeLog
                     ? 'bg-[#0f0f0f] text-[#c0c0c0]'
                     : 'text-[#505050] hover:text-[#808080]'
                 }`}
               >
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                 </svg>
-                Terminal
+                Log
               </button>
 
               {/* Refresh */}
@@ -234,7 +248,7 @@ export default function PreviewPanel() {
           
           {/* Preview Area */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className={`flex-1 flex items-center justify-center p-4 overflow-auto bg-[#000000] ${showTerminal ? 'h-1/2' : ''}`}>
+            <div className={`flex-1 flex items-center justify-center p-4 overflow-auto bg-[#000000] ${showRuntimeLog ? 'h-1/2' : ''}`}>
               <PreviewContent
                 isBooting={isBooting}
                 isReady={isReady}
@@ -245,12 +259,14 @@ export default function PreviewPanel() {
                 deviceWidths={deviceWidths}
                 files={files}
                 devicePreset={devicePreset}
+                isTyping={chatInput.length > 0}
+                isGenerating={isGenerating}
               />
             </div>
 
-            {/* Terminal */}
+            {/* Runtime Log (formerly Terminal) */}
             <AnimatePresence>
-              {showTerminal && (
+              {showRuntimeLog && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: '40%', opacity: 1 }}
@@ -258,7 +274,7 @@ export default function PreviewPanel() {
                   transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
                   className="border-t border-[#151515] bg-[#000000] overflow-hidden"
                 >
-                  <TerminalOutput />
+                  <RuntimeLogOutput />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -285,6 +301,8 @@ interface PreviewContentProps {
   deviceWidths: Record<string, string>
   files: { path: string; content: string }[]
   devicePreset: string
+  isTyping: boolean
+  isGenerating: boolean
 }
 
 function PreviewContent({
@@ -297,12 +315,29 @@ function PreviewContent({
   deviceWidths,
   files,
   devicePreset,
+  isTyping,
+  isGenerating,
 }: PreviewContentProps) {
   const [isMounted, setIsMounted] = useState(false)
+  const [showVerified, setShowVerified] = useState(false)
+  const prevServerUrl = useRef<string | null>(null)
   
   useEffect(() => {
     setIsMounted(true)
   }, [])
+  
+  // Verification Reveal Moment - brief pause when server becomes ready
+  useEffect(() => {
+    if (serverUrl && !prevServerUrl.current) {
+      // Server just became ready - show verification moment
+      setShowVerified(true)
+      const timeout = setTimeout(() => {
+        setShowVerified(false)
+      }, 800) // Brief pause before showing preview
+      return () => clearTimeout(timeout)
+    }
+    prevServerUrl.current = serverUrl
+  }, [serverUrl])
   
   if (!isMounted) {
     return <StatusCard icon="loading" title="Loading..." subtitle="Initializing preview" />
@@ -323,8 +358,8 @@ function PreviewContent({
     return (
       <StatusCard 
         icon="error" 
-        title="Something went wrong" 
-        subtitle={error}
+        title="Verification failed" 
+        subtitle="Check runtime log for details"
         variant="error"
       />
     )
@@ -334,10 +369,43 @@ function PreviewContent({
     return (
       <StatusCard 
         icon="loading" 
-        title="Starting environment..." 
-        subtitle="Booting Node.js runtime in browser"
+        title="Verifying environment" 
+        subtitle="Establishing secure runtime"
         variant="blue"
       />
+    )
+  }
+
+  // Verification Reveal Moment - brief pause with checkmark
+  if (showVerified && serverUrl) {
+    return (
+      <motion.div 
+        className="text-center"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.2 }}
+      >
+        <motion.div 
+          className="w-12 h-12 mx-auto mb-4 rounded-full bg-white/[0.05] border border-white/[0.1] flex items-center justify-center"
+          initial={{ scale: 0.8 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          <motion.svg 
+            className="w-5 h-5 text-white/60" 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor" 
+            strokeWidth={2}
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </motion.svg>
+        </motion.div>
+        <p className="text-[13px] text-white/50">Verified</p>
+      </motion.div>
     )
   }
 
@@ -356,23 +424,84 @@ function PreviewContent({
     return (
       <StatusCard 
         icon="loading" 
-        title="Starting server..." 
-        subtitle={`${files.length} files ready`}
+        title="Validating runtime" 
+        subtitle={`${files.length} artifacts staged`}
         variant="amber"
       />
     )
   }
 
+  // Show "Preparing preview..." when user is typing or generating
+  if (isTyping || isGenerating) {
+    return (
+      <StatusCard 
+        icon="loading" 
+        title="Preparing preview" 
+        subtitle="Output will appear here"
+        variant="blue"
+      />
+    )
+  }
+
+  // Expectation Panel - show what will appear here
+  return <ExpectationPanel />
+}
+
+// Expectation Panel - Premium minimal design showing what will appear
+function ExpectationPanel() {
   return (
-    <StatusCard 
-      icon="empty" 
-      title="No preview yet" 
-      subtitle="Describe what you want to build and the preview will appear here."
-    />
+    <div className="text-center max-w-sm">
+      {/* Ghosted browser frame */}
+      <div className="relative w-48 h-32 mx-auto mb-8">
+        <div className="absolute inset-0 border border-dashed border-white/[0.08] rounded-lg overflow-hidden">
+          {/* Title bar */}
+          <div className="h-5 border-b border-dashed border-white/[0.06] flex items-center gap-1 px-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-white/[0.06]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-white/[0.06]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-white/[0.06]" />
+          </div>
+          {/* Content area with grid */}
+          <div className="flex-1 p-3">
+            <div className="w-full h-2 bg-white/[0.03] rounded mb-2" />
+            <div className="w-3/4 h-2 bg-white/[0.03] rounded mb-2" />
+            <div className="w-1/2 h-2 bg-white/[0.03] rounded" />
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[13px] text-white/30 mb-6">This panel will show:</p>
+      
+      <div className="space-y-2.5 text-left max-w-[200px] mx-auto">
+        <div className="flex items-center gap-2.5 text-[12px] text-white/40">
+          <div className="w-4 h-4 rounded border border-white/[0.1] flex items-center justify-center">
+            <svg className="w-2.5 h-2.5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Verified UI</span>
+        </div>
+        <div className="flex items-center gap-2.5 text-[12px] text-white/40">
+          <div className="w-4 h-4 rounded border border-white/[0.1] flex items-center justify-center">
+            <svg className="w-2.5 h-2.5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Runtime output</span>
+        </div>
+        <div className="flex items-center gap-2.5 text-[12px] text-white/40">
+          <div className="w-4 h-4 rounded border border-white/[0.1] flex items-center justify-center">
+            <svg className="w-2.5 h-2.5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Export-ready artifacts</span>
+        </div>
+      </div>
+    </div>
   )
 }
 
-// Status card component - Premium minimal design
+// Status card component - Premium minimal design with TORBIT branding
 function StatusCard({ 
   icon, 
   title, 
@@ -386,78 +515,25 @@ function StatusCard({
 }) {
   return (
     <div className="text-center max-w-xs">
-      {/* Premium loading animation */}
+      {/* TORBIT branded loading animation */}
       <div className="relative w-16 h-16 mx-auto mb-6">
         {icon === 'loading' ? (
-          <>
-            {/* Outer ring - slow pulse */}
-            <motion.div
-              className="absolute inset-0 rounded-full border border-[#1a1a1a]"
-              animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.2, 0.5] }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            {/* Middle ring - silver accent */}
-            <motion.div
-              className="absolute inset-1 rounded-full border border-[#303030]"
-              animate={{ scale: [1, 1.08, 1], opacity: [0.6, 0.3, 0.6] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
-            />
-            {/* Inner core - glowing silver */}
-            <motion.div
-              className="absolute inset-3 rounded-full bg-gradient-to-br from-[#151515] to-[#0a0a0a] border border-[#252525] flex items-center justify-center"
-              animate={{ boxShadow: ['0 0 0 0 rgba(192,192,192,0)', '0 0 20px 2px rgba(192,192,192,0.15)', '0 0 0 0 rgba(192,192,192,0)'] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              {/* Orbiting dot */}
-              <motion.div
-                className="absolute w-1.5 h-1.5 rounded-full bg-[#c0c0c0]"
-                animate={{ 
-                  rotate: 360,
-                  x: [0, 20, 0, -20, 0],
-                  y: [-20, 0, 20, 0, -20]
-                }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-              />
-            </motion.div>
-            {/* Center icon */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <motion.svg 
-                className="w-5 h-5 text-[#c0c0c0]" 
-                viewBox="0 0 24 24"
-                fill="none"
-                animate={{ opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <path 
-                  d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" 
-                  stroke="currentColor" 
-                  strokeWidth="1.5" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round"
-                />
-              </motion.svg>
-            </div>
-          </>
+          <TorbitSpinner size="xl" speed="normal" />
         ) : icon === 'error' ? (
-          <div className="w-full h-full rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+          <div className="w-full h-full rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
             <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
             </svg>
           </div>
         ) : (
-          <div className="w-full h-full rounded-full bg-[#0a0a0a] border border-[#1a1a1a] flex items-center justify-center">
-            <svg className="w-6 h-6 text-[#404040]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
+          <TorbitLogo size="xl" variant="muted" />
         )}
       </div>
       
-      {/* Title with silver gradient for loading */}
+      {/* Title with red accent for loading */}
       <h3 className={`text-[14px] font-medium mb-1.5 ${
         icon === 'loading' 
-          ? 'text-[#c0c0c0]' 
+          ? 'text-white' 
           : icon === 'error' 
             ? 'text-red-400' 
             : 'text-[#808080]'
@@ -611,20 +687,20 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths, devicePreset
 }
 
 // ============================================================================
-// Terminal Output
+// Runtime Log Output (formerly Terminal)
 // ============================================================================
 
-function TerminalOutput() {
+function RuntimeLogOutput() {
   const { lines, clear, isRunning } = useTerminalStore()
 
   const getLineColor = (type: string) => {
     switch (type) {
-      case 'command': return 'text-cyan-400'
-      case 'error': return 'text-red-400'
-      case 'success': return 'text-[#c0c0c0]'
-      case 'warning': return 'text-amber-400'
-      case 'info': return 'text-blue-400'
-      default: return 'text-[#a1a1a1]'
+      case 'command': return 'text-white/60'
+      case 'error': return 'text-red-400/80'
+      case 'success': return 'text-white/50'
+      case 'warning': return 'text-amber-400/70'
+      case 'info': return 'text-white/40'
+      default: return 'text-white/30'
     }
   }
 
@@ -634,9 +710,9 @@ function TerminalOutput() {
       <div className="h-9 border-b border-[#1f1f1f] flex items-center justify-between px-3 bg-[#0a0a0a]">
         <div className="flex items-center gap-2">
           <svg className="w-3.5 h-3.5 text-[#525252]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
           </svg>
-          <span className="text-[12px] text-[#737373]">Terminal</span>
+          <span className="text-[12px] text-[#737373]">Runtime Log</span>
           {isRunning && (
             <motion.div
               className="w-1.5 h-1.5 rounded-full bg-amber-500"
@@ -656,7 +732,7 @@ function TerminalOutput() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-3 font-mono text-[12px] leading-relaxed custom-scrollbar">
         {lines.length === 0 ? (
-          <span className="text-[#404040]">No output yet...</span>
+          <span className="text-white/20">No execution output</span>
         ) : (
           lines.map((line, i) => (
             <div key={i} className={`${getLineColor(line.type)} whitespace-pre-wrap`}>

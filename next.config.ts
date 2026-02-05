@@ -7,15 +7,17 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 const nextConfig: NextConfig = {
   // ============================================================================
-  // WEBCONTAINER SECURITY HEADERS (MANDATORY)
+  // WEBCONTAINER SECURITY HEADERS
   // ============================================================================
-  // WebContainers require SharedArrayBuffer which needs these COOP/COEP headers.
-  // Without these, the browser will refuse to boot the container.
+  // WebContainers require SharedArrayBuffer which needs COOP/COEP headers.
+  // BUT these headers break Stripe.js and other cross-origin resources.
+  // So we ONLY apply them to the /builder route where WebContainers run.
   // ============================================================================
   async headers() {
     return [
       {
-        source: '/(.*)',
+        // Only apply COOP/COEP headers to the builder page
+        source: '/builder/:path*',
         headers: [
           { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },

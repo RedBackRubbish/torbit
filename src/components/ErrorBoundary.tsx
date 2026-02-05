@@ -143,10 +143,10 @@ export function ChatErrorFallback({ onRetry }: { onRetry?: () => void }) {
         </svg>
       </div>
       <h2 className="text-[15px] font-medium text-[#fafafa] mb-2">
-        Chat encountered an error
+        Session interrupted
       </h2>
       <p className="text-[13px] text-[#737373] mb-6 max-w-sm leading-relaxed">
-        The AI chat system ran into a problem. Your conversation history is safe.
+        The build session encountered an error. Your conversation history is safe.
       </p>
       {onRetry && (
         <button

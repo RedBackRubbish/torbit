@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useFuelStore } from '@/store/fuel'
-import { loadStripe } from '@stripe/stripe-js'
+import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 /**
  * RefuelModal - The "Refueling Station"
@@ -16,11 +16,6 @@ import { loadStripe } from '@stripe/stripe-js'
  * - Jerry Can (2,500) - $29: Feature builds  
  * - Reactor Core (10,000) - $99: Full MVP
  */
-
-// Initialize Stripe (lazy load)
-const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
-  : null
 
 interface FuelPack {
   id: string
@@ -95,7 +90,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
 
     try {
       // Check if Stripe is configured
-      if (!stripePromise) {
+      if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
         // Fallback to demo mode if Stripe not configured
         await new Promise(resolve => setTimeout(resolve, 1500))
         topUp(pack.amount)
@@ -126,17 +121,12 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
       }
 
       // Redirect to Stripe Checkout
-      const stripe = await stripePromise
-      if (stripe && data.sessionId) {
-        const { error: stripeError } = await stripe.redirectToCheckout({
-          sessionId: data.sessionId,
-        })
-        if (stripeError) {
-          throw new Error(stripeError.message)
-        }
-      } else if (data.url) {
-        // Fallback to direct URL redirect
+      // Modern Stripe.js uses direct URL redirect from the session
+      if (data.url) {
         window.location.href = data.url
+      } else if (data.sessionId) {
+        // Legacy fallback - manually construct checkout URL
+        window.location.href = `https://checkout.stripe.com/pay/${data.sessionId}`
       }
     } catch (err) {
       console.error('Purchase error:', err)
@@ -299,15 +289,11 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
                   {/* Processing Spinner */}
                   {isSelected && isProcessing && (
                     <motion.div
-                      className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl"
+                      className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl backdrop-blur-sm"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                     >
-                      <motion.div
-                        className={`w-8 h-8 border-2 border-t-transparent ${pack.color} rounded-full`}
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      />
+                      <TorbitSpinner size="lg" speed="fast" />
                     </motion.div>
                   )}
 

@@ -15,6 +15,7 @@ import ShipMenu from '@/components/builder/ShipMenu'
 import { PublishPanel } from '@/components/builder/PublishPanel'
 import { ScreenshotButton } from '@/components/builder/ScreenshotButton'
 import { UserMenu } from '@/components/builder/UserMenu'
+import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 export default function BuilderPage() {
   return (
@@ -100,9 +101,24 @@ function BuilderPageContent() {
           
           {/* Right: Actions */}
           <div className="flex items-center gap-3">
+            {/* Home button */}
+            <a
+              href="/dashboard"
+              className="w-7 h-7 flex items-center justify-center rounded-md text-[#525252] hover:text-[#fafafa] hover:bg-[#141414] transition-all"
+              title="Dashboard"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+              </svg>
+            </a>
+            
             {/* Status indicator */}
             <div className="flex items-center gap-1.5 pr-2 border-r border-[#1f1f1f]">
-              <div className={`w-1.5 h-1.5 rounded-full ${isWorking ? 'bg-[#c0c0c0] animate-pulse' : 'bg-[#333]'}`} />
+              {isWorking ? (
+                <TorbitSpinner size="xs" speed="fast" />
+              ) : (
+                <div className="w-1.5 h-1.5 rounded-full bg-[#333]" />
+              )}
               <span className="text-[11px] text-[#525252]">
                 {isWorking ? 'Building...' : 'Idle'}
               </span>

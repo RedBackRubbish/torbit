@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { TorbitLogo } from '@/components/ui/TorbitLogo'
 
 interface NavbarProps {
   className?: string
@@ -27,16 +28,10 @@ const Navbar = memo(function Navbar({ className }: NavbarProps) {
           {/* Logo */}
           <Link 
             href="/"
-            className="flex items-center gap-3 group"
+            className="flex items-center gap-2.5 group"
           >
-            <div className="relative w-10 h-10 flex items-center justify-center border border-matrix-500 group-hover:border-matrix-400 transition-colors">
-              <span className="text-2xl font-bold text-matrix-400 group-hover:drop-shadow-[0_0_10px_rgba(0,255,65,0.8)] transition-all">
-                T
-              </span>
-              {/* Orbit ring */}
-              <div className="absolute inset-0 border border-matrix-400/30 rotate-45 scale-125 group-hover:rotate-[135deg] transition-transform duration-700" />
-            </div>
-            <span className="text-xl font-mono font-bold text-matrix-400 tracking-wider">
+            <TorbitLogo size="md" animated />
+            <span className="text-xl font-bold text-white tracking-tight">
               TORBIT
             </span>
           </Link>

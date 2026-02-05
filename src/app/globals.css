@@ -107,12 +107,21 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 .animate-pulse-subtle {
   animation: pulse-subtle 2s ease-in-out infinite;
 }
 
 .animate-spin-slow {
   animation: spin-slow 3s linear infinite;
+}
+
+.animate-scroll {
+  animation: scroll 30s linear infinite;
 }
 
 /* ========================================

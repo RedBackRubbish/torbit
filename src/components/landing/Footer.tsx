@@ -2,6 +2,7 @@
 
 import { memo } from 'react'
 import Link from 'next/link'
+import { TorbitLogo } from '@/components/ui/TorbitLogo'
 
 /**
  * Footer - Matrix-themed footer
@@ -45,10 +46,8 @@ const Footer = memo(function Footer() {
           {/* Logo & Description */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 flex items-center justify-center border border-matrix-500">
-                <span className="text-xl font-bold text-matrix-400">T</span>
-              </div>
-              <span className="text-lg font-mono font-bold text-matrix-400">
+              <TorbitLogo size="sm" />
+              <span className="text-lg font-bold text-white tracking-tight">
                 TORBIT
               </span>
             </Link>

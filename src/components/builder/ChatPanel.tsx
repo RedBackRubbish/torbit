@@ -8,6 +8,8 @@ import { NervousSystem, type PainSignal } from '@/lib/nervous-system'
 import { MessageBubble } from './chat/MessageBubble'
 import { ChatInput } from './chat/ChatInput'
 import { InspectorView, type ActivityEntry } from './governance'
+import { TorbitLogo } from '@/components/ui/TorbitLogo'
+import { useWebContainerContext } from '@/providers/WebContainerProvider'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
@@ -20,13 +22,14 @@ import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
  */
 export default function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [currentTask, setCurrentTask] = useState<string | null>(null)
   const [showInspector, setShowInspector] = useState(false)
   const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [selectedAgent] = useState<AgentId>('architect')
+  
+  const { isBooting, isReady, serverUrl, error } = useWebContainerContext()
   
   const { 
     chatCollapsed, 
@@ -38,6 +41,8 @@ export default function ChatPanel() {
     files,
     projectType,
     capabilities,
+    chatInput,
+    setChatInput,
   } = useBuilderStore()
 
   // Parse SSE stream
@@ -270,11 +275,11 @@ export default function ChatPanel() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim()) return
+    if (!chatInput.trim()) return
     
-    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: input }])
-    handleSubmitMessage(input, selectedAgent)
-    setInput('')
+    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: chatInput }])
+    handleSubmitMessage(chatInput, selectedAgent)
+    setChatInput('')
   }
 
   function getTaskName(toolName: string, args: Record<string, unknown>): string {
@@ -334,7 +339,7 @@ export default function ChatPanel() {
           >
             {messages.length === 0 ? (
               <EmptyState onSelectTemplate={(prompt) => {
-                setInput(prompt)
+                setChatInput(prompt)
               }} />
             ) : (
               <div className="p-4 space-y-0">
@@ -354,30 +359,24 @@ export default function ChatPanel() {
         )}
       </AnimatePresence>
 
-      {/* Execution Status - Subtle, non-intrusive */}
+      {/* Execution Status Rail - The authoritative spine */}
       <AnimatePresence mode="wait">
-        {!chatCollapsed && isLoading && (
+        {!chatCollapsed && (isLoading || isBooting || (messages.length > 0 && files.length > 0)) && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="px-4 py-2 border-t border-[#151515] bg-[#000000]"
+            className="px-4 py-3 border-t border-[#151515] bg-[#000000]"
           >
-            <div className="flex items-center gap-2">
-              <motion.div
-                className="w-2.5 h-2.5 rounded-full border border-[#333] border-t-[#888]"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-              />
-              <span className="text-[12px] text-[#606060]">
-                Building…
-              </span>
-              {currentTask && currentTask !== 'Thinking...' && (
-                <span className="text-[11px] text-[#404040] ml-1">
-                  • {currentTask}
-                </span>
-              )}
-            </div>
+            <ExecutionStatusRail 
+              isBooting={isBooting}
+              isReady={isReady}
+              serverUrl={serverUrl}
+              error={error}
+              isBuilding={isLoading}
+              currentTask={currentTask}
+              hasFiles={files.length > 0}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -386,9 +385,9 @@ export default function ChatPanel() {
       <AnimatePresence mode="wait">
         {!chatCollapsed && (
           <ChatInput
-            input={input}
+            input={chatInput}
             isLoading={isLoading}
-            onInputChange={setInput}
+            onInputChange={setChatInput}
             onSubmit={handleSubmit}
           />
         )}
@@ -463,40 +462,44 @@ export default function ChatPanel() {
   )
 }
 
-const STARTER_TEMPLATES = [
+const PRODUCTION_STARTERS = [
   { 
-    label: 'Dashboard', 
-    prompt: 'Build a modern analytics dashboard with charts, stats cards, and a sidebar navigation',
+    label: 'Internal Tool', 
+    description: 'Auth, roles, audit logs, governed integrations',
+    prompt: 'Build a production-ready internal tool with user authentication, role-based access control, audit logging, and secure API integrations. Include a dashboard layout with sidebar navigation.',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
       </svg>
     )
   },
   { 
-    label: 'Landing Page', 
-    prompt: 'Create a beautiful SaaS landing page with hero, features, pricing, and footer sections',
+    label: 'Customer-Facing App', 
+    description: 'Auth, billing, export-ready frontend',
+    prompt: 'Build a production-ready customer-facing SaaS application with user authentication, Stripe billing integration, and a polished export-ready frontend. Include onboarding flow and account settings.',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
       </svg>
     )
   },
   { 
-    label: 'E-commerce', 
-    prompt: 'Build a product catalog page with filters, search, and a shopping cart',
+    label: 'API / Backend Service', 
+    description: 'Validated routes, schema, observability',
+    prompt: 'Build a production-ready API backend service with validated REST routes, TypeScript schema definitions, error handling, and observability endpoints. Include health checks and structured logging.',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
       </svg>
     )
   },
   { 
-    label: 'Blog', 
-    prompt: 'Create a minimal blog with article cards, tags, and a featured post section',
+    label: 'Mobile App', 
+    description: 'iOS export, permissions, App Store bundle',
+    prompt: 'Build a production-ready mobile application with React Native / Expo setup, proper permission handling, iOS export configuration, and App Store submission bundle structure.',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
       </svg>
     )
   },
@@ -505,37 +508,177 @@ const STARTER_TEMPLATES = [
 function EmptyState({ onSelectTemplate }: { onSelectTemplate?: (prompt: string) => void }) {
   return (
     <div className="h-full flex flex-col items-center justify-center p-6">
-      <div className="text-center max-w-[340px]">
-        {/* Logo/Icon - Silver accent */}
-        <div className="w-10 h-10 mx-auto mb-4 rounded-xl bg-[#050505] border border-[#1a1a1a] flex items-center justify-center">
-          <svg className="w-5 h-5 text-[#505050]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-          </svg>
+      <div className="text-center max-w-[380px]">
+        {/* TORBIT Logo */}
+        <div className="w-10 h-10 mx-auto mb-5 flex items-center justify-center">
+          <TorbitLogo size="lg" variant="muted" animated />
         </div>
         
-        <h3 className="text-[14px] font-medium text-[#c0c0c0] mb-1">What do you want to build?</h3>
-        <p className="text-[12px] text-[#606060] mb-5">
-          Describe your idea or pick a template
+        <h3 className="text-[15px] font-medium text-white/90 mb-1.5">Start with a production artifact</h3>
+        <p className="text-[12px] text-white/40 mb-6">
+          Choose a governed starting point. Torbit will handle the rest.
         </p>
         
-        {/* Template Grid - Silver accent */}
-        <div className="grid grid-cols-2 gap-2">
-          {STARTER_TEMPLATES.map((template) => (
+        {/* Production Starters - Vertical layout */}
+        <div className="space-y-2">
+          {PRODUCTION_STARTERS.map((starter) => (
             <button
-              key={template.label}
-              onClick={() => onSelectTemplate?.(template.prompt)}
-              className="flex items-center gap-2 p-2.5 rounded-lg bg-[#050505] border border-[#151515] hover:border-[#333333] hover:bg-[#080808] transition-all text-left group"
+              key={starter.label}
+              onClick={() => onSelectTemplate?.(starter.prompt)}
+              className="w-full flex items-start gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:border-l-white/40 hover:border-l-2 hover:border-white/[0.12] hover:bg-white/[0.04] transition-all text-left group"
             >
-              <div className="w-7 h-7 rounded-lg bg-[#0a0a0a] border border-[#1a1a1a] flex items-center justify-center text-[#505050] group-hover:text-[#808080] group-hover:border-[#333333] transition-all">
-                {template.icon}
+              <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white/30 group-hover:text-white/50 group-hover:border-white/[0.15] transition-all flex-shrink-0 mt-0.5">
+                {starter.icon}
               </div>
-              <span className="text-[11px] font-medium text-[#808080] group-hover:text-[#a8a8a8] transition-colors">
-                {template.label}
-              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium text-white/70 group-hover:text-white/90 transition-colors mb-0.5">
+                  {starter.label}
+                </div>
+                <div className="text-[11px] text-white/30 group-hover:text-white/40 transition-colors">
+                  {starter.description}
+                </div>
+              </div>
+              <svg className="w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors flex-shrink-0 mt-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
             </button>
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// Execution Status Rail - The Authoritative Spine
+// ============================================================================
+// Replaces terminal as primary feedback. Deterministic. Human-readable.
+// Events are summarized. Logs are hidden behind this.
+// ============================================================================
+
+interface ExecutionStatusRailProps {
+  isBooting: boolean
+  isReady: boolean
+  serverUrl: string | null
+  error: string | null
+  isBuilding: boolean
+  currentTask: string | null
+  hasFiles: boolean
+}
+
+function ExecutionStatusRail({
+  isBooting,
+  isReady,
+  serverUrl,
+  error,
+  isBuilding,
+  currentTask,
+  hasFiles,
+}: ExecutionStatusRailProps) {
+  // Derive status steps with error awareness
+  const hasError = !!error
+  
+  const steps: Array<{
+    label: string
+    status: 'complete' | 'active' | 'pending' | 'error'
+    errorMessage?: string
+    recoveryAction?: string
+  }> = [
+    {
+      label: 'Environment verified',
+      status: hasError && !isReady ? 'error' : isReady ? 'complete' : isBooting ? 'active' : 'pending',
+      errorMessage: hasError && !isReady ? 'Environment verification failed' : undefined,
+      recoveryAction: hasError && !isReady ? 'Retry verification' : undefined,
+    },
+    {
+      label: 'Toolchain locked',
+      status: hasError && !isReady ? 'error' : isReady ? 'complete' : 'pending',
+    },
+    {
+      label: 'Dependencies pinned',
+      status: hasError ? 'error' : serverUrl ? 'complete' : isReady && !serverUrl ? 'active' : 'pending',
+      errorMessage: hasError && isReady && !serverUrl ? 'Dependency resolution failed' : undefined,
+      recoveryAction: hasError && isReady && !serverUrl ? 'Resolve dependencies' : undefined,
+    },
+    {
+      label: isBuilding ? (currentTask && currentTask !== 'Thinking...' ? currentTask : 'Building artifacts') : (hasFiles ? 'Artifacts ready' : 'Awaiting build'),
+      status: hasError && isReady && serverUrl ? 'error' : isBuilding ? 'active' : hasFiles ? 'complete' : 'pending',
+      errorMessage: hasError && isReady && serverUrl ? 'Build failed' : undefined,
+      recoveryAction: hasError && isReady && serverUrl ? 'Retry build' : undefined,
+    },
+    {
+      label: 'Awaiting verification',
+      status: 'pending',
+    },
+  ]
+
+  // Only show relevant steps (hide pending ones after active)
+  const activeIndex = steps.findIndex(s => s.status === 'active')
+  const errorIndex = steps.findIndex(s => s.status === 'error')
+  
+  let visibleSteps: typeof steps
+  
+  if (errorIndex >= 0) {
+    // Show up to and including the error
+    visibleSteps = steps.slice(0, errorIndex + 1)
+  } else if (activeIndex >= 0) {
+    visibleSteps = steps.slice(0, Math.min(activeIndex + 2, steps.length))
+  } else {
+    visibleSteps = steps.filter(s => s.status === 'complete').slice(-3)
+  }
+
+  if (visibleSteps.length === 0) return null
+
+  // Find the error step if any
+  const errorStep = visibleSteps.find(s => s.status === 'error')
+
+  return (
+    <div className="space-y-1.5">
+      {visibleSteps.map((step, i) => (
+        <div key={i} className="flex items-center gap-2">
+          {step.status === 'complete' && (
+            <svg className="w-3 h-3 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+          {step.status === 'active' && (
+            <motion.div
+              className="w-3 h-3 rounded-full border border-white/30 border-t-white/60"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+            />
+          )}
+          {step.status === 'pending' && (
+            <div className="w-3 h-3 rounded-full border border-white/10" />
+          )}
+          {step.status === 'error' && (
+            <svg className="w-3 h-3 text-red-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          <span className={`text-[11px] ${
+            step.status === 'complete' ? 'text-white/40' :
+            step.status === 'active' ? 'text-white/60' :
+            step.status === 'error' ? 'text-red-400/70' :
+            'text-white/20'
+          }`}>
+            {step.status === 'error' && step.errorMessage ? step.errorMessage : step.label}
+          </span>
+        </div>
+      ))}
+      
+      {/* Single recovery action for errors */}
+      {errorStep?.recoveryAction && (
+        <button 
+          className="mt-2 text-[11px] text-white/50 hover:text-white/70 transition-colors flex items-center gap-1.5 pl-5"
+          onClick={() => window.location.reload()}
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+          {errorStep.recoveryAction}
+        </button>
+      )}
     </div>
   )
 }

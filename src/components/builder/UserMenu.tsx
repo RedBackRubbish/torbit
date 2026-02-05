@@ -24,7 +24,18 @@ export function UserMenu() {
   const router = useRouter()
   const { user, profile, signOut, loading } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
+  const [avatarError, setAvatarError] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  
+  // Debug log
+  useEffect(() => {
+    console.log('[UserMenu] State:', { loading, hasUser: !!user, email: user?.email })
+  }, [loading, user])
+  
+  // Reset avatar error when user changes
+  useEffect(() => {
+    setAvatarError(false)
+  }, [user?.id])
 
   // Close on outside click
   useEffect(() => {
@@ -42,8 +53,16 @@ export function UserMenu() {
     router.push('/')
   }
 
-  // Show sign in button if not authenticated
-  if (!user && !loading) {
+  // Show sign in button if not authenticated (after loading completes or times out)
+  if (!user) {
+    // Still loading - show loading state briefly
+    if (loading) {
+      return (
+        <div className="w-8 h-8 rounded-full bg-neutral-800 animate-pulse" />
+      )
+    }
+    
+    // Not loading, no user - show sign in
     return (
       <button
         onClick={() => router.push('/login')}
@@ -55,15 +74,9 @@ export function UserMenu() {
     )
   }
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="w-8 h-8 rounded-full bg-neutral-800 animate-pulse" />
-    )
-  }
-
+  // User is authenticated - get display info
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User'
-  const avatarUrl = profile?.avatar_url
+  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture
   const tier = profile?.tier || 'free'
   const fuelBalance = profile?.fuel_balance || 0
 
@@ -75,14 +88,15 @@ export function UserMenu() {
         className="flex items-center gap-2 px-2 py-1 hover:bg-neutral-800 rounded-lg transition-colors"
       >
         {/* Avatar */}
-        {avatarUrl ? (
+        {avatarUrl && !avatarError ? (
           <img 
             src={avatarUrl} 
             alt={displayName}
             className="w-7 h-7 rounded-full object-cover border border-neutral-700"
+            onError={() => setAvatarError(true)}
           />
         ) : (
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-neutral-700 to-neutral-800 flex items-center justify-center border border-neutral-600">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-red-600 to-red-700 flex items-center justify-center border border-red-500/50">
             <span className="text-xs font-medium text-white">
               {displayName.charAt(0).toUpperCase()}
             </span>
@@ -105,14 +119,15 @@ export function UserMenu() {
             {/* User Info */}
             <div className="p-4 border-b border-neutral-800">
               <div className="flex items-center gap-3">
-                {avatarUrl ? (
+                {avatarUrl && !avatarError ? (
                   <img 
                     src={avatarUrl} 
                     alt={displayName}
                     className="w-10 h-10 rounded-full object-cover border border-neutral-700"
+                    onError={() => setAvatarError(true)}
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neutral-700 to-neutral-800 flex items-center justify-center border border-neutral-600">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-600 to-red-700 flex items-center justify-center border border-red-500/50">
                     <span className="text-sm font-medium text-white">
                       {displayName.charAt(0).toUpperCase()}
                     </span>
@@ -147,11 +162,11 @@ export function UserMenu() {
             <div className="py-2">
               <MenuItem icon={Settings} label="Settings" onClick={() => {
                 setIsOpen(false)
-                // TODO: Navigate to settings
+                router.push('/settings')
               }} />
               <MenuItem icon={CreditCard} label="Billing" onClick={() => {
                 setIsOpen(false)
-                // TODO: Navigate to billing
+                router.push('/settings?tab=billing')
               }} />
             </div>
 

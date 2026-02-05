@@ -83,6 +83,7 @@ export interface BuilderState {
   // Chat
   messages: ChatMessage[]
   isGenerating: boolean
+  chatInput: string
   
   // UI State
   sidebarTab: 'agents' | 'files'
@@ -119,6 +120,7 @@ export interface BuilderActions {
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void
   updateLastMessage: (content: string) => void
   setIsGenerating: (isGenerating: boolean) => void
+  setChatInput: (input: string) => void
   
   // UI
   setSidebarTab: (tab: 'agents' | 'files') => void
@@ -221,6 +223,7 @@ const initialState: BuilderState = {
   activeAgentId: null,
   messages: [],
   isGenerating: false,
+  chatInput: '',
   sidebarTab: 'agents',
   previewTab: 'preview',
   previewDevice: 'desktop',
@@ -407,6 +410,12 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
     setIsGenerating: (isGenerating) => {
       set((state) => {
         state.isGenerating = isGenerating
+      })
+    },
+
+    setChatInput: (input) => {
+      set((state) => {
+        state.chatInput = input
       })
     },
 

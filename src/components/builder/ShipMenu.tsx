@@ -167,7 +167,7 @@ export default function ShipMenu() {
                   </div>
                   <div className="flex flex-col items-start">
                     <span className="text-[12px] font-medium">Vercel</span>
-                    <span className="text-[10px] text-[#505050]">Instant deployment</span>
+                    <span className="text-[10px] text-[#505050]">Production deployment</span>
                   </div>
                 </button>
 

@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ActionLog } from './ActionLog'
+import { TorbitSpinner, TorbitIcon } from '@/components/ui/TorbitLogo'
 import type { Message } from './types'
 
 // ============================================================================
@@ -59,14 +60,13 @@ export function AgentMessage({ message, isLast, isLoading }: AgentMessageProps) 
       animate={{ opacity: 1, y: 0 }}
       className="py-3"
     >
-      {/* Agent Header - VS Code style */}
-      <div className="flex items-center gap-2.5 mb-2">
-        <div 
-          className={`w-2 h-2 rounded-full ${
-            isLoading ? 'bg-[#c0c0c0] animate-pulse' : 'bg-[#606060]'
-          }`} 
-          aria-hidden="true" 
-        />
+      {/* Agent Header - TORBIT branded */}
+      <div className="flex items-center gap-2 mb-2">
+        {isLoading ? (
+          <TorbitSpinner size="xs" speed="fast" />
+        ) : (
+          <TorbitIcon size="xs" variant="muted" />
+        )}
         <span className="text-[14px] font-medium text-[#e5e5e5]">Torbit</span>
         {isLoading && hasTools && (
           <span className="text-[11px] text-[#606060]">
@@ -92,15 +92,11 @@ export function AgentMessage({ message, isLast, isLoading }: AgentMessageProps) 
           />
         )}
         
-        {/* Typing Indicator - When no content yet */}
+        {/* Typing Indicator - TORBIT spinner when thinking */}
         {showTyping && (
           <div className="flex items-center gap-2 text-[12px] text-[#606060] py-1">
-            <motion.div
-              className="w-3.5 h-3.5 rounded-full border-2 border-[#333] border-t-[#606060]"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-              aria-hidden="true"
-            />
+            <TorbitSpinner size="sm" speed="normal" />
+            <span className="text-[#505050]">Thinking...</span>
           </div>
         )}
         

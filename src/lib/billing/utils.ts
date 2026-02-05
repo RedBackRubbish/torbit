@@ -101,7 +101,9 @@ export async function getBillingTransactions(
     description: tx.description,
     stripePaymentIntentId: tx.stripe_payment_intent_id,
     stripeInvoiceId: tx.stripe_invoice_id,
-    metadata: tx.metadata || {},
+    metadata: (tx.metadata && typeof tx.metadata === 'object' && !Array.isArray(tx.metadata) 
+      ? tx.metadata 
+      : {}) as Record<string, unknown>,
     createdAt: new Date(tx.created_at),
   }))
 }
@@ -123,7 +125,7 @@ export async function useFuel(
     p_project_id: projectId,
     p_amount: amount,
     p_description: description,
-    p_metadata: metadata,
+    p_metadata: metadata as unknown as import('@/lib/supabase/types').Json,
   })
 
   if (error) {
@@ -187,12 +189,12 @@ export async function checkAndProcessDailyRefill(userId: string): Promise<{
   // Process refill
   const refillAmount = TIER_CONFIG.free.fuelAllowance
   
-  const { data: newBalance, error: refillError } = await supabase.rpc('add_fuel', {
+  const { error: refillError } = await supabase.rpc('add_fuel', {
     p_user_id: userId,
     p_amount: refillAmount,
     p_type: 'daily_refill',
     p_description: 'Daily free tier fuel refill',
-    p_metadata: { tier: 'free' },
+    p_metadata: { tier: 'free' } as unknown as import('@/lib/supabase/types').Json,
   })
 
   if (refillError) {

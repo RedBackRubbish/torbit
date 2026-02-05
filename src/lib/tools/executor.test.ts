@@ -182,7 +182,6 @@ describe('Tool Executor', () => {
           { name: 'tool1', description: 'First tool', parameters: {} },
           { name: 'tool2', description: 'Second tool', parameters: {} }
         ],
-        connected: true,
       })
 
       const result = await executeTool('listMcpTools', {

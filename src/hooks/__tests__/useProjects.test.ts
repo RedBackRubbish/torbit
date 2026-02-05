@@ -151,14 +151,16 @@ describe('useProjects Hook', () => {
 
   describe('Error Handling', () => {
     it('should set error state on fetch failure', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockSupabase.from.mockReturnValueOnce({
         select: vi.fn(() => ({
           order: vi.fn(() => Promise.resolve({ 
             data: null, 
-            error: new Error('Fetch failed') 
+            error: { message: 'Fetch failed' }
           })),
+          eq: vi.fn(),
         })),
-      })
+      } as any)
 
       const { useProjects } = await import('../useProjects')
       const { result } = renderHook(() => useProjects())

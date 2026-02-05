@@ -10,7 +10,6 @@ import {
   Camera,
   Image,
   Download,
-  Loader2,
   CheckCircle2,
   AlertTriangle,
   X,
@@ -24,6 +23,7 @@ import {
   Eye
 } from 'lucide-react'
 import { useBuilderStore } from '@/store/builder'
+import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 import {
   SCREENSHOT_DEVICES,
   DEFAULT_SCREENSHOT_DEVICE,
@@ -238,7 +238,7 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
           {/* Detecting State */}
           {status === 'detecting' && (
             <div className="py-12 flex flex-col items-center gap-4">
-              <Loader2 className="w-8 h-8 text-[#c0c0c0] animate-spin" />
+              <TorbitSpinner size="lg" />
               <p className="text-neutral-400">Detecting screens...</p>
             </div>
           )}
@@ -363,14 +363,7 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
           {status === 'capturing' && (
             <div className="space-y-4">
               <div className="py-8 flex flex-col items-center gap-4">
-                <div className="relative">
-                  <div className="p-4 bg-neutral-900 rounded-2xl">
-                    <Camera className="w-8 h-8 text-[#c0c0c0]" />
-                  </div>
-                  <div className="absolute -right-1 -bottom-1 p-1 bg-black rounded-full">
-                    <Loader2 className="w-4 h-4 text-[#c0c0c0] animate-spin" />
-                  </div>
-                </div>
+                <TorbitSpinner size="xl" />
                 <div className="text-center">
                   <p className="text-white font-medium">Capturing Screenshots</p>
                   <p className="text-neutral-500 text-sm mt-1">
@@ -396,7 +389,7 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
                       <div className="w-5 h-5 rounded-full border-2 border-neutral-600" />
                     )}
                     {screenshot.status === 'capturing' && (
-                      <Loader2 className="w-5 h-5 text-[#c0c0c0] animate-spin" />
+                      <TorbitSpinner size="xs" speed="fast" />
                     )}
                     {screenshot.status === 'complete' && (
                       <CheckCircle2 className="w-5 h-5 text-emerald-500" />

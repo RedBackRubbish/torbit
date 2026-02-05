@@ -276,6 +276,206 @@ export interface Database {
           }
         ]
       }
+
+      // ============================================
+      // STRIPE CUSTOMERS
+      // ============================================
+      stripe_customers: {
+        Row: {
+          id: string
+          user_id: string
+          stripe_customer_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          stripe_customer_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          stripe_customer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_customers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // FUEL BALANCES (Extended fuel tracking)
+      // ============================================
+      fuel_balances: {
+        Row: {
+          id: string
+          user_id: string
+          current_fuel: number
+          lifetime_fuel_purchased: number
+          lifetime_fuel_used: number
+          last_daily_refill_at: string | null
+          last_monthly_refill_at: string | null
+          user_timezone: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          current_fuel?: number
+          lifetime_fuel_purchased?: number
+          lifetime_fuel_used?: number
+          last_daily_refill_at?: string | null
+          last_monthly_refill_at?: string | null
+          user_timezone?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          current_fuel?: number
+          lifetime_fuel_purchased?: number
+          lifetime_fuel_used?: number
+          last_daily_refill_at?: string | null
+          last_monthly_refill_at?: string | null
+          user_timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fuel_balances_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // SUBSCRIPTIONS
+      // ============================================
+      subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          stripe_subscription_id: string
+          stripe_price_id: string
+          tier: 'free' | 'pro' | 'enterprise'
+          status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete'
+          monthly_fuel_allowance: number
+          current_period_start: string
+          current_period_end: string
+          cancel_at_period_end: boolean
+          trial_end: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          stripe_subscription_id: string
+          stripe_price_id: string
+          tier?: 'free' | 'pro' | 'enterprise'
+          status?: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete'
+          monthly_fuel_allowance?: number
+          current_period_start: string
+          current_period_end: string
+          cancel_at_period_end?: boolean
+          trial_end?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          stripe_subscription_id?: string
+          stripe_price_id?: string
+          tier?: 'free' | 'pro' | 'enterprise'
+          status?: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete'
+          monthly_fuel_allowance?: number
+          current_period_start?: string
+          current_period_end?: string
+          cancel_at_period_end?: boolean
+          trial_end?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // BILLING TRANSACTIONS (Detailed ledger)
+      // ============================================
+      billing_transactions: {
+        Row: {
+          id: string
+          user_id: string
+          project_id: string | null
+          type: 'purchase' | 'usage' | 'refund' | 'bonus' | 'subscription_refill'
+          amount: number
+          balance_after: number
+          description: string | null
+          stripe_payment_intent_id: string | null
+          stripe_invoice_id: string | null
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          project_id?: string | null
+          type: 'purchase' | 'usage' | 'refund' | 'bonus' | 'subscription_refill'
+          amount: number
+          balance_after: number
+          description?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_invoice_id?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          project_id?: string | null
+          type?: 'purchase' | 'usage' | 'refund' | 'bonus' | 'subscription_refill'
+          amount?: number
+          balance_after?: number
+          description?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_invoice_id?: string | null
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -301,6 +501,37 @@ export interface Database {
         }
         Returns: boolean
       }
+      // RPC function to use fuel - returns array of result objects
+      use_fuel: {
+        Args: {
+          p_user_id: string
+          p_project_id: string | null
+          p_amount: number
+          p_description: string
+          p_metadata?: Json
+        }
+        Returns: Array<{ success: boolean; new_balance: number; error_message: string | null }>
+      }
+      // RPC function to add fuel - returns new balance
+      add_fuel: {
+        Args: {
+          p_user_id: string
+          p_amount: number
+          p_type: string
+          p_description: string
+          p_stripe_payment_intent_id?: string
+          p_stripe_invoice_id?: string
+          p_metadata?: Json
+        }
+        Returns: number
+      }
+      // RPC function to check daily refill eligibility - returns array
+      check_daily_refill: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: Array<{ eligible: boolean; hours_until_refill: number }>
+      }
     }
     Enums: {
       tier: 'free' | 'pro' | 'enterprise'
@@ -321,6 +552,10 @@ export type Conversation = Database['public']['Tables']['conversations']['Row']
 export type Message = Database['public']['Tables']['messages']['Row']
 export type FuelTransaction = Database['public']['Tables']['fuel_transactions']['Row']
 export type AuditEvent = Database['public']['Tables']['audit_events']['Row']
+export type StripeCustomer = Database['public']['Tables']['stripe_customers']['Row']
+export type FuelBalance = Database['public']['Tables']['fuel_balances']['Row']
+export type Subscription = Database['public']['Tables']['subscriptions']['Row']
+export type BillingTransaction = Database['public']['Tables']['billing_transactions']['Row']
 
 export type NewProject = Database['public']['Tables']['projects']['Insert']
 export type UpdateProject = Database['public']['Tables']['projects']['Update']

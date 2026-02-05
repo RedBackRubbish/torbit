@@ -1,5 +1,6 @@
 import { forwardRef, ButtonHTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
+import { TorbitSpinner } from './TorbitLogo'
 
 export interface MatrixButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Button variant */
@@ -91,7 +92,7 @@ const MatrixButton = forwardRef<HTMLButtonElement, MatrixButtonProps>(
 
         {loading ? (
           <span className="flex items-center gap-2">
-            <span className="animate-spin">⟳</span>
+            <TorbitSpinner size="xs" speed="fast" />
             <span>Processing...</span>
           </span>
         ) : (

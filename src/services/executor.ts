@@ -77,7 +77,7 @@ export class ExecutorService {
     // 3. Check fuel before execution
     const fuelCost = TOOL_FUEL_COSTS[toolName] || TOOL_FUEL_COSTS.default
     if (!fuel.canAfford(fuelCost)) {
-      terminal.addLog(`⛽ Insufficient fuel for ${toolName} (need ${fuelCost}, have ${fuel.currentFuel})`, 'error')
+      terminal.addLog(`Insufficient fuel for ${toolName} (need ${fuelCost}, have ${fuel.currentFuel})`, 'error')
       return {
         success: false,
         output: `ERROR: Insufficient fuel. Need ${fuelCost} units, have ${fuel.currentFuel}. Please refuel.`,
@@ -87,7 +87,7 @@ export class ExecutorService {
     }
     
     // 4. Log the intent (Ghost Text in terminal)
-    terminal.addLog(`🤖 Executing: ${toolName}`, 'info')
+    terminal.addLog(`Executing: ${toolName}`, 'info')
 
     try {
       // 5. Boot WebContainer (singleton, only boots once)
@@ -111,7 +111,7 @@ export class ExecutorService {
           }
           
           await container.fs.writeFile(path, content)
-          terminal.addLog(`✅ Created: ${path}`, 'success')
+          terminal.addLog(`Created: ${path}`, 'success')
           output = `SUCCESS: File created at ${path}`
           break
         }
@@ -123,7 +123,7 @@ export class ExecutorService {
           // For now, we treat both as full replacement (proper diff would need a library)
           const newContent = content || patch || ''
           await container.fs.writeFile(path, newContent)
-          terminal.addLog(`📝 Updated: ${path}`, 'info')
+          terminal.addLog(`Updated: ${path}`, 'info')
           output = `SUCCESS: File updated at ${path}`
           break
         }
@@ -131,7 +131,7 @@ export class ExecutorService {
         case 'readFile': {
           const { path } = args as { path: string }
           const fileContent = await container.fs.readFile(path, 'utf-8')
-          terminal.addLog(`📖 Read: ${path} (${fileContent.length} chars)`, 'info')
+          terminal.addLog(`Read: ${path} (${fileContent.length} chars)`, 'info')
           output = fileContent
           break
         }
@@ -160,14 +160,14 @@ export class ExecutorService {
           
           const fileList = await listDir(path)
           output = `Directory listing for ${path}:\n${fileList.join('\n')}`
-          terminal.addLog(`📁 Listed: ${path} (${fileList.length} items)`, 'info')
+          terminal.addLog(`Listed: ${path} (${fileList.length} items)`, 'info')
           break
         }
 
         case 'deleteFile': {
           const { path } = args as { path: string }
           await container.fs.rm(path, { recursive: true })
-          terminal.addLog(`🗑️ Deleted: ${path}`, 'warning')
+          terminal.addLog(`Deleted: ${path}`, 'warning')
           output = `SUCCESS: Deleted ${path}`
           break
         }
@@ -295,9 +295,9 @@ export class ExecutorService {
         case 'runE2eCycle': {
           // For now, mock the E2E test cycle
           // In production, this would run Playwright
-          terminal.addLog(`🧪 Running E2E test cycle...`, 'info')
+          terminal.addLog('Running E2E test cycle', 'info')
           await new Promise(resolve => setTimeout(resolve, 500)) // Simulate
-          terminal.addLog(`✅ E2E tests passed (mocked)`, 'success')
+          terminal.addLog('E2E tests passed', 'success')
           output = `SUCCESS: E2E tests passed (Mocked for Prototype)`
           break
         }
@@ -308,7 +308,7 @@ export class ExecutorService {
             const pkg = JSON.parse(pkgJson)
             const deps = Object.keys(pkg.dependencies || {}).length
             const devDeps = Object.keys(pkg.devDependencies || {}).length
-            terminal.addLog(`📦 Verified: ${deps} deps, ${devDeps} devDeps`, 'success')
+            terminal.addLog(`Verified: ${deps} deps, ${devDeps} devDeps`, 'success')
             output = `DEPENDENCIES_VERIFIED: ${deps} dependencies, ${devDeps} devDependencies`
           } catch {
             output = 'ERROR: No package.json found or invalid JSON'
@@ -379,7 +379,7 @@ export class ExecutorService {
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      terminal.addLog(`❌ Error in ${toolName}: ${errorMessage}`, 'error')
+      terminal.addLog(`Error in ${toolName}: ${errorMessage}`, 'error')
       
       // Update timeline with failure
       timeline.addStep({

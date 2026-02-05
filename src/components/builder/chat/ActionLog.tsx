@@ -14,9 +14,9 @@ import {
   Package,
   Sparkles,
   Search,
-  AlertCircle,
-  Loader2
+  AlertCircle
 } from 'lucide-react'
+import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 import type { ToolCall } from './types'
 
 // ============================================================================
@@ -162,7 +162,7 @@ function ActionItem({ toolCall }: { toolCall: ToolCall }) {
       {/* Status indicator */}
       <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
         {isRunning ? (
-          <Loader2 className="w-3.5 h-3.5 text-[#808080] animate-spin" />
+          <TorbitSpinner size="xs" speed="fast" />
         ) : isComplete ? (
           <Check className="w-3.5 h-3.5 text-[#666]" />
         ) : isError ? (
@@ -307,7 +307,7 @@ export function ActionLog({ toolCalls, isLoading, className = '' }: ActionLogPro
       {/* Show loading state */}
       {isLoading && toolCalls.length === 0 && (
         <div className="flex items-center gap-2 py-1 text-[12px] text-[#606060]">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <TorbitSpinner size="xs" speed="fast" />
           <span>Processing...</span>
         </div>
       )}
@@ -370,7 +370,7 @@ export function ActionIndicator({ toolCalls, isLoading }: { toolCalls: ToolCall[
     <div className="flex items-center gap-2 text-[11px]">
       {isLoading && (
         <div className="flex items-center gap-1.5 text-[#808080]">
-          <Loader2 className="w-3 h-3 animate-spin" />
+          <TorbitSpinner size="xs" speed="fast" />
           {running > 0 && <span>{running} running</span>}
         </div>
       )}

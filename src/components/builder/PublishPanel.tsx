@@ -11,7 +11,6 @@ import {
   Apple, 
   Download, 
   CheckCircle2, 
-  Loader2,
   Package,
   FileCode,
   Shield,
@@ -30,6 +29,7 @@ import type { ValidationResult } from '@/lib/mobile/validation'
 import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 import { PreflightChecklist } from './PreflightChecklist'
 import { GovernanceResolved } from './governance'
+import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 type ExportStatus = 'idle' | 'validating' | 'preflight' | 'exporting' | 'complete' | 'error'
 
@@ -272,14 +272,7 @@ export function PublishPanel() {
               {/* Validating State */}
               {status === 'validating' && (
                 <div className="py-12 flex flex-col items-center gap-4">
-                  <div className="relative">
-                    <div className="p-4 bg-neutral-900 rounded-2xl">
-                      <Shield className="w-8 h-8 text-[#c0c0c0]" />
-                    </div>
-                    <div className="absolute -right-1 -bottom-1 p-1 bg-black rounded-full">
-                      <Loader2 className="w-4 h-4 text-[#c0c0c0] animate-spin" />
-                    </div>
-                  </div>
+                  <TorbitSpinner size="xl" />
                   <div className="text-center">
                     <p className="text-white font-medium">Validating Project</p>
                     <p className="text-neutral-500 text-sm mt-1">Checking configuration and assets...</p>
@@ -303,14 +296,7 @@ export function PublishPanel() {
               {/* Exporting State */}
               {status === 'exporting' && (
                 <div className="py-12 flex flex-col items-center gap-4">
-                  <div className="relative">
-                    <div className="p-4 bg-neutral-900 rounded-2xl">
-                      <FileCode className="w-8 h-8 text-[#c0c0c0]" />
-                    </div>
-                    <div className="absolute -right-1 -bottom-1 p-1 bg-black rounded-full">
-                      <Loader2 className="w-4 h-4 text-[#c0c0c0] animate-spin" />
-                    </div>
-                  </div>
+                  <TorbitSpinner size="xl" />
                   <div className="text-center">
                     <p className="text-white font-medium">Generating Bundle</p>
                     <p className="text-neutral-500 text-sm mt-1">Creating Xcode-ready package...</p>

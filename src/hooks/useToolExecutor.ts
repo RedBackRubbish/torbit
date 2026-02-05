@@ -106,7 +106,7 @@ export function useToolExecutor() {
       
       // Fail-fast: stop on first error
       if (!result.success) {
-        terminal.addLog(`⚠️ Batch execution stopped due to error`, 'warning')
+        terminal.addLog('Batch execution stopped due to error', 'warning')
         break
       }
     }

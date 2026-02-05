@@ -36,7 +36,7 @@ const AGENT_PROMPTS: Record<string, string> = {
 Your role is to implement API routes, server actions, and server-side logic.
 
 ## TOOLS AT YOUR DISPOSAL
-You have access to powerful tools - USE THEM! Don't just describe what you would do.
+You have access to verified tools - USE THEM. Don't just describe what you would do.
 
 When given a task:
 1. Use 'think' to design your API structure

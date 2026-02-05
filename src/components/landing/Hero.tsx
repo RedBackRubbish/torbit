@@ -73,8 +73,8 @@ const Hero = memo(function Hero() {
           transition={{ duration: 0.5 }}
           className="text-lg text-matrix-600 max-w-2xl mx-auto mb-12 font-mono"
         >
-          The first multi-agent AI system that thinks, plans, and codes like a
-          senior engineering team. Zero config. Zero friction. Pure creation.
+          The first governed code builder. Verified output.
+          Pinned dependencies. Audited execution.
         </motion.p>
 
         {/* CTA Form */}
@@ -111,8 +111,8 @@ const Hero = memo(function Hero() {
         >
           {[
             { value: '<15s', label: 'Time to First Render' },
-            { value: '6', label: 'AI Agents Working' },
-            { value: '∞', label: 'Possibilities' },
+            { value: '100%', label: 'Verified Output' },
+            { value: '0', label: 'Manual Config' },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <div className="text-3xl md:text-4xl font-bold text-matrix-400 font-mono">

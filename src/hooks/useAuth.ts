@@ -1,7 +1,7 @@
 /**
  * TORBIT - useAuth Hook
  * 
- * Easy access to auth state and user profile.
+ * Simple auth state management using useState and useEffect.
  */
 
 'use client'
@@ -19,70 +19,105 @@ interface AuthState {
   error: Error | null
 }
 
+const initialState: AuthState = {
+  user: null,
+  profile: null,
+  session: null,
+  loading: true,
+  error: null,
+}
+
 export function useAuth() {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    profile: null,
-    session: null,
-    loading: true,
-    error: null,
-  })
+  const [state, setState] = useState<AuthState>(initialState)
 
   useEffect(() => {
     const supabase = getSupabase()
+    let cancelled = false
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        setState(s => ({ ...s, loading: false, error }))
-        return
-      }
-      
-      if (session?.user) {
-        // Fetch profile
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: profile }) => {
-            setState({
-              user: session.user,
-              profile: profile as Profile | null,
-              session,
-              loading: false,
-              error: null,
-            })
-          })
-      } else {
-        setState({ user: null, profile: null, session: null, loading: false, error: null })
-      }
-    })
+    async function loadSession() {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (cancelled) return
+        
+        if (error) {
+          console.error('[useAuth] getSession error:', error)
+          setState(s => ({ ...s, loading: false, error }))
+          return
+        }
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
         if (session?.user) {
+          console.log('[useAuth] Session found:', session.user.email)
+          setState(s => ({ 
+            ...s, 
+            user: session.user, 
+            session, 
+            loading: false 
+          }))
+          
+          // Fetch profile
           const { data: profile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single()
           
-          setState({
-            user: session.user,
-            profile: profile as Profile | null,
-            session,
-            loading: false,
-            error: null,
-          })
+          if (!cancelled) {
+            setState(s => ({ ...s, profile: profile as Profile | null }))
+          }
         } else {
-          setState({ user: null, profile: null, session: null, loading: false, error: null })
+          console.log('[useAuth] No session')
+          setState(s => ({ ...s, loading: false }))
+        }
+      } catch (err) {
+        console.error('[useAuth] Error:', err)
+        if (!cancelled) {
+          setState(s => ({ ...s, loading: false, error: err as Error }))
+        }
+      }
+    }
+
+    loadSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (cancelled) return
+        
+        console.log('[useAuth] Auth changed:', event, session?.user?.email)
+        
+        if (session?.user) {
+          setState(s => ({ 
+            ...s, 
+            user: session.user, 
+            session, 
+            loading: false 
+          }))
+          
+          // Fetch profile
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single()
+          
+          if (!cancelled) {
+            setState(s => ({ ...s, profile: profile as Profile | null }))
+          }
+        } else {
+          setState({ 
+            user: null, 
+            profile: null, 
+            session: null, 
+            loading: false, 
+            error: null 
+          })
         }
       }
     )
 
     return () => {
+      cancelled = true
       subscription.unsubscribe()
     }
   }, [])
@@ -122,8 +157,21 @@ export function useAuth() {
     if (error) throw error
   }, [])
 
+  // Compute avatar URL with fallback to user_metadata
+  const avatarUrl = state.profile?.avatar_url 
+    || state.user?.user_metadata?.avatar_url 
+    || state.user?.user_metadata?.picture 
+    || null
+
   return {
-    ...state,
+    user: state.user,
+    session: state.session,
+    loading: state.loading,
+    error: state.error,
+    profile: state.profile ? {
+      ...state.profile,
+      avatar_url: avatarUrl,
+    } : null,
     signIn,
     signUp,
     signInWithOAuth,

@@ -101,8 +101,8 @@ describe('useAuth Hook', () => {
   describe('Error Handling', () => {
     it('should handle sign in errors', async () => {
       mockSupabase.auth.signInWithPassword.mockResolvedValueOnce({
-        data: {},
-        error: new Error('Invalid credentials'),
+        data: { user: null, session: null },
+        error: { name: 'AuthError', message: 'Invalid credentials', status: 400 } as unknown as null,
       })
 
       const { useAuth } = await import('../useAuth')

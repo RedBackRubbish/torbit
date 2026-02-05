@@ -77,7 +77,7 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
         // Only log once per session (prevents Strict Mode duplicates)
         if (!hasLoggedBoot) {
           hasLoggedBoot = true
-          addLog('🔋 Initializing virtual environment...', 'info')
+          addLog('Verifying execution environment', 'info')
         }
         
         const instance = await getWebContainer()
@@ -90,12 +90,12 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
         instance.on('server-ready', (port, url) => {
           console.log(`🚀 Server ready on port ${port}: ${url}`)
           setServerUrl(url)
-          addLog(`✅ Server ready at ${url}`, 'success')
+          addLog('Runtime validated', 'success')
         })
         
         setIsBooting(false)
         setIsReady(true)
-        addLog('✅ Virtual environment ready', 'success')
+        addLog('Execution environment verified', 'success')
         
       } catch (err) {
         if (!mounted) return
@@ -103,7 +103,7 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
         const message = err instanceof Error ? err.message : 'Boot failed'
         setError(message)
         setIsBooting(false)
-        addLog(`❌ ${message}`, 'error')
+        addLog(`Verification failed: ${message}`, 'error')
       }
     }
 
@@ -124,7 +124,7 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
     }
     
     await container.fs.writeFile(path, content)
-    addLog(`📝 Written: ${path}`, 'info')
+    addLog(`Wrote: ${path}`, 'info')
   }
 
   const readFile = async (path: string): Promise<string | null> => {
@@ -160,7 +160,7 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
       return exitCode
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Command failed'
-      addLog(`❌ ${message}`, 'error')
+      addLog(`Error: ${message}`, 'error')
       setRunning(false)
       throw err
     }
@@ -170,20 +170,20 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
   const syncFilesToContainer = async () => {
     if (!container) return
     
-    addLog('📁 Syncing files to virtual environment...', 'info')
+    addLog('Synchronizing governed artifacts', 'info')
     
     for (const file of files) {
       await writeFile(file.path, file.content)
     }
     
-    addLog(`✅ Synced ${files.length} files`, 'success')
+    addLog(`${files.length} artifacts synchronized`, 'success')
   }
 
   // Initialize project
   const initializeProject = async () => {
     if (!container) throw new Error('Container not ready')
     
-    addLog('📦 Initializing Next.js project...', 'info')
+    addLog('Locking toolchain', 'info')
     
     // Create package.json
     await writeFile('package.json', JSON.stringify({
@@ -264,12 +264,12 @@ module.exports = nextConfig
       exclude: ['node_modules'],
     }, null, 2))
     
-    addLog('📥 Installing dependencies (this may take a moment)...', 'info')
+    addLog('Resolving pinned dependencies', 'info')
     
     const exitCode = await runCommand('npm', ['install'])
     
     if (exitCode === 0) {
-      addLog('✅ Dependencies installed', 'success')
+      addLog('Dependencies locked', 'success')
     }
   }
 
@@ -277,7 +277,7 @@ module.exports = nextConfig
   const startDevServer = async () => {
     if (!container) throw new Error('Container not ready')
     
-    addLog('🚀 Starting development server...', 'info')
+    addLog('Validating runtime', 'info')
     
     // Don't await - let it run in background
     container.spawn('npm', ['run', 'dev']).then(process => {

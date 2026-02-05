@@ -9,7 +9,8 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
-import { Loader2, Mail, Lock, Github, Chrome, ArrowRight, Sparkles } from 'lucide-react'
+import { Mail, Lock, Github, Chrome, ArrowRight } from 'lucide-react'
+import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 type AuthMode = 'login' | 'signup'
 
@@ -34,7 +35,7 @@ export function LoginForm() {
       } else {
         await signUp(email, password)
       }
-      router.push('/builder')
+      router.push('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
     } finally {
@@ -60,9 +61,11 @@ export function LoginForm() {
     >
       {/* Logo */}
       <div className="text-center mb-8">
-        <Link href="/" className="inline-flex items-center gap-2 group">
-          <Sparkles className="w-8 h-8 text-white group-hover:text-neutral-300 transition-colors" />
-          <span className="text-2xl font-bold tracking-tight text-white">TORBIT</span>
+        <Link href="/" className="inline-flex items-center gap-2.5 group">
+          <TorbitLogo size="lg" animated />
+          <span className="text-3xl font-bold tracking-tight text-white">
+            TORBIT
+          </span>
         </Link>
         <p className="text-neutral-400 mt-2">
           {mode === 'login' ? 'Welcome back' : 'Create your account'}
@@ -155,7 +158,7 @@ export function LoginForm() {
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <TorbitSpinner size="xs" speed="fast" />
                 {mode === 'login' ? 'Signing in...' : 'Creating account...'}
               </>
             ) : (

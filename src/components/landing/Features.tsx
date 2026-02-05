@@ -92,7 +92,7 @@ const Features = memo(function Features() {
             viewport={{ once: true }}
             className="text-4xl md:text-5xl font-bold text-matrix-400 mb-6"
           >
-            6 Agents. One Mind.
+            Governed Execution. Verified Output.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 20 }}
@@ -101,8 +101,8 @@ const Features = memo(function Features() {
             transition={{ delay: 0.1 }}
             className="text-matrix-600 font-mono max-w-2xl mx-auto"
           >
-            Not a single AI assistant. A coordinated team that thinks, plans,
-            builds, and audits—while you focus on the vision.
+            Not a code generator. A deterministic build system that plans,
+            executes, and verifies—while you focus on the outcome.
           </motion.p>
         </div>
 

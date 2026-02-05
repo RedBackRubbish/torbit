@@ -2,18 +2,20 @@
 
 import { useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { Check } from 'lucide-react'
 
 interface ChatInputProps {
   input: string
   isLoading: boolean
   onInputChange: (value: string) => void
   onSubmit: (e: React.FormEvent) => void
+  currentStep?: number
 }
 
 /**
- * ChatInput - Emergent-style clean input
+ * ChatInput - Emergent-style clean input with trust signals
  */
-export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInputProps) {
+export function ChatInput({ input, isLoading, onInputChange, onSubmit, currentStep = 1 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-resize textarea
@@ -51,7 +53,7 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Message Agent..."
+            placeholder="Describe what you want Torbit to produce"
             disabled={isLoading}
             rows={1}
             className="w-full px-4 py-3 pr-12 bg-transparent text-[14px] text-[#ffffff] placeholder:text-[#505050] resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
@@ -77,7 +79,57 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
             )}
           </button>
         </div>
+        
+        {/* Trust signals - subtle reassurance */}
+        <div className="flex items-center justify-center gap-4 mt-3 text-[11px] text-white/25">
+          <span className="flex items-center gap-1">
+            <Check className="w-3 h-3" />
+            Auditor-gated execution
+          </span>
+          <span className="flex items-center gap-1">
+            <Check className="w-3 h-3" />
+            Pinned dependencies
+          </span>
+          <span className="flex items-center gap-1">
+            <Check className="w-3 h-3" />
+            Refund on failed builds
+          </span>
+        </div>
       </form>
+      
+      {/* Workflow stepper */}
+      <div className="flex items-center justify-center gap-1 mt-4 text-[11px]">
+        {[
+          { num: 1, label: 'Describe' },
+          { num: 2, label: 'Build' },
+          { num: 3, label: 'Verify' },
+          { num: 4, label: 'Export' },
+        ].map((step, i) => (
+          <div key={step.num} className="flex items-center">
+            <span className={`flex items-center gap-1 px-2 py-0.5 rounded ${
+              currentStep === step.num 
+                ? 'text-white bg-white/[0.08]' 
+                : currentStep > step.num
+                  ? 'text-white/40'
+                  : 'text-white/20'
+            }`}>
+              <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[10px] font-medium ${
+                currentStep === step.num 
+                  ? 'bg-white text-black' 
+                  : currentStep > step.num
+                    ? 'bg-white/20 text-white/60'
+                    : 'bg-white/[0.06] text-white/30'
+              }`}>
+                {currentStep > step.num ? <Check className="w-2.5 h-2.5" /> : step.num}
+              </span>
+              {step.label}
+            </span>
+            {i < 3 && (
+              <div className={`w-4 h-px mx-1 ${currentStep > step.num ? 'bg-white/20' : 'bg-white/[0.06]'}`} />
+            )}
+          </div>
+        ))}
+      </div>
     </motion.div>
   )
 }
