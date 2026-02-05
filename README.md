@@ -5,15 +5,15 @@
 <h1 align="center">TORBIT</h1>
 
 <p align="center">
-  <strong>The Autonomous AI Coding Platform</strong><br/>
-  Build full-stack applications with AI agents that write, test, and deploy code in real-time.
+  <strong>AI That Ships Production Code</strong><br/>
+  Web apps. Mobile apps. One prompt. Export to Xcode or deploy to Vercel.
 </p>
 
 <p align="center">
   <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#getting-started">Getting Started</a> •
-  <a href="#documentation">Documentation</a> •
+  <a href="#governance">Governance</a> •
   <a href="#testing">Testing</a>
 </p>
 
@@ -21,40 +21,72 @@
 
 ## Overview
 
-TORBIT is an autonomous AI coding platform that gives AI agents a **living body** to build software. Unlike traditional coding assistants that only suggest code, TORBIT's agents can:
+TORBIT is a governed AI coding platform where **you talk to Torbit, not a swarm of agents**. Under the hood, specialized AI agents collaborate - but the UX is a single, accountable voice.
 
-- 📁 **Create, edit, and delete files** directly in a real filesystem
-- 🖥️ **Run terminal commands** (npm, git, node, etc.)
-- 👁️ **See live preview** of the application being built
-- 🔴 **Feel errors** through a nervous system that detects and auto-fixes issues
-- ⛽ **Manage resources** through a fuel-based token economy
+**Core philosophy:**
+- 🎯 **Single voice** - Torbit is responsible. Agents are invisible infrastructure.
+- 🛡️ **Visible governance** - Escalations surface only when needed.
+- ⚡ **Invisible machinery** - No agent theater, no model names, no streaming reasoning.
 
-All of this runs **entirely in the browser** using WebContainers - no server-side code execution required.
+### What Torbit can do:
+
+- 📱 **Build iOS apps** - Expo/React Native, export for Xcode
+- 🌐 **Build web apps** - Next.js 15, deploy to Vercel/Netlify  
+- 📁 **Create files** - Full filesystem in the browser via WebContainers
+- 🖥️ **Run commands** - npm, git, node, shell
+- 👁️ **Live preview** - See the app as it's built
+- 🔴 **Auto-fix errors** - Deterministic fixes with validation and audit rollback
 
 ---
 
 ## Features
 
-### 🧠 Multi-Agent System
+### 🧠 Agent Hierarchy (Invisible to Users)
 
-TORBIT uses specialized AI agents that work together:
+> This agent hierarchy is internal and never exposed in the user interface.
 
-| Agent | Role | Description |
-|-------|------|-------------|
-| **Planner** | 🎯 Strategy | Analyzes tasks, breaks them into steps, estimates fuel costs |
-| **Architect** | 📐 Design | Designs system architecture, file structure, component hierarchy |
-| **Builder** | 🔨 Execution | Writes code, runs commands, creates files |
-| **Auditor** | ✅ Quality | Reviews code for errors, security issues, best practices |
-| **DevOps** | 🚀 Deployment | Handles builds, tests, and deployment preparation |
+Behind the scenes, Torbit orchestrates specialized agents:
 
-### ⚡ WebContainer Runtime
+| Agent | Model | Role |
+|-------|-------|------|
+| **Strategist** | GPT-5.2 | Reviews plans. Never first mover. <10% of tokens. |
+| **Planner** | Gemini Pro | Creates execution plans, delegates work. |
+| **Architect** | Gemini Pro | System design, component hierarchy. |
+| **Frontend** | Claude Sonnet 4.5 | Pixel-perfect UI implementation. |
+| **Backend** | Kimi K2.5 | APIs, business logic, data layer. |
+| **DevOps** | Gemini Flash | Infrastructure, builds, fast iteration. |
+| **QA** | Gemini Flash | Testing, validation, fix loops. |
+| **Auditor** | Claude Opus 4.5 | Quality gate. Judges only - never fixes. <10% of tokens. |
 
-Full Node.js environment running in your browser:
+**Governance rule:** Premium models (GPT-5.2 + Opus) combined should be <10% of total tokens.
 
-- **Real filesystem** - Files are created and persisted
-- **npm support** - Install any package from the registry
-- **Hot reload** - See changes instantly in the preview
-- **Terminal output** - Full command output visibility
+### 📱 Mobile App Export
+
+Build iOS apps and export for Xcode:
+
+- **Expo + React Native** - Cross-platform foundation
+- **Native capabilities** - Camera, auth, push notifications
+- **Preflight checks** - Bundle ID, signing, entitlements validation
+- **One-click export** - Download Xcode-ready project
+
+### 🛡️ Governance UI
+
+Escalation is visible. Agents are not.
+
+| Event | UX |
+|-------|-----|
+| **Normal build** | Subtle status: `Building… • UI • Backend` |
+| **Strategist review** | Side panel slides in with structured verdict |
+| **Auditor pass** | Single line: `Checks passed. Ready to export.` |
+| **Auditor fail** | Inline card: Issues + `Correcting and re-running.` |
+
+### ⛽ Fuel Economy
+
+Token-based resource management:
+
+- **Pre-flight estimation** - See costs before execution
+- **Auditor Guarantee** - If code fails audit, fuel is refunded
+- **Tier system** - Standard (1,000) / Pro (5,000) / Enterprise (25,000)
 
 ### 🔴 Nervous System
 
@@ -64,32 +96,14 @@ Self-healing error detection with 15+ patterns:
 ┌─────────────────┬──────────────────────────────────────────┐
 │ Error Type      │ Auto-Response                            │
 ├─────────────────┼──────────────────────────────────────────┤
-│ DEPENDENCY_ERROR│ npm install the missing package          │
-│ SYNTAX_ERROR    │ Read file, locate typo, fix it           │
-│ TYPE_ERROR      │ Add proper TypeScript annotations        │
-│ HYDRATION_ERROR │ Wrap in useEffect or use dynamic()       │
-│ BUILD_ERROR     │ Analyze error, fix the root cause        │
-│ RUNTIME_ERROR   │ Debug and patch the issue                │
+│ DEPENDENCY_ERROR│ Install missing package                  │
+│ SYNTAX_ERROR    │ Locate and fix typo                      │
+│ TYPE_ERROR      │ Add TypeScript annotations               │
+│ HYDRATION_ERROR │ Wrap in useEffect or dynamic()           │
+│ BUILD_ERROR     │ Analyze and fix root cause               │
+│ RUNTIME_ERROR   │ Debug and patch                          │
 └─────────────────┴──────────────────────────────────────────┘
 ```
-
-### ⛽ Fuel Economy
-
-Token-based resource management with the **Auditor Guarantee**:
-
-- **Pre-flight estimation** - See costs before execution
-- **Hold pattern** - Fuel is held, not charged, during builds
-- **Quality guarantee** - If code fails audit, user gets refunded
-- **Tier system** - Standard (1,000) / Pro (5,000) / Enterprise (25,000)
-
-### 🎯 Neural Timeline
-
-Real-time visibility into AI reasoning:
-
-- Step-by-step execution tracking
-- Agent attribution for each action
-- Expandable "thinking" output
-- Success/failure status indicators
 
 ---
 
@@ -101,14 +115,21 @@ Real-time visibility into AI reasoning:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐ │
-│  │   ChatPanel │───▶│ SSE Stream  │───▶│  Agent Middleware   │ │
-│  │  (React UI) │    │ /api/chat   │    │  (Anthropic/Google) │ │
+│  │   ChatPanel │───▶│  Orchestrator│───▶│   Agent Router      │ │
+│  │  "Torbit"   │    │  SSE Stream │    │  (Model Selection)  │ │
 │  └─────────────┘    └─────────────┘    └─────────────────────┘ │
 │         │                                        │              │
-│         ▼                                        ▼              │
+│         │                                        ▼              │
+│         │           ┌────────────────────────────────────────┐ │
+│         │           │            GOVERNANCE LAYER            │ │
+│         │           │  ┌──────────┐ ┌──────────┐ ┌────────┐ │ │
+│         │           │  │Strategist│ │ Auditor  │ │Escalate│ │ │
+│         │           │  │ (GPT-5.2)│ │ (Opus)   │ │  UI    │ │ │
+│         │           │  └──────────┘ └──────────┘ └────────┘ │ │
+│         │           └────────────────────────────────────────┘ │
+│         ▼                                                       │
 │  ┌─────────────────────────────────────────────────────────────┐│
 │  │                    EXECUTOR SERVICE                         ││
-│  │              "The Spinal Cord"                              ││
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐ ││
 │  │  │ createFile│ │ editFile │ │runTerminal│ │ installPackage │ ││
 │  │  └──────────┘ └──────────┘ └──────────┘ └────────────────┘ ││
@@ -117,7 +138,6 @@ Real-time visibility into AI reasoning:
 │         ▼                                                       │
 │  ┌─────────────────────────────────────────────────────────────┐│
 │  │                    WEBCONTAINER                             ││
-│  │              "The Body"                                     ││
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐ ││
 │  │  │ Filesystem│ │ Terminal │ │ npm/node │ │  Dev Server    │ ││
 │  │  └──────────┘ └──────────┘ └──────────┘ └────────────────┘ ││
@@ -126,7 +146,6 @@ Real-time visibility into AI reasoning:
 │         ▼                                                       │
 │  ┌─────────────────────────────────────────────────────────────┐│
 │  │                   NERVOUS SYSTEM                            ││
-│  │              "Pain Receptors"                               ││
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐ ││
 │  │  │ Terminal │ │ Browser  │ │ Build    │ │  Reflex Arc    │ ││
 │  │  │ Monitor  │ │ Console  │ │ Errors   │ │  (Auto-fix)    │ ││
@@ -146,34 +165,43 @@ src/
 │   └── globals.css        # Global styles
 ├── components/
 │   ├── builder/           # IDE components
-│   │   ├── ChatPanel.tsx      # AI chat interface
+│   │   ├── ChatPanel.tsx      # Single-voice chat ("Torbit")
 │   │   ├── FileExplorer.tsx   # File tree browser
 │   │   ├── PreviewPanel.tsx   # Live preview iframe
-│   │   ├── FuelGauge.tsx      # Fuel meter display
-│   │   ├── NeuralTimeline.tsx # Step tracking sidebar
-│   │   └── BuilderLayout.tsx  # Main layout
-│   ├── effects/           # Visual effects
+│   │   ├── PublishPanel.tsx   # iOS export flow
+│   │   ├── governance/        # Escalation UI components
+│   │   │   ├── SupervisorReviewPanel.tsx
+│   │   │   ├── QualityGateResult.tsx
+│   │   │   ├── InspectorView.tsx
+│   │   │   └── EscalationMessage.tsx
+│   │   └── chat/              # Message components
 │   └── ui/               # Reusable UI components
-├── hooks/
-│   └── useToolExecutor.ts # React hook for tool execution
 ├── lib/
-│   ├── agents/           # AI agent configurations
-│   │   ├── orchestrator.ts    # Agent routing logic
-│   │   └── prompts/           # System prompts
-│   │       └── god-prompt.ts  # Master instruction
+│   ├── agents/           # AI agent system
+│   │   ├── orchestrator.ts    # Agent routing
+│   │   ├── models.ts          # Model configuration
+│   │   ├── router.ts          # Kimi intelligent routing
+│   │   └── prompts/           # Agent prompts
+│   │       ├── strategist.ts  # GPT-5.2 plan validator
+│   │       ├── planner.ts     # Gemini Pro planner
+│   │       ├── architect.ts   # System design
+│   │       ├── frontend.ts    # UI specialist
+│   │       ├── auditor.ts     # Quality gate (read-only)
+│   │       └── qa.ts          # Testing & fixes
 │   ├── tools/            # Tool definitions
-│   │   ├── definitions.ts     # Tool schemas
-│   │   └── executor.ts        # Tool execution logic
-│   ├── nervous-system.ts # Error detection & dispatch
+│   │   ├── definitions.ts     # Tool schemas per agent
+│   │   └── executor.ts        # Tool execution
+│   ├── mobile/           # iOS export system
+│   │   ├── export.ts          # Bundle generation
+│   │   └── validation.ts      # Preflight checks
+│   ├── nervous-system.ts # Error detection
 │   └── webcontainer.ts   # WebContainer singleton
 ├── services/
-│   └── executor.ts       # ExecutorService (Spinal Cord)
-├── store/                # Zustand state management
-│   ├── fuel.ts          # Fuel economy state
-│   ├── timeline.ts      # Neural timeline state
-│   └── terminal.ts      # Terminal output state
-└── providers/
-    └── WebContainerProvider.tsx
+│   └── executor.ts       # ExecutorService
+└── store/                # Zustand state
+    ├── fuel.ts          # Token economy
+    ├── builder.ts       # App state
+    └── terminal.ts      # Terminal output
 ```
 
 ---
@@ -233,6 +261,8 @@ Create a `.env.local` file with the following:
 # AI Provider API Keys (at least one required)
 ANTHROPIC_API_KEY=sk-ant-api03-...
 GOOGLE_GENERATIVE_AI_API_KEY=AIza...
+OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-or-...
 
 # Default Model (optional)
 DEFAULT_MODEL=claude-sonnet-4-20250514
@@ -241,28 +271,33 @@ DEFAULT_MODEL=claude-sonnet-4-20250514
 TORBIT_SYSTEM_MODE=development
 TORBIT_MAX_ITERATIONS=50
 TORBIT_ENABLE_AUDITOR=true
-TORBIT_ENABLE_PLANNER=true
+TORBIT_ENABLE_STRATEGIST=true
 ```
 
 ---
 
 ## Documentation
 
-### The God Prompt
+### Single Voice Architecture
 
-Every AI agent receives the "God Prompt" - a comprehensive system instruction that teaches them:
+Torbit speaks as **one entity**, not a swarm:
 
-1. **Identity** - They are TORBIT, an autonomous coding agent with a living body
-2. **Tools** - How to use file operations, terminal commands, and package management
-3. **Nervous System** - How to respond to pain signals (errors)
-4. **Fuel Economics** - How to be efficient with token usage
-5. **Workflow Protocol** - Reconnaissance → Execution → Verification
-6. **Tech Stack** - Next.js 15, React 19, TypeScript, Tailwind, App Router
+- **User sees:** "Building…", "Updating layout…", "Correcting and re-running."
+- **User never sees:** "Frontend Agent is thinking…", "Claude Sonnet 4.5 processing…"
+- **Governance surfaces only when needed:** Escalation panels slide in for supervisor review
+
+### Governance Contracts
+
+| Role | Model | Contract | Token Budget |
+|------|-------|----------|--------------|
+| **Strategist** | GPT-5.2 | Reviews plans, never first mover | <10% |
+| **Auditor** | Claude Opus 4.5 | Judges quality, never fixes | <10% |
+| **Executors** | All others | Build, fix, ship | Bulk tokens |
 
 ### Tool Reference
 
-| Tool | Fuel Cost | Description |
-|------|-----------|-------------|
+| Tool | Cost | Description |
+|------|------|-------------|
 | `readFile` | 2 | Read file contents |
 | `createFile` | 5 | Create a new file |
 | `editFile` | 8 | Modify existing file |
@@ -270,54 +305,20 @@ Every AI agent receives the "God Prompt" - a comprehensive system instruction th
 | `listFiles` | 2 | List directory contents |
 | `runTerminal` | 15 | Execute shell command |
 | `installPackage` | 25 | npm install a package |
-| `runTests` | 30 | Run test suite |
 | `think` | 10 | Record reasoning step |
 
-### Auditor Guarantee
+### Quality Gate
 
-The fuel system implements a "hold and finalize" pattern:
+The Auditor implements a "hold and finalize" pattern:
 
-1. **Hold** - When Builder starts, fuel is reserved (not charged)
-2. **Build** - Builder creates files, runs commands
+1. **Hold** - When build starts, fuel is reserved
+2. **Build** - Agents create files, run commands
 3. **Audit** - Auditor checks for errors, TypeScript issues, security
 4. **Finalize or Refund**:
-   - ✅ Audit passes → Fuel is charged
-   - ❌ Audit fails → Fuel is refunded
+   - ✅ Audit passes → Fuel charged
+   - ❌ Audit fails → Fuel refunded, issues surfaced
 
-This ensures users only pay for working code.
-
----
-
-## Testing
-
-TORBIT has comprehensive test coverage with **312 tests** across all systems.
-
-### Running Tests
-
-```bash
-# Run tests in watch mode
-npm run test
-
-# Run tests once
-npm run test:run
-
-# Run with coverage
-npm run test:coverage
-```
-
-### Test Suites
-
-| Suite | Tests | Coverage |
-|-------|-------|----------|
-| `nervous-system.test.ts` | 28 | Error detection, debouncing, pain dispatch |
-| `executor.test.ts` | 22 | Tool routing, WebContainer ops, error handling |
-| `fuel.test.ts` | 23 | Fuel economy, Auditor Guarantee, tiers |
-| `timeline.test.ts` | 34 | Step tracking, status transitions, agents |
-| `terminal.test.ts` | 23 | Command logging, output types, limits |
-| `webcontainer.test.ts` | 20 | FS operations, process spawning |
-| `god-prompt.test.ts` | 35 | Prompt structure, content validation |
-| `useToolExecutor.test.ts` | 8 | React hook, batch execution |
-| UI Components | 50+ | MatrixButton, MatrixCard, GlitchText, etc. |
+Users only pay for working code.
 
 ---
 
@@ -329,9 +330,9 @@ npm run test:coverage
 | **Runtime** | React 19.2.3 |
 | **Language** | TypeScript 5 (strict mode) |
 | **Styling** | Tailwind CSS 4 |
-| **Animation** | Framer Motion 12 |
+| **Animation** | Framer Motion 12 (250ms ease-in) |
 | **State** | Zustand 5 (with immer & persist) |
-| **AI SDK** | Vercel AI SDK 6 (Anthropic, Google) |
+| **AI SDK** | Vercel AI SDK 6 (Anthropic, Google, OpenAI, OpenRouter) |
 | **Editor** | Monaco Editor |
 | **Container** | WebContainer API |
 | **Testing** | Vitest 4, Testing Library |
@@ -344,7 +345,7 @@ npm run test:coverage
 TORBIT requires browsers that support:
 
 - **SharedArrayBuffer** - For WebContainer multi-threading
-- **Cross-Origin Isolation** - COOP/COEP headers are configured
+- **Cross-Origin Isolation** - COOP/COEP headers configured
 
 Supported browsers:
 - ✅ Chrome 92+
@@ -356,13 +357,14 @@ Supported browsers:
 
 ## Roadmap
 
-- [ ] **Persistent Projects** - Save/load projects to cloud storage
-- [ ] **Git Integration** - Commit, push, pull from the IDE
+- [x] **Mobile App Export** - Export iOS apps via Expo + Xcode
+- [ ] **Android Export** - Android packaging support
+- [x] **Multi-Agent Governance** - Strategist review, Auditor quality gate
+- [ ] **Persistent Projects** - Save/load to cloud storage
+- [ ] **Git Integration** - Commit, push, pull from IDE
 - [ ] **Deployment** - One-click deploy to Vercel/Netlify
 - [ ] **Collaboration** - Real-time multi-user editing
-- [ ] **Custom Agents** - User-defined agent personalities
 - [ ] **Plugin System** - Extend with custom tools
-- [ ] **Mobile Support** - Responsive IDE for tablets
 
 ---
 

@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import FileExplorer from './FileExplorer'
 import NeuralTimeline from './NeuralTimeline'
+import { ProjectTypeSelector } from './ProjectTypeSelector'
+import { CapabilitiesPanel } from './CapabilitiesPanel'
+import { useBuilderStore } from '@/store/builder'
 
 interface SidebarProps {
   collapsed: boolean
@@ -17,6 +20,7 @@ type SidebarTab = 'files' | 'activity'
  */
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files')
+  const { projectType } = useBuilderStore()
   
   return (
     <motion.aside
@@ -72,8 +76,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </button>
       </div>
 
+      {/* Project Type Selector */}
+      {!collapsed && (
+        <div className="px-2 py-2 border-b border-[#151515]">
+          <ProjectTypeSelector compact />
+        </div>
+      )}
+
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden flex flex-col">
         <AnimatePresence mode="wait">
           {!collapsed && (
             <motion.div
@@ -82,12 +93,17 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="h-full"
+              className="flex-1 overflow-hidden"
             >
               {activeTab === 'files' ? <FileExplorer /> : <NeuralTimeline />}
             </motion.div>
           )}
         </AnimatePresence>
+        
+        {/* Capabilities Panel - Only show when mobile and not collapsed */}
+        {!collapsed && projectType === 'mobile' && (
+          <CapabilitiesPanel />
+        )}
         
         {/* Collapsed state icons */}
         {collapsed && (

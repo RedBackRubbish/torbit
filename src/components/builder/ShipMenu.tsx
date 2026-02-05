@@ -2,16 +2,21 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useBuilderStore } from '@/store/builder'
 
 /**
- * ShipMenu - Premium Deploy Button with Silver Accents
+ * ShipMenu - Premium Deploy Button for Web Apps
  * 
- * Pure black + silver theme with proper dropdown positioning
+ * Only shows for web projects (Vercel, Netlify deployment)
+ * Hidden for mobile apps (use Publish for iOS export instead)
  */
 export default function ShipMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const [isDeploying, setIsDeploying] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  
+  const { projectType } = useBuilderStore()
+  const isMobile = projectType === 'mobile'
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -62,61 +67,76 @@ export default function ShipMenu() {
     // TODO: Deploy to Netlify
   }
 
-  return (
-    <div ref={menuRef} className="relative flex items-center">
-      {/* Primary Action: Deploy */}
-      <button
-        onClick={handleDeploy}
-        disabled={isDeploying}
-        className={`
-          flex items-center gap-2 px-4 py-1.5 text-[13px] font-semibold rounded-l-lg transition-all duration-200
-          ${isDeploying 
-            ? 'bg-[#c0c0c0]/50 text-[#000] cursor-wait' 
-            : 'bg-[#c0c0c0] text-[#000] hover:bg-[#d4d4d4]'
-          }
-        `}
-      >
-        {isDeploying ? (
-          <>
-            <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            <span>Deploying...</span>
-          </>
-        ) : (
-          <>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-            </svg>
-            <span>DEPLOY</span>
-          </>
-        )}
-      </button>
+  // Hide Deploy button for mobile apps (they use Publish for iOS export)
+  if (isMobile) {
+    return null
+  }
 
-      {/* Dropdown Trigger */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`
-          flex items-center justify-center w-7 py-1.5 rounded-r-lg border-l border-[#909090] transition-all duration-200
-          ${isOpen 
-            ? 'bg-[#a0a0a0] text-[#000]' 
-            : 'bg-[#c0c0c0] text-[#000] hover:bg-[#d4d4d4]'
-          }
-        `}
-        aria-label="More deploy options"
-        aria-expanded={isOpen}
-      >
-        <svg 
-          className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
-          fill="none" 
-          viewBox="0 0 24 24" 
-          stroke="currentColor" 
-          strokeWidth={2.5}
+  return (
+    <div ref={menuRef} className="relative flex items-center group/deploy" role="group" aria-label="Deploy options">
+      {/* Premium Deploy Button Group */}
+      <div className="flex items-center rounded-lg overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.3)] group-hover/deploy:shadow-[0_4px_16px_rgba(16,185,129,0.2)] transition-shadow duration-300">
+        {/* Primary Action: Deploy */}
+        <button
+          onClick={handleDeploy}
+          disabled={isDeploying}
+          aria-label={isDeploying ? 'Deploying your web app to production' : 'Deploy your web app to production hosting'}
+          aria-busy={isDeploying}
+          className={`
+            group relative flex items-center gap-2 px-5 py-2 text-[13px] font-bold tracking-wide transition-all duration-200 overflow-hidden
+            ${isDeploying 
+              ? 'bg-gradient-to-r from-emerald-600/80 to-emerald-500/80 text-white cursor-wait' 
+              : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 text-white hover:from-emerald-500 hover:via-emerald-400 hover:to-emerald-500'
+            }
+            shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]
+            active:scale-[0.98]
+          `}
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+          {isDeploying ? (
+            <>
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span>Deploying...</span>
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4 transition-transform group-hover:-rotate-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+              </svg>
+              <span>Deploy</span>
+            </>
+          )}
+          {/* Shimmer effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" aria-hidden="true" />
+        </button>
+
+        {/* Dropdown Trigger */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={`
+            flex items-center justify-center w-9 py-2 border-l border-emerald-700/50 transition-all duration-200
+            ${isOpen 
+              ? 'bg-emerald-700 text-white' 
+              : 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white hover:from-emerald-500 hover:to-emerald-400'
+            }
+            shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]
+          `}
+          aria-label="More deploy options"
+          aria-expanded={isOpen}
+        >
+          <svg 
+            className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor" 
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
 
       {/* Dropdown Menu */}
       <AnimatePresence>

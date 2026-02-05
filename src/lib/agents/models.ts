@@ -7,6 +7,7 @@
 
 import { anthropic } from '@ai-sdk/anthropic'
 import { google } from '@ai-sdk/google'
+import { openai } from '@ai-sdk/openai'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import type { LanguageModel } from 'ai'
 import type { AgentId } from '../tools/definitions'
@@ -20,7 +21,7 @@ const openrouter = createOpenRouter({
 // MODEL TYPES
 // ============================================
 
-export type ModelProvider = 'claude-opus' | 'claude-sonnet' | 'gemini-pro' | 'gemini-flash' | 'kimi'
+export type ModelProvider = 'claude-opus' | 'claude-sonnet' | 'gpt-5.2' | 'gpt-5-mini' | 'gemini-pro' | 'gemini-flash' | 'kimi'
 export type TaskComplexity = 'high' | 'medium' | 'low'
 
 export interface ModelConfig {
@@ -52,6 +53,22 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
     costTier: 'standard',
     inputCostPer1k: 0.003,
     outputCostPer1k: 0.015,
+  },
+  'gpt-5.2': {
+    provider: 'gpt-5.2',
+    model: 'gpt-5.2',
+    description: 'OpenAI flagship - best for coding and agentic tasks',
+    costTier: 'premium',
+    inputCostPer1k: 0.00175,
+    outputCostPer1k: 0.014,
+  },
+  'gpt-5-mini': {
+    provider: 'gpt-5-mini',
+    model: 'gpt-5-mini',
+    description: 'Fast, cheap GPT-5 for well-defined tasks',
+    costTier: 'economy',
+    inputCostPer1k: 0.00025,
+    outputCostPer1k: 0.002,
   },
   'gemini-pro': {
     provider: 'gemini-pro',
@@ -86,24 +103,49 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
 /**
  * Default model for each agent - optimized for their specialty
  * 
- * NOTE: Using Gemini as primary while Anthropic credits are low
- * Switch back to claude-opus for architect when credits are topped up
+ * MODEL HIERARCHY & GOVERNANCE:
+ * ═══════════════════════════════════════════════════════════════
  * 
- * OPUS 4.5 = The Boss (plans everything)
- * SONNET 4.5 = The Executor (builds what Opus plans)
- * GEMINI PRO = Big brain (large context, full codebase analysis)
- * GEMINI FLASH = The Rabbit (cleanup, small fixes, dirty work)
- * KIMI K2.5 = Multilingual powerhouse (complex reasoning, internationalization)
+ * STRATEGIST (GPT-5.2) - Plan Validator
+ *   → Reviews/validates plans from Planner
+ *   → NEVER the first mover - only approves/vetoes/amends
+ *   → Read-only access, produces verdicts not code
+ * 
+ * PLANNER (Gemini Pro) - Plan Creator  
+ *   → Creates plans, delegates to specialists
+ *   → First mover for orchestration
+ * 
+ * ARCHITECT (Gemini Pro) - System Design
+ *   → System architecture, file structure
+ *   → Orchestrates multi-file builds
+ * 
+ * BUILDERS (Sonnet/Kimi) - Execution
+ *   → Frontend: Claude Sonnet 4.5 (precision UI)
+ *   → Backend: Kimi K2.5 (heavy API logic)
+ * 
+ * FAST OPS (Gemini Flash) - Iteration
+ *   → DevOps, QA loops, cheap iteration
+ * 
+ * AUDITOR (Claude Opus 4.5) - Quality Gate
+ *   → Deep inspection, critical path safety
+ *   → JUDGES ONLY - does not fix freely
+ *   → Produces verdicts + bounded recommendations
+ *   → ❌ No endless iteration
+ *   → ❌ No refactoring large surfaces
+ * 
+ * COST RULE: GPT-5.2 + Opus combined < 10% of total tokens
+ * ═══════════════════════════════════════════════════════════════
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  architect: 'gemini-pro',       // Using Gemini while Anthropic credits low
-  planner: 'gemini-pro',         // Using Gemini while Anthropic credits low
-  frontend: 'gemini-pro',        // Gemini executes frontend code
-  backend: 'kimi',               // KIMI handles backend logic
-  database: 'gemini-pro',        // PRO handles large schema context
-  devops: 'gemini-flash',        // FLASH handles config cleanup
-  qa: 'gemini-flash',            // FLASH writes quick tests
-  auditor: 'gemini-pro',         // PRO reviews full codebase
+  architect: 'gemini-pro',       // System design, orchestration
+  planner: 'gemini-pro',         // Plan CREATION (not validation)
+  strategist: 'gpt-5.2',         // Plan VALIDATION (reviews planner output)
+  frontend: 'claude-sonnet',     // Precision UI builds
+  backend: 'kimi',               // Heavy API/backend execution
+  database: 'gemini-pro',        // Large schema context
+  devops: 'gemini-flash',        // Fast config/deploy loops
+  qa: 'gemini-flash',            // Quick test cycles
+  auditor: 'claude-opus',        // Deep inspection, quality gate (JUDGE ONLY)
 }
 
 // ============================================
@@ -120,6 +162,9 @@ export function getModel(provider: ModelProvider): LanguageModel {
     case 'claude-opus':
     case 'claude-sonnet':
       return anthropic(config.model)
+    case 'gpt-5.2':
+    case 'gpt-5-mini':
+      return openai(config.model)
     case 'gemini-pro':
     case 'gemini-flash':
       return google(config.model)

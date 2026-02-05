@@ -7,6 +7,81 @@ import { useBuilderStore } from '@/store/builder'
 import { useWebContainer } from '@/hooks/useWebContainer'
 import { useTerminalStore } from '@/store/terminal'
 import { NervousSystem } from '@/lib/nervous-system'
+import { IPhoneFrame, BrowserFrame } from './DeviceFrame'
+import { DEVICE_PRESETS } from '@/lib/mobile/types'
+
+// ============================================================================
+// Device Preset Selector
+// ============================================================================
+
+function DevicePresetSelector() {
+  const { devicePreset, setDevicePreset } = useBuilderStore()
+  const [isOpen, setIsOpen] = useState(false)
+  const currentDevice = DEVICE_PRESETS[devicePreset] || DEVICE_PRESETS['iphone-15-pro-max']
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-[#808080] hover:text-[#a0a0a0] bg-[#050505] border border-[#151515] rounded-md transition-all"
+      >
+        <span className="text-[#c0c0c0]">{currentDevice.name}</span>
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 z-40" 
+              onClick={() => setIsOpen(false)} 
+            />
+            {/* Dropdown */}
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.15 }}
+              className="absolute top-full left-0 mt-1 w-48 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg shadow-xl z-50 overflow-hidden"
+            >
+              {Object.values(DEVICE_PRESETS).map((device) => (
+                <button
+                  key={device.id}
+                  onClick={() => {
+                    setDevicePreset(device.id)
+                    setIsOpen(false)
+                  }}
+                  className={`
+                    w-full flex items-center gap-2 px-3 py-2 text-left text-[12px] transition-all
+                    ${devicePreset === device.id 
+                      ? 'bg-[#c0c0c0]/10 text-[#c0c0c0]' 
+                      : 'text-[#808080] hover:bg-[#141414] hover:text-white'
+                    }
+                  `}
+                >
+                  <div className="flex-1">
+                    <div className="font-medium">{device.name}</div>
+                    <div className="text-[10px] text-[#525252]">
+                      {device.width} × {device.height}
+                    </div>
+                  </div>
+                  {devicePreset === device.id && (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 // Dynamic import Monaco
 const CodeEditor = dynamic(() => import('./CodeEditor'), {
@@ -29,7 +104,7 @@ const CodeEditor = dynamic(() => import('./CodeEditor'), {
  * PreviewPanel - Clean, minimal preview with WebContainer
  */
 export default function PreviewPanel() {
-  const { previewTab, previewDevice, setPreviewDevice, files } = useBuilderStore()
+  const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, projectType } = useBuilderStore()
   const { isBooting, isReady, serverUrl, error, isSupported } = useWebContainer()
   const terminalLines = useTerminalStore((s) => s.lines)
   const [showTerminal, setShowTerminal] = useState(false)
@@ -66,35 +141,42 @@ export default function PreviewPanel() {
           {/* Controls Bar - Pure black + silver */}
           <div className="h-10 border-b border-[#151515] flex items-center justify-between px-3 bg-[#000000]">
             {/* Device Switcher */}
-            <div className="flex items-center gap-0.5 p-0.5 bg-[#050505] rounded-md border border-[#151515]">
-              {(['desktop', 'tablet', 'mobile'] as const).map((device) => (
-                <button
-                  key={device}
-                  onClick={() => setPreviewDevice(device)}
-                  className={`p-1.5 rounded transition-all ${
-                    previewDevice === device
-                      ? 'bg-[#0f0f0f] text-[#c0c0c0]'
-                      : 'text-[#505050] hover:text-[#808080]'
-                  }`}
-                  title={device.charAt(0).toUpperCase() + device.slice(1)}
-                >
-                  {device === 'desktop' && (
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
-                    </svg>
-                  )}
-                  {device === 'tablet' && (
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5h3m-6.75 2.25h10.5a2.25 2.25 0 002.25-2.25v-15a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 4.5v15a2.25 2.25 0 002.25 2.25z" />
-                    </svg>
-                  )}
-                  {device === 'mobile' && (
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
-                    </svg>
-                  )}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-0.5 p-0.5 bg-[#050505] rounded-md border border-[#151515]">
+                {(['desktop', 'tablet', 'mobile'] as const).map((device) => (
+                  <button
+                    key={device}
+                    onClick={() => setPreviewDevice(device)}
+                    className={`p-1.5 rounded transition-all ${
+                      previewDevice === device
+                        ? 'bg-[#0f0f0f] text-[#c0c0c0]'
+                        : 'text-[#505050] hover:text-[#808080]'
+                    }`}
+                    title={device.charAt(0).toUpperCase() + device.slice(1)}
+                  >
+                    {device === 'desktop' && (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+                      </svg>
+                    )}
+                    {device === 'tablet' && (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5h3m-6.75 2.25h10.5a2.25 2.25 0 002.25-2.25v-15a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 4.5v15a2.25 2.25 0 002.25 2.25z" />
+                      </svg>
+                    )}
+                    {device === 'mobile' && (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Device Preset Selector (only shown when mobile) */}
+              {previewDevice === 'mobile' && (
+                <DevicePresetSelector />
+              )}
             </div>
 
             {/* Right Controls */}
@@ -262,6 +344,7 @@ function PreviewContent({
         serverUrl={serverUrl}
         previewDevice={previewDevice}
         deviceWidths={deviceWidths}
+        devicePreset={devicePreset}
       />
     )
   }
@@ -405,9 +488,10 @@ interface LivePreviewFrameProps {
   serverUrl: string
   previewDevice: 'desktop' | 'tablet' | 'mobile'
   deviceWidths: Record<string, string>
+  devicePreset?: string
 }
 
-function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePreviewFrameProps) {
+function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths, devicePreset = 'iphone-15-pro-max' }: LivePreviewFrameProps) {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'TORBIT_CONSOLE_ERROR') {
@@ -480,42 +564,45 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths }: LivePrevie
     }
   }
 
+  // iPhone frame for mobile preview
+  if (previewDevice === 'mobile') {
+    return (
+      <div data-preview-capture="true">
+        <IPhoneFrame preset={devicePreset}>
+          <iframe 
+            id="webcontainer-preview"
+            src={serverUrl} 
+            className="w-full h-full bg-white"
+            title="Preview"
+            sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+            onLoad={handleIframeLoad}
+          />
+        </IPhoneFrame>
+      </div>
+    )
+  }
+
+  // Browser frame for desktop/tablet
   return (
     <motion.div
-      className="bg-white rounded-xl overflow-hidden shadow-2xl ring-1 ring-[#262626]"
       style={{ 
         width: previewDevice === 'desktop' ? '100%' : deviceWidths[previewDevice],
         maxWidth: '100%',
-        height: previewDevice === 'mobile' ? '667px' : '100%',
+        height: '100%',
       }}
       layout
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
-      {/* Browser chrome */}
-      <div className="h-9 bg-[#f5f5f5] border-b border-[#e5e5e5] flex items-center px-3 gap-2">
-        <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-          <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-          <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-white rounded-md text-[11px] text-[#737373] border border-[#e5e5e5]">
-            <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-            </svg>
-            localhost:3000
-          </div>
-        </div>
-      </div>
-      
-      <iframe 
-        id="webcontainer-preview"
-        src={serverUrl} 
-        className="w-full h-[calc(100%-2.25rem)] bg-white"
-        title="Preview"
-        sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
-        onLoad={handleIframeLoad}
-      />
+      <BrowserFrame url="localhost:3000">
+        <iframe 
+          id="webcontainer-preview"
+          src={serverUrl} 
+          className="w-full h-full bg-white"
+          title="Preview"
+          sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+          onLoad={handleIframeLoad}
+        />
+      </BrowserFrame>
     </motion.div>
   )
 }

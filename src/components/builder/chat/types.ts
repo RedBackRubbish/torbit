@@ -13,6 +13,7 @@ export const AGENT_COLORS: Record<string, string> = {
   devops: '#f43f5e',    // rose
   qa: '#22c55e',        // green
   planner: '#6366f1',   // indigo
+  strategist: '#facc15', // yellow (GPT-5.2 plan validator)
   auditor: '#ef4444',   // red
 }
 

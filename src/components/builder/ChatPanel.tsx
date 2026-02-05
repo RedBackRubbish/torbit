@@ -7,10 +7,16 @@ import { ExecutorService } from '@/services/executor'
 import { NervousSystem, type PainSignal } from '@/lib/nervous-system'
 import { MessageBubble } from './chat/MessageBubble'
 import { ChatInput } from './chat/ChatInput'
+import { InspectorView, type ActivityEntry } from './governance'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
- * ChatPanel - Emergent-style chat interface
+ * ChatPanel - Single voice interface
+ * 
+ * UX RULES:
+ * - User talks to Torbit. Torbit is accountable.
+ * - Agents are invisible infrastructure.
+ * - No agent names, no model names, no background activity indicators.
  */
 export default function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -18,6 +24,8 @@ export default function ChatPanel() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [currentTask, setCurrentTask] = useState<string | null>(null)
+  const [showInspector, setShowInspector] = useState(false)
+  const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [selectedAgent] = useState<AgentId>('architect')
   
   const { 
@@ -28,6 +36,8 @@ export default function ChatPanel() {
     setIsGenerating,
     prompt,
     files,
+    projectType,
+    capabilities,
   } = useBuilderStore()
 
   // Parse SSE stream
@@ -199,6 +209,8 @@ export default function ChatPanel() {
             .filter(m => m.content && m.content.trim().length > 0)
             .map(m => ({ role: m.role, content: m.content })),
           agentId,
+          projectType,
+          capabilities,
         }),
       })
 
@@ -221,7 +233,7 @@ export default function ChatPanel() {
       setIsGenerating(false)
       setCurrentTask(null)
     }
-  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream])
+  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectType, capabilities])
 
   // Auto-submit initial prompt
   useEffect(() => {
@@ -280,18 +292,21 @@ export default function ChatPanel() {
       animate={{ width: chatCollapsed ? 48 : 440 }}
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
     >
-      {/* Header - Minimal */}
+      {/* Header - Torbit branding */}
       <div className="h-11 border-b border-[#151515] flex items-center justify-between px-4 shrink-0">
         <AnimatePresence mode="wait">
           {!chatCollapsed && (
-            <motion.span
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="text-[13px] font-medium text-[#c0c0c0]"
+              className="flex items-center gap-2"
             >
-              Chat
-            </motion.span>
+              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-neutral-400 to-neutral-600" />
+              <span className="text-[13px] font-medium text-[#c0c0c0]">
+                Torbit
+              </span>
+            </motion.div>
           )}
         </AnimatePresence>
         
@@ -339,23 +354,27 @@ export default function ChatPanel() {
         )}
       </AnimatePresence>
 
-      {/* Agent Status Bar - Emergent style */}
+      {/* Execution Status - Subtle, non-intrusive */}
       <AnimatePresence mode="wait">
         {!chatCollapsed && isLoading && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="px-4 py-2.5 border-t border-[#151515] bg-[#000000]"
+            className="px-4 py-2 border-t border-[#151515] bg-[#000000]"
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-2 h-2 rounded-full bg-[#c0c0c0] animate-pulse" />
-              <span className="text-[12px] text-[#808080]">
-                Agent is running...
+            <div className="flex items-center gap-2">
+              <motion.div
+                className="w-2.5 h-2.5 rounded-full border border-[#333] border-t-[#888]"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+              />
+              <span className="text-[12px] text-[#606060]">
+                Building…
               </span>
               {currentTask && currentTask !== 'Thinking...' && (
-                <span className="text-[11px] text-[#505050] font-mono ml-auto">
-                  {currentTask}
+                <span className="text-[11px] text-[#404040] ml-1">
+                  • {currentTask}
                 </span>
               )}
             </div>
@@ -384,11 +403,15 @@ export default function ChatPanel() {
             exit={{ opacity: 0 }}
             className="h-11 border-t border-[#151515] flex items-center justify-between px-3 bg-[#000000] shrink-0"
           >
-            {/* Left: Attachment */}
-            <button className="w-7 h-7 flex items-center justify-center text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded-lg transition-all">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+            {/* Left: View activity (opt-in Inspector) */}
+            <button 
+              onClick={() => setShowInspector(true)}
+              className="h-7 px-2 flex items-center gap-1.5 text-[10px] text-[#404040] hover:text-[#606060] transition-all"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
+              View activity
             </button>
             
             {/* Center: Actions */}
@@ -397,14 +420,7 @@ export default function ChatPanel() {
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3v11.25" />
                 </svg>
-                Save to GitHub
-              </button>
-              
-              <button className="h-7 px-2.5 flex items-center gap-1.5 text-[11px] text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded-lg transition-all">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
-                </svg>
-                Fork
+                GitHub
               </button>
               
               {/* Ultra toggle */}
@@ -436,6 +452,13 @@ export default function ChatPanel() {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Inspector View - Opt-in timeline for advanced users */}
+      <InspectorView 
+        activities={activities}
+        isOpen={showInspector}
+        onClose={() => setShowInspector(false)}
+      />
     </motion.div>
   )
 }

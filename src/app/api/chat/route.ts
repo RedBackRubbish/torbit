@@ -18,6 +18,9 @@ import { QA_SYSTEM_PROMPT } from '@/lib/agents/prompts/qa'
 import { AUDITOR_SYSTEM_PROMPT } from '@/lib/agents/prompts/auditor'
 import { PLANNER_SYSTEM_PROMPT } from '@/lib/agents/prompts/planner'
 import { GOD_PROMPT } from '@/lib/agents/prompts/god-prompt'
+import { getMobileSystemPrompt } from '@/lib/mobile/prompts'
+import type { MobileCapabilities, MobileProjectConfig } from '@/lib/mobile/types'
+import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 
 // Allow streaming responses up to 120 seconds for tool-heavy tasks
 export const maxDuration = 120
@@ -194,7 +197,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { messages: rawMessages, agentId = 'architect', projectId = 'default', userId = 'anonymous' } = await req.json()
+    const { 
+      messages: rawMessages, 
+      agentId = 'architect', 
+      projectId = 'default', 
+      userId = 'anonymous',
+      projectType = 'web',
+      capabilities = null,
+    } = await req.json()
 
     // Filter out empty messages to prevent API errors
     const messages = rawMessages.filter((m: { content?: string }) => 
@@ -209,7 +219,18 @@ export async function POST(req: Request) {
       )
     }
 
-    const systemPrompt = AGENT_PROMPTS[agentId] || AGENT_PROMPTS.architect
+    // Select prompt based on project type
+    let systemPrompt: string
+    if (projectType === 'mobile') {
+      // Use mobile-specific prompt with capabilities
+      const mobileConfig: MobileProjectConfig = {
+        ...DEFAULT_MOBILE_CONFIG,
+        capabilities: capabilities as MobileCapabilities || DEFAULT_MOBILE_CONFIG.capabilities,
+      }
+      systemPrompt = getMobileSystemPrompt(mobileConfig)
+    } else {
+      systemPrompt = AGENT_PROMPTS[agentId] || AGENT_PROMPTS.architect
+    }
     const complexity = analyzeTaskComplexity(messages)
     const model = getModelForTask(agentId as AgentId, complexity)
     const modelProvider = AGENT_MODEL_MAP[agentId as AgentId] || 'claude-sonnet'

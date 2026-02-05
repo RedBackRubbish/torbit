@@ -1,12 +1,29 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
+import type { 
+  ProjectType, 
+  MobileStack, 
+  Platform, 
+  MobileCapabilities, 
+  MobileProjectConfig,
+  DevicePreset 
+} from '@/lib/mobile/types'
+import { 
+  DEFAULT_CAPABILITIES, 
+  DEFAULT_MOBILE_CONFIG, 
+  DEFAULT_DEVICE,
+  DEVICE_PRESETS 
+} from '@/lib/mobile/types'
+import { generateExpoTemplate } from '@/lib/mobile/template'
+import type { AuditStatus, AuditIssue } from '@/lib/auditor'
 
 // ============================================
 // Types
 // ============================================
 
 // Full agent list - includes all specialist agents
-export type AgentId = 'architect' | 'frontend' | 'backend' | 'database' | 'devops' | 'qa' | 'planner' | 'auditor'
+// NOTE: Keep in sync with AGENT_TOOLS in src/lib/tools/definitions.ts
+export type AgentId = 'architect' | 'frontend' | 'backend' | 'database' | 'devops' | 'qa' | 'planner' | 'strategist' | 'auditor'
 export type AgentStatus = 'idle' | 'thinking' | 'working' | 'complete' | 'error'
 
 export interface Agent {
@@ -27,6 +44,8 @@ export interface ProjectFile {
   language: string
   isNew?: boolean
   isModified?: boolean
+  auditStatus?: AuditStatus
+  auditIssues?: AuditIssue[]
 }
 
 export interface ChatMessage {
@@ -43,6 +62,15 @@ export interface BuilderState {
   projectId: string | null
   projectName: string
   prompt: string
+  projectType: ProjectType
+  
+  // Mobile-specific
+  mobileStack: MobileStack
+  platforms: Platform[]
+  capabilities: MobileCapabilities
+  mobileConfig: MobileProjectConfig
+  devicePreset: string
+  deviceOrientation: 'portrait' | 'landscape'
   
   // Files
   files: ProjectFile[]
@@ -67,12 +95,21 @@ export interface BuilderState {
 export interface BuilderActions {
   // Project
   initProject: (prompt: string) => void
+  setProjectType: (type: ProjectType) => void
+  
+  // Mobile
+  setMobileStack: (stack: MobileStack) => void
+  setPlatforms: (platforms: Platform[]) => void
+  setCapability: (capability: keyof MobileCapabilities, enabled: boolean) => void
+  setDevicePreset: (preset: string) => void
+  setDeviceOrientation: (orientation: 'portrait' | 'landscape') => void
   
   // Files
   addFile: (file: Omit<ProjectFile, 'id'>) => void
   updateFile: (id: string, content: string) => void
   deleteFile: (id: string) => void
   setActiveFile: (id: string | null) => void
+  setFileAuditStatus: (id: string, status: AuditStatus, issues?: AuditIssue[]) => void
   
   // Agents
   setAgentStatus: (agentId: AgentId, status: AgentStatus, task?: string, progress?: number) => void
@@ -149,9 +186,16 @@ const INITIAL_AGENTS: Agent[] = [
     color: '#22c55e',
   },
   {
+    id: 'strategist',
+    name: 'Strategist',
+    role: 'Plan Validation (GPT-5.2)',
+    status: 'idle',
+    color: '#facc15', // yellow - high-value reviewer
+  },
+  {
     id: 'auditor',
     name: 'Auditor',
-    role: 'Hostile QA & Code Review',
+    role: 'Quality Gate (Opus)',
     status: 'idle',
     color: '#ef4444',
   },
@@ -161,6 +205,16 @@ const initialState: BuilderState = {
   projectId: null,
   projectName: 'Untitled Project',
   prompt: '',
+  projectType: 'web',
+  
+  // Mobile defaults
+  mobileStack: 'expo-rn',
+  platforms: ['ios'],
+  capabilities: DEFAULT_CAPABILITIES,
+  mobileConfig: DEFAULT_MOBILE_CONFIG,
+  devicePreset: DEFAULT_DEVICE,
+  deviceOrientation: 'portrait',
+  
   files: [],
   activeFileId: null,
   agents: INITIAL_AGENTS,
@@ -203,12 +257,70 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
       })
     },
 
+    setProjectType: (type) => {
+      set((state) => {
+        state.projectType = type
+        // Auto-switch to mobile preview when mobile project selected
+        if (type === 'mobile') {
+          state.previewDevice = 'mobile'
+          
+          // Bootstrap with Expo template if no files exist yet
+          if (state.files.length === 0) {
+            const templateFiles = generateExpoTemplate(state.mobileConfig)
+            templateFiles.forEach(file => {
+              state.files.push({
+                ...file,
+                id: crypto.randomUUID(),
+                isNew: true,
+              })
+            })
+          }
+        } else {
+          state.previewDevice = 'desktop'
+        }
+      })
+    },
+
+    setMobileStack: (stack) => {
+      set((state) => {
+        state.mobileStack = stack
+        state.mobileConfig.stack = stack
+      })
+    },
+
+    setPlatforms: (platforms) => {
+      set((state) => {
+        state.platforms = platforms
+        state.mobileConfig.platforms = platforms
+      })
+    },
+
+    setCapability: (capability, enabled) => {
+      set((state) => {
+        state.capabilities[capability] = enabled
+        state.mobileConfig.capabilities[capability] = enabled
+      })
+    },
+
+    setDevicePreset: (preset) => {
+      set((state) => {
+        state.devicePreset = preset
+      })
+    },
+
+    setDeviceOrientation: (orientation) => {
+      set((state) => {
+        state.deviceOrientation = orientation
+      })
+    },
+
     addFile: (file) => {
       set((state) => {
         state.files.push({
           ...file,
           id: crypto.randomUUID(),
           isNew: true,
+          auditStatus: 'new',
         })
       })
     },
@@ -219,6 +331,7 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
         if (file) {
           file.content = content
           file.isModified = true
+          file.auditStatus = 'new' // Re-audit on change
         }
       })
     },
@@ -237,6 +350,20 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
         state.activeFileId = id
         if (id) {
           state.previewTab = 'code'
+        }
+      })
+    },
+
+    setFileAuditStatus: (id, status, issues) => {
+      set((state) => {
+        const file = state.files.find((f) => f.id === id)
+        if (file) {
+          file.auditStatus = status
+          file.auditIssues = issues || []
+          // Clear new flag when audit passes
+          if (status === 'passed') {
+            file.isNew = false
+          }
         }
       })
     },

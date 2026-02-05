@@ -12,6 +12,8 @@ import PreviewPanel from '@/components/builder/PreviewPanel'
 import TasksPanel from '@/components/builder/TasksPanel'
 import FuelGauge from '@/components/builder/FuelGauge'
 import ShipMenu from '@/components/builder/ShipMenu'
+import { PublishPanel } from '@/components/builder/PublishPanel'
+import { ScreenshotButton } from '@/components/builder/ScreenshotButton'
 
 export default function BuilderPage() {
   return (
@@ -83,7 +85,6 @@ function BuilderPageContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Preview
               </TabButton>
               <TabButton 
                 active={previewTab === 'code'} 
@@ -92,21 +93,22 @@ function BuilderPageContent() {
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
                 </svg>
-                Code
               </TabButton>
             </div>
           </div>
           
           {/* Right: Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {/* Status indicator */}
-            <div className="flex items-center gap-2 mr-3">
+            <div className="flex items-center gap-1.5 pr-2 border-r border-[#1f1f1f]">
               <div className={`w-1.5 h-1.5 rounded-full ${isWorking ? 'bg-[#c0c0c0] animate-pulse' : 'bg-[#333]'}`} />
               <span className="text-[11px] text-[#525252]">
                 {isWorking ? 'Building...' : 'Idle'}
               </span>
             </div>
             
+            <ScreenshotButton />
+            <PublishPanel />
             <FuelGauge />
             <ShipMenu />
             
@@ -179,7 +181,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md transition-all ${
+      className={`flex items-center justify-center w-8 h-8 rounded-md transition-all ${
         active
           ? 'bg-[#1f1f1f] text-[#fafafa]'
           : 'text-[#525252] hover:text-[#a1a1a1]'

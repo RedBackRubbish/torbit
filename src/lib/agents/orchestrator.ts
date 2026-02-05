@@ -23,6 +23,7 @@ import { checkCircuitBreaker, calculateFuelCost, useFuelStore, type ModelTier as
 import { AUDITOR_SYSTEM_PROMPT } from './prompts/auditor'
 import { ARCHITECT_SYSTEM_PROMPT } from './prompts/architect'
 import { PLANNER_SYSTEM_PROMPT } from './prompts/planner'
+import { STRATEGIST_SYSTEM_PROMPT } from './prompts/strategist'
 import { FRONTEND_SYSTEM_PROMPT } from './prompts/frontend'
 import { DEVOPS_SYSTEM_PROMPT } from './prompts/devops'
 import { QA_SYSTEM_PROMPT, QA_TOOLS } from './prompts/qa'
@@ -145,7 +146,8 @@ const AGENT_PROMPTS: Record<AgentId, string> = {
   devops: DEVOPS_SYSTEM_PROMPT,
   qa: QA_SYSTEM_PROMPT,
   planner: PLANNER_SYSTEM_PROMPT,
-  auditor: AUDITOR_SYSTEM_PROMPT,
+  strategist: STRATEGIST_SYSTEM_PROMPT, // GPT-5.2: Reviews plans, NEVER first mover
+  auditor: AUDITOR_SYSTEM_PROMPT,        // Opus: Judges quality, NEVER executes fixes
 }
 
 // ============================================

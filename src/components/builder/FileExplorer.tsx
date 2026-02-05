@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore, ProjectFile } from '@/store/builder'
+import { Auditor, AuditStatus } from '@/lib/auditor'
 
 interface FileNode {
   name: string
@@ -109,11 +110,104 @@ interface FileTreeItemProps {
   depth: number
 }
 
+// Audit status indicator orb with animations
+function AuditOrb({ status, issueCount }: { status?: AuditStatus; issueCount?: number }) {
+  if (!status || status === 'new') return null
+
+  const getOrbStyles = () => {
+    switch (status) {
+      case 'auditing':
+        return {
+          bg: 'bg-[#c0c0c0]',
+          shadow: 'shadow-[0_0_6px_rgba(192,192,192,0.5)]',
+          pulse: true,
+        }
+      case 'passed':
+        return {
+          bg: 'bg-emerald-500',
+          shadow: 'shadow-[0_0_6px_rgba(16,185,129,0.5)]',
+          pulse: false,
+        }
+      case 'warning':
+        return {
+          bg: 'bg-amber-400',
+          shadow: 'shadow-[0_0_6px_rgba(251,191,36,0.5)]',
+          pulse: false,
+        }
+      case 'error':
+        return {
+          bg: 'bg-red-500',
+          shadow: 'shadow-[0_0_6px_rgba(239,68,68,0.5)]',
+          pulse: false,
+        }
+      default:
+        return { bg: 'bg-[#404040]', shadow: '', pulse: false }
+    }
+  }
+
+  const styles = getOrbStyles()
+
+  const statusLabels: Record<AuditStatus, string> = {
+    new: 'New file',
+    auditing: 'Auditing file...',
+    passed: 'Validation passed',
+    warning: `${issueCount || 0} warning${issueCount !== 1 ? 's' : ''}`,
+    error: `${issueCount || 0} error${issueCount !== 1 ? 's' : ''}`,
+  }
+
+  return (
+    <motion.span
+      initial={{ opacity: 0, scale: 0 }}
+      animate={{ 
+        opacity: 1, 
+        scale: styles.pulse ? [1, 1.3, 1] : 1,
+      }}
+      transition={styles.pulse ? { 
+        scale: { repeat: Infinity, duration: 1.2, ease: 'easeInOut' },
+        opacity: { duration: 0.2 }
+      } : { duration: 0.2 }}
+      className={`w-1.5 h-1.5 rounded-full ${styles.bg} ${styles.shadow}`}
+      title={statusLabels[status]}
+      aria-label={statusLabels[status]}
+    />
+  )
+}
+
 function FileTreeItem({ node, depth }: FileTreeItemProps) {
   const [expanded, setExpanded] = useState(true)
-  const { activeFileId, setActiveFile } = useBuilderStore()
+  const { activeFileId, setActiveFile, setFileAuditStatus, files } = useBuilderStore()
   const isSelected = node.file?.id === activeFileId
-  const isNew = node.file?.isNew
+  const auditStatus = node.file?.auditStatus
+  const issueCount = node.file?.auditIssues?.length || 0
+
+  // Trigger audit when file is new
+  useEffect(() => {
+    if (node.file && node.file.auditStatus === 'new') {
+      // Start auditing
+      setFileAuditStatus(node.file.id, 'auditing')
+      
+      // Convert files to FileContext format
+      const fileContexts = files.map(f => ({ path: f.path, content: f.content }))
+      const currentFile = { path: node.file.path, content: node.file.content }
+      
+      // Queue the audit
+      Auditor.getInstance().queueAudit(node.file.id, currentFile, fileContexts)
+    }
+  }, [node.file?.auditStatus, node.file?.id, node.file?.path, node.file?.content])
+
+  // Subscribe to audit results
+  useEffect(() => {
+    if (!node.file) return
+
+    const fileId = node.file.id
+    const unsubscribe = Auditor.getInstance().subscribe((id, result) => {
+      if (id === fileId) {
+        setFileAuditStatus(fileId, result.status, result.issues)
+      }
+    })
+
+    return unsubscribe
+  }, [node.file?.id])
 
   const handleClick = () => {
     if (node.type === 'folder') {
@@ -157,14 +251,8 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
         {/* Name */}
         <span className="flex-1 truncate text-[11px] font-normal">{node.name}</span>
         
-        {/* NEW badge - silver */}
-        {isNew && (
-          <motion.span 
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-1.5 h-1.5 rounded-full bg-[#c0c0c0]"
-          />
-        )}
+        {/* Audit status orb */}
+        <AuditOrb status={auditStatus} issueCount={issueCount} />
       </motion.button>
       
       {/* Children */}

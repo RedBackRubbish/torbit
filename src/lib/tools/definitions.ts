@@ -900,25 +900,62 @@ export const AGENT_TOOLS = {
     syncExternalTicket: TOOL_DEFINITIONS.syncExternalTicket,
     listTickets: TOOL_DEFINITIONS.listTickets,
   },
-  auditor: {
-    // Reasoning
+  // ============================================
+  // STRATEGIST (GPT-5.2) - Plan Validator
+  // ============================================
+  // GOVERNANCE: Strategist REVIEWS plans, never creates them.
+  // This is NOT a first-mover. It validates, vetoes, or amends.
+  // NO execution tools. Read-only + verdict tools only.
+  strategist: {
+    // Reasoning (review & validate)
     think: TOOL_DEFINITIONS.think,
-    // File reading (read-only for auditing)
+    // Read-only access to understand context
+    readFile: TOOL_DEFINITIONS.readFile,
+    getFileTree: TOOL_DEFINITIONS.getFileTree,
+    searchCode: TOOL_DEFINITIONS.searchCode,
+    listFiles: TOOL_DEFINITIONS.listFiles,
+    // Can inspect but not execute
+    inspectSchema: TOOL_DEFINITIONS.inspectSchema,
+    // Can query docs for validation
+    queryIndexedDocs: TOOL_DEFINITIONS.queryIndexedDocs,
+    // Can check dependencies for feasibility
+    verifyDependencyGraph: TOOL_DEFINITIONS.verifyDependencyGraph,
+    checkPeerDependencies: TOOL_DEFINITIONS.checkPeerDependencies,
+    // NO createFile, NO editFile, NO runCommand
+    // Strategist produces VERDICTS, not code
+  },
+  // ============================================
+  // AUDITOR (Claude Opus 4.5) - Quality Gate
+  // ============================================
+  // GOVERNANCE: Auditor JUDGES. Auditor does NOT fix freely.
+  // ❌ No endless iteration
+  // ❌ No refactoring large surfaces
+  // ✅ Produces verdicts + bounded recommendations
+  // Read-only + vision tools. NO execution.
+  auditor: {
+    // Reasoning (judgment only)
+    think: TOOL_DEFINITIONS.think,
+    // File reading (READ-ONLY - auditor cannot write)
     readFile: TOOL_DEFINITIONS.readFile,
     listFiles: TOOL_DEFINITIONS.listFiles,
     searchCode: TOOL_DEFINITIONS.searchCode,
     getFileTree: TOOL_DEFINITIONS.getFileTree,
-    // VISION (Eyes) - Verify UI matches specs
+    // VISION (Eyes) - See and judge the UI
     captureScreenshot: TOOL_DEFINITIONS.captureScreenshot,
     analyzeVisual: TOOL_DEFINITIONS.analyzeVisual,
     getBrowserLogs: TOOL_DEFINITIONS.getBrowserLogs,
-    // Design Validation
+    // Design Validation (check, don't fix)
     consultDesignTokens: TOOL_DEFINITIONS.consultDesignTokens,
     validateStyle: TOOL_DEFINITIONS.validateStyle,
-    // PHASE 3: Visual Regression (Reality Check)
+    // Visual Regression (verdict only)
     verifyVisualMatch: TOOL_DEFINITIONS.verifyVisualMatch,
-    // FINAL 5: Self-Healing Tester (for QA audits)
-    runE2eCycle: TOOL_DEFINITIONS.runE2eCycle,
+    // Database inspection (read-only)
+    inspectSchema: TOOL_DEFINITIONS.inspectSchema,
+    runSqlQuery: TOOL_DEFINITIONS.runSqlQuery,
+    // NO createFile, NO editFile, NO applyPatch
+    // NO runCommand, NO runTests (that's QA's job)
+    // NO runE2eCycle (removed - auditor judges, QA heals)
+    // Auditor produces VERDICTS + RECOMMENDATIONS, not fixes
   },
 } as const
 
