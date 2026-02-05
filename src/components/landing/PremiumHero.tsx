@@ -15,6 +15,7 @@ import {
   getCapabilityContext,
   type IntegrationCapability 
 } from '@/lib/integrations/capabilities'
+import { CapabilityPreview } from './CapabilityPreview'
 
 // Icon mapping
 const CAPABILITY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -314,24 +315,25 @@ export default function PremiumHero() {
                       const isSelected = selectedCapabilities.includes(id)
                       
                       return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => toggleCapability(id)}
-                          className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                            isSelected
-                              ? 'bg-white/10 text-white border border-white/20'
-                              : 'bg-white/[0.03] text-white/40 border border-white/[0.06] hover:bg-white/[0.06] hover:text-white/60 hover:border-white/10'
-                          }`}
-                        >
-                          {isSelected ? (
-                            <X className="w-3 h-3" />
-                          ) : (
-                            <Plus className="w-3 h-3 opacity-50 group-hover:opacity-100" />
-                          )}
-                          {Icon && <Icon className="w-3.5 h-3.5" />}
-                          {cap.label}
-                        </button>
+                        <CapabilityPreview key={id} capability={cap}>
+                          <button
+                            type="button"
+                            onClick={() => toggleCapability(id)}
+                            className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                              isSelected
+                                ? 'bg-white/10 text-white border border-white/20'
+                                : 'bg-white/[0.03] text-white/40 border border-white/[0.06] hover:bg-white/[0.06] hover:text-white/60 hover:border-white/10'
+                            }`}
+                          >
+                            {isSelected ? (
+                              <X className="w-3 h-3" />
+                            ) : (
+                              <Plus className="w-3 h-3 opacity-50 group-hover:opacity-100" />
+                            )}
+                            {Icon && <Icon className="w-3.5 h-3.5" />}
+                            {cap.label}
+                          </button>
+                        </CapabilityPreview>
                       )
                     })}
                     

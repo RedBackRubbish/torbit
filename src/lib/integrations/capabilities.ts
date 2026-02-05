@@ -10,6 +10,11 @@
  * - Mocked by default, always
  */
 
+export interface CapabilityArtifact {
+  path: string
+  purpose: string
+}
+
 export interface IntegrationCapability {
   id: string
   label: string
@@ -20,6 +25,15 @@ export interface IntegrationCapability {
     provider: string
     behavior: string
   }
+  // What Torbit will scaffold (read-only preview)
+  artifacts: CapabilityArtifact[]
+  // What the user sees in preview
+  preview: {
+    headline: string
+    features: string[]
+  }
+  // Internal: for future pricing signals (not exposed)
+  costWeight: 'low' | 'medium' | 'high'
 }
 
 export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
@@ -33,6 +47,23 @@ export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
       provider: 'Stripe-compatible',
       behavior: 'Simulated checkout flows, test card responses',
     },
+    artifacts: [
+      { path: 'lib/payments/client.ts', purpose: 'Payment provider client' },
+      { path: 'lib/payments/mock.ts', purpose: 'Simulated payment responses' },
+      { path: 'app/api/checkout/route.ts', purpose: 'Checkout session endpoint' },
+      { path: 'app/api/webhooks/stripe/route.ts', purpose: 'Webhook handler' },
+      { path: 'components/checkout/PricingTable.tsx', purpose: 'Pricing display' },
+    ],
+    preview: {
+      headline: 'Payments capability',
+      features: [
+        'Checkout flow scaffolded',
+        'Subscription-ready schema',
+        'Webhook handlers included',
+        'Mock Stripe-compatible provider',
+      ],
+    },
+    costWeight: 'high',
   },
   {
     id: 'auth',
@@ -44,6 +75,24 @@ export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
       provider: 'Supabase-compatible',
       behavior: 'Fake users, session management, role checks',
     },
+    artifacts: [
+      { path: 'lib/auth/client.ts', purpose: 'Auth provider client' },
+      { path: 'lib/auth/mock.ts', purpose: 'Simulated users and sessions' },
+      { path: 'app/api/auth/[...nextauth]/route.ts', purpose: 'Auth routes' },
+      { path: 'components/auth/LoginForm.tsx', purpose: 'Login UI' },
+      { path: 'components/auth/SignupForm.tsx', purpose: 'Signup UI' },
+      { path: 'middleware.ts', purpose: 'Route protection' },
+    ],
+    preview: {
+      headline: 'Auth capability',
+      features: [
+        'Login & signup flows',
+        'Session management',
+        'Role-based access ready',
+        'Mock Supabase-compatible provider',
+      ],
+    },
+    costWeight: 'medium',
   },
   {
     id: 'database',
@@ -55,6 +104,22 @@ export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
       provider: 'Postgres-compatible',
       behavior: 'In-memory data store, seeded test data',
     },
+    artifacts: [
+      { path: 'lib/db/client.ts', purpose: 'Database client' },
+      { path: 'lib/db/mock.ts', purpose: 'In-memory data store' },
+      { path: 'lib/db/schema.ts', purpose: 'Type-safe schema' },
+      { path: 'lib/db/seed.ts', purpose: 'Test data seeding' },
+    ],
+    preview: {
+      headline: 'Database capability',
+      features: [
+        'Type-safe schema',
+        'Query helpers included',
+        'Seeded test data',
+        'Mock Postgres-compatible provider',
+      ],
+    },
+    costWeight: 'medium',
   },
   {
     id: 'email',
@@ -66,6 +131,22 @@ export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
       provider: 'Resend-compatible',
       behavior: 'Console logs, "sent" confirmations',
     },
+    artifacts: [
+      { path: 'lib/email/client.ts', purpose: 'Email provider client' },
+      { path: 'lib/email/mock.ts', purpose: 'Simulated email sending' },
+      { path: 'lib/email/templates/', purpose: 'Email templates' },
+      { path: 'app/api/email/send/route.ts', purpose: 'Send endpoint' },
+    ],
+    preview: {
+      headline: 'Email capability',
+      features: [
+        'Transactional email ready',
+        'Template system included',
+        'Send confirmation logs',
+        'Mock Resend-compatible provider',
+      ],
+    },
+    costWeight: 'low',
   },
   {
     id: 'ai',
@@ -77,6 +158,22 @@ export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
       provider: 'OpenAI-compatible',
       behavior: 'Canned responses, simulated streaming',
     },
+    artifacts: [
+      { path: 'lib/ai/client.ts', purpose: 'AI provider client' },
+      { path: 'lib/ai/mock.ts', purpose: 'Simulated completions' },
+      { path: 'app/api/ai/chat/route.ts', purpose: 'Chat endpoint' },
+      { path: 'components/ai/ChatInterface.tsx', purpose: 'Chat UI' },
+    ],
+    preview: {
+      headline: 'AI / LLM capability',
+      features: [
+        'Chat interface scaffolded',
+        'Streaming responses ready',
+        'Embeddings support',
+        'Mock OpenAI-compatible provider',
+      ],
+    },
+    costWeight: 'high',
   },
   {
     id: 'storage',
@@ -88,6 +185,22 @@ export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
       provider: 'S3-compatible',
       behavior: 'Local blob storage, placeholder URLs',
     },
+    artifacts: [
+      { path: 'lib/storage/client.ts', purpose: 'Storage provider client' },
+      { path: 'lib/storage/mock.ts', purpose: 'Local blob storage' },
+      { path: 'app/api/upload/route.ts', purpose: 'Upload endpoint' },
+      { path: 'components/upload/FileUploader.tsx', purpose: 'Upload UI' },
+    ],
+    preview: {
+      headline: 'File Storage capability',
+      features: [
+        'File upload UI included',
+        'Presigned URL support',
+        'Image optimization ready',
+        'Mock S3-compatible provider',
+      ],
+    },
+    costWeight: 'medium',
   },
   {
     id: 'maps',
@@ -99,6 +212,22 @@ export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
       provider: 'Google Maps-compatible',
       behavior: 'Static tiles, placeholder markers',
     },
+    artifacts: [
+      { path: 'lib/maps/client.ts', purpose: 'Maps provider client' },
+      { path: 'lib/maps/mock.ts', purpose: 'Static map tiles' },
+      { path: 'components/maps/MapView.tsx', purpose: 'Map display' },
+      { path: 'components/maps/LocationPicker.tsx', purpose: 'Location selection' },
+    ],
+    preview: {
+      headline: 'Maps capability',
+      features: [
+        'Interactive map view',
+        'Location picker included',
+        'Geocoding support',
+        'Mock Google Maps-compatible provider',
+      ],
+    },
+    costWeight: 'medium',
   },
   {
     id: 'analytics',
@@ -110,6 +239,22 @@ export const INTEGRATION_CAPABILITIES: IntegrationCapability[] = [
       provider: 'Mixpanel-compatible',
       behavior: 'Console logs, no-op tracking',
     },
+    artifacts: [
+      { path: 'lib/analytics/client.ts', purpose: 'Analytics provider client' },
+      { path: 'lib/analytics/mock.ts', purpose: 'Console log tracking' },
+      { path: 'lib/analytics/events.ts', purpose: 'Event definitions' },
+      { path: 'components/analytics/AnalyticsProvider.tsx', purpose: 'Context provider' },
+    ],
+    preview: {
+      headline: 'Analytics capability',
+      features: [
+        'Event tracking ready',
+        'Pageview tracking',
+        'User identification',
+        'Mock Mixpanel-compatible provider',
+      ],
+    },
+    costWeight: 'low',
   },
 ]
 
@@ -133,6 +278,41 @@ For each capability:
 - Use mocked implementations that work without real API keys
 - Structure code to allow easy swap to real providers later
 `
+}
+
+// Get artifact mapping for Activity Ledger / Export Proof
+export function getArtifactMapping(ids: string[]): Record<string, CapabilityArtifact[]> {
+  const capabilities = getCapabilitiesById(ids)
+  const mapping: Record<string, CapabilityArtifact[]> = {}
+  
+  for (const cap of capabilities) {
+    mapping[cap.id] = cap.artifacts
+  }
+  
+  return mapping
+}
+
+// Get all artifacts as flat list with capability attribution
+export function getAllArtifacts(ids: string[]): Array<CapabilityArtifact & { capability: string }> {
+  const capabilities = getCapabilitiesById(ids)
+  const artifacts: Array<CapabilityArtifact & { capability: string }> = []
+  
+  for (const cap of capabilities) {
+    for (const artifact of cap.artifacts) {
+      artifacts.push({ ...artifact, capability: cap.label })
+    }
+  }
+  
+  return artifacts
+}
+
+// Get estimated cost tier for selected capabilities
+export function getEstimatedCostTier(ids: string[]): 'low' | 'medium' | 'high' {
+  const capabilities = getCapabilitiesById(ids)
+  
+  if (capabilities.some(c => c.costWeight === 'high')) return 'high'
+  if (capabilities.some(c => c.costWeight === 'medium')) return 'medium'
+  return 'low'
 }
 
 // Primary capabilities shown by default (max 6)
