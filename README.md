@@ -529,6 +529,79 @@ Strategist:         ✓ PASSED
 - Toggle: "Include Compliance Evidence" (default ON for production)
 - All files are read-only, deterministic, hashable, no secrets
 
+### Project Memory (Directive I)
+
+**The last stabilizer before TORBIT scales.**
+
+Project knowledge is frozen on first execution and protected from drift:
+
+#### Knowledge Snapshot
+
+Created automatically on first execution:
+
+```json
+// .project/knowledge.json
+{
+  "createdAt": "2026-02-05T12:00:00Z",
+  "frameworks": {
+    "nextjs": "15.1",
+    "react": "19",
+    "expo": "52"
+  },
+  "assumptions": [
+    "App Router default",
+    "Server Components available",
+    "Payment Intents API"
+  ],
+  "confidence": 0.94,
+  "freezeMode": "frozen",
+  "snapshotHash": "snap-a7f3c..."
+}
+```
+
+#### Freeze Modes
+
+| Mode | Behavior | Allowed Environment |
+|------|----------|---------------------|
+| **Frozen** | No new knowledge injected | All (default in production) |
+| **Advisory** | Suggestions allowed, no auto-apply | Local, Staging |
+| **Live** | Suggestions + updates allowed | Local only |
+
+**Production environment forces Frozen mode.** No exceptions.
+
+#### UX
+
+Minimal badge in toolbar:
+
+```
+❄️ Knowledge: Frozen (94%)
+```
+
+One-click "Review Knowledge" opens panel showing:
+- Frameworks detected
+- Assumptions applied
+- Sources consulted
+- Freeze mode controls (if not production)
+
+#### Ledger Events
+
+| Event | When |
+|-------|------|
+| `KNOWLEDGE_SNAPSHOT_CREATED` | First execution |
+| `KNOWLEDGE_FROZEN` | Mode locked |
+| `KNOWLEDGE_MODE_CHANGED` | Mode switch |
+| `KNOWLEDGE_OVERRIDE_REQUESTED` | User wants update |
+| `KNOWLEDGE_OVERRIDE_RESOLVED` | Request approved/denied |
+| `KNOWLEDGE_EXPORTED` | Snapshot exported |
+| `KNOWLEDGE_INTEGRITY_VERIFIED` | Hash checked |
+
+#### Guarantees
+
+- **Deterministic rebuilds** - Same snapshot = same behavior
+- **Audit-proof explanations** - "Here's why I assumed X"
+- **Reproducibility years later** - Frozen facts never change
+- **No silent drift** - Projects stay exactly as intended
+
 ---
 
 ## Roadmap
@@ -542,6 +615,7 @@ Strategist:         ✓ PASSED
 - [x] **Audit Ledger** - Immutable provenance trail
 - [x] **Evidence Bundles** - SOC2-ready compliance exports
 - [x] **Knowledge Awareness** - Governed trend sensing, approved sources only
+- [x] **Project Memory** - Knowledge freezing, deterministic rebuilds
 - [ ] **Persistent Projects** - Save/load to cloud storage
 - [ ] **Git Integration** - Commit, push, pull from IDE
 - [ ] **Deployment** - One-click deploy to Vercel/Netlify

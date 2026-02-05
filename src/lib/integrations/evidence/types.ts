@@ -15,6 +15,7 @@ import type { EnvironmentName, EnvironmentProfile } from '../environments/types'
 import type { OrganizationPolicy } from '../policies/types'
 import type { LedgerEntry } from '../ledger/types'
 import type { HealthReport } from '../health/types'
+import type { KnowledgeSnapshot } from '@/lib/knowledge/memory/types'
 
 // ============================================
 // EVIDENCE BUNDLE
@@ -70,6 +71,11 @@ export interface EvidenceBundle {
    * Health status at export time
    */
   healthStatus: HealthReport
+  
+  /**
+   * Knowledge snapshot at export time (Directive I)
+   */
+  knowledgeSnapshot?: KnowledgeSnapshot
 }
 
 // ============================================
