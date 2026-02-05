@@ -359,11 +359,95 @@ Supported browsers:
 
 ---
 
+## Enterprise Governance
+
+TORBIT includes a complete enterprise governance stack:
+
+### Environment Profiles
+
+Environment-aware rules: Local ≠ Staging ≠ Production.
+
+```json
+// .integrations/environments.json
+{
+  "local": {
+    "allowAutoFix": true,
+    "allowExperimentalIntegrations": true,
+    "exportRequiresCleanLedger": false
+  },
+  "staging": {
+    "allowAutoFix": false,
+    "blockedOnDrift": true,
+    "requireHumanApprovalFor": ["payments", "auth"]
+  },
+  "production": {
+    "allowAutoFix": false,
+    "blockedOnDrift": true,
+    "exportRequiresCleanLedger": true,
+    "denyIntegrations": ["experimental-*"]
+  }
+}
+```
+
+**Rule resolution order** (most restrictive wins):
+1. Environment profile
+2. Organization policy
+3. Integration manifest
+4. User intent
+
+### Organization Policies
+
+Define hard constraints that TORBIT must obey:
+
+```json
+// .integrations/policies.json
+{
+  "integrations": {
+    "allow": ["stripe", "supabase", "clerk"],
+    "deny": ["firebase"]
+  },
+  "categories": {
+    "requireHumanApproval": ["payments", "auth"]
+  },
+  "autoFix": {
+    "enabled": true,
+    "requireApproval": true
+  },
+  "shipping": {
+    "blockOnDrift": true,
+    "requireCleanLedger": true,
+    "requireAuditorPass": true
+  }
+}
+```
+
+### Integration Health
+
+Version drift detection, deprecation tracking, and health triggers:
+
+- **Pre-export checks** - Block exports with unresolved drift
+- **Deprecation warnings** - Flag deprecated SDKs before they break
+- **Auto-remediation** - Consent-gated fixes with audit trail
+
+### Audit Ledger
+
+Immutable, append-only record of every integration action:
+
+- 24 event types tracked
+- Compliance reports on export
+- SOC2/audit-ready evidence bundles
+
+---
+
 ## Roadmap
 
 - [x] **Mobile App Export** - Export iOS apps via Expo + Xcode
 - [ ] **Android Export** - Android packaging support
 - [x] **Multi-Agent Governance** - Strategist review, Auditor quality gate
+- [x] **Environment Profiles** - Local/Staging/Production rule enforcement
+- [x] **Organization Policies** - Enterprise policy-as-code
+- [x] **Integration Health** - Drift detection, deprecation tracking
+- [x] **Audit Ledger** - Immutable provenance trail
 - [ ] **Persistent Projects** - Save/load to cloud storage
 - [ ] **Git Integration** - Commit, push, pull from IDE
 - [ ] **Deployment** - One-click deploy to Vercel/Netlify
