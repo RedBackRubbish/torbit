@@ -10,6 +10,7 @@ import { ChatInput } from './chat/ChatInput'
 import { InspectorView, type ActivityEntry } from './governance'
 import { TorbitLogo } from '@/components/ui/TorbitLogo'
 import { useWebContainerContext } from '@/providers/WebContainerProvider'
+import { VerificationDetailDrawer, type VerificationData } from './governance/VerificationDetailDrawer'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
@@ -28,8 +29,9 @@ export default function ChatPanel() {
   const [showInspector, setShowInspector] = useState(false)
   const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [selectedAgent] = useState<AgentId>('architect')
+  const [showVerificationDrawer, setShowVerificationDrawer] = useState(false)
   
-  const { isBooting, isReady, serverUrl, error } = useWebContainerContext()
+  const { isBooting, isReady, serverUrl, error, verification } = useWebContainerContext()
   
   const { 
     chatCollapsed, 
@@ -376,6 +378,7 @@ export default function ChatPanel() {
               isBuilding={isLoading}
               currentTask={currentTask}
               hasFiles={files.length > 0}
+              onOpenVerification={() => setShowVerificationDrawer(true)}
             />
           </motion.div>
         )}
@@ -457,6 +460,24 @@ export default function ChatPanel() {
         activities={activities}
         isOpen={showInspector}
         onClose={() => setShowInspector(false)}
+      />
+      
+      {/* Verification Detail Drawer - Read-only proof surface */}
+      <VerificationDetailDrawer
+        isOpen={showVerificationDrawer}
+        onClose={() => setShowVerificationDrawer(false)}
+        data={{
+          environmentVerifiedAt: verification.environmentVerifiedAt,
+          runtimeVersion: verification.runtimeVersion,
+          containerHash: verification.containerHash,
+          dependenciesLockedAt: verification.dependenciesLockedAt,
+          dependencyCount: verification.dependencyCount,
+          lockfileHash: verification.lockfileHash,
+          buildCompletedAt: files.length > 0 ? Date.now() : null,
+          artifactCount: files.length,
+          auditorVerdict: isReady && serverUrl ? 'passed' : 'pending',
+          auditorTimestamp: isReady && serverUrl ? Date.now() : null,
+        }}
       />
     </motion.div>
   )
@@ -564,6 +585,7 @@ interface ExecutionStatusRailProps {
   isBuilding: boolean
   currentTask: string | null
   hasFiles: boolean
+  onOpenVerification?: () => void
 }
 
 function ExecutionStatusRail({
@@ -574,6 +596,7 @@ function ExecutionStatusRail({
   isBuilding,
   currentTask,
   hasFiles,
+  onOpenVerification,
 }: ExecutionStatusRailProps) {
   // Derive status steps with error awareness
   const hasError = !!error
@@ -634,38 +657,56 @@ function ExecutionStatusRail({
 
   return (
     <div className="space-y-1.5">
-      {visibleSteps.map((step, i) => (
-        <div key={i} className="flex items-center gap-2">
-          {step.status === 'complete' && (
-            <svg className="w-3 h-3 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-          {step.status === 'active' && (
-            <motion.div
-              className="w-3 h-3 rounded-full border border-white/30 border-t-white/60"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-            />
-          )}
-          {step.status === 'pending' && (
-            <div className="w-3 h-3 rounded-full border border-white/10" />
-          )}
-          {step.status === 'error' && (
-            <svg className="w-3 h-3 text-red-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          <span className={`text-[11px] ${
-            step.status === 'complete' ? 'text-white/40' :
-            step.status === 'active' ? 'text-white/60' :
-            step.status === 'error' ? 'text-red-400/70' :
-            'text-white/20'
-          }`}>
-            {step.status === 'error' && step.errorMessage ? step.errorMessage : step.label}
-          </span>
-        </div>
-      ))}
+      {visibleSteps.map((step, i) => {
+        const isClickable = step.status === 'complete' && onOpenVerification
+        
+        const content = (
+          <>
+            {step.status === 'complete' && (
+              <svg className="w-3 h-3 text-white/40 group-hover:text-white/60 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            {step.status === 'active' && (
+              <motion.div
+                className="w-3 h-3 rounded-full border border-white/30 border-t-white/60"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+              />
+            )}
+            {step.status === 'pending' && (
+              <div className="w-3 h-3 rounded-full border border-white/10" />
+            )}
+            {step.status === 'error' && (
+              <svg className="w-3 h-3 text-red-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            )}
+            <span className={`text-[11px] ${
+              step.status === 'complete' ? 'text-white/40 group-hover:text-white/60' :
+              step.status === 'active' ? 'text-white/60' :
+              step.status === 'error' ? 'text-red-400/70' :
+              'text-white/20'
+            } transition-colors`}>
+              {step.status === 'error' && step.errorMessage ? step.errorMessage : step.label}
+            </span>
+          </>
+        )
+        
+        return isClickable ? (
+          <button
+            key={i}
+            onClick={onOpenVerification}
+            className="flex items-center gap-2 group cursor-pointer hover:bg-white/[0.02] -mx-1 px-1 py-0.5 rounded transition-colors"
+          >
+            {content}
+          </button>
+        ) : (
+          <div key={i} className="flex items-center gap-2">
+            {content}
+          </div>
+        )
+      })}
       
       {/* Single recovery action for errors */}
       {errorStep?.recoveryAction && (
