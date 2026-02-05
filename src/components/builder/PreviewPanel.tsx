@@ -244,6 +244,7 @@ export default function PreviewPanel() {
                 previewDevice={previewDevice}
                 deviceWidths={deviceWidths}
                 files={files}
+                devicePreset={devicePreset}
               />
             </div>
 
@@ -283,6 +284,7 @@ interface PreviewContentProps {
   previewDevice: 'desktop' | 'tablet' | 'mobile'
   deviceWidths: Record<string, string>
   files: { path: string; content: string }[]
+  devicePreset: string
 }
 
 function PreviewContent({
@@ -294,6 +296,7 @@ function PreviewContent({
   previewDevice,
   deviceWidths,
   files,
+  devicePreset,
 }: PreviewContentProps) {
   const [isMounted, setIsMounted] = useState(false)
   

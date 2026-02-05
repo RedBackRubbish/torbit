@@ -153,8 +153,8 @@ export function validateSuggestion(
     suggestion.optional = true // Force optional
   }
   
-  // Check rationale quality
-  if (!suggestion.rationale || suggestion.rationale.length < 20) {
+  // Check rationale quality (using 'why' field)
+  if (!suggestion.why || suggestion.why.length < 20) {
     reasons.push('Suggestion must have meaningful rationale')
     score *= 0.5
   }

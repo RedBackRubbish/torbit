@@ -199,17 +199,17 @@ function IntegrationRulesView({ rules }: { rules: OrganizationPolicy['integratio
     <div className="space-y-3">
       <RuleList
         label="Allowed"
-        items={rules.allow}
+        items={rules.allow ?? []}
         emptyText="All integrations allowed"
         variant="success"
       />
       <RuleList
         label="Denied"
-        items={rules.deny}
+        items={rules.deny ?? []}
         emptyText="None"
         variant="error"
       />
-      {Object.keys(rules.versionConstraints).length > 0 && (
+      {rules.versionConstraints && Object.keys(rules.versionConstraints).length > 0 && (
         <div>
           <p className="text-xs text-zinc-500 mb-1">Version Constraints</p>
           <div className="space-y-1">
@@ -232,25 +232,25 @@ function CategoryRulesView({ rules }: { rules: OrganizationPolicy['categories'] 
     <div className="space-y-3">
       <RuleList
         label="Require Human Approval"
-        items={rules.requireHumanApproval}
+        items={(rules.requireHumanApproval ?? []) as string[]}
         emptyText="None"
         variant="warning"
       />
       <RuleList
         label="Blocked"
-        items={rules.blocked}
+        items={(rules.blocked ?? []) as string[]}
         emptyText="None"
         variant="error"
       />
       <RuleList
         label="Require Strategist"
-        items={rules.requireStrategist}
+        items={(rules.requireStrategist ?? []) as string[]}
         emptyText="None"
         variant="info"
       />
       <RuleList
         label="Require Auditor"
-        items={rules.requireAuditor}
+        items={(rules.requireAuditor ?? []) as string[]}
         emptyText="None"
         variant="info"
       />
@@ -261,15 +261,15 @@ function CategoryRulesView({ rules }: { rules: OrganizationPolicy['categories'] 
 function AutoFixRulesView({ rules }: { rules: OrganizationPolicy['autoFix'] }) {
   return (
     <div className="space-y-2">
-      <BooleanRule label="Auto-fix enabled" value={rules.enabled} />
-      <BooleanRule label="Require approval" value={rules.requireApproval} />
+      <BooleanRule label="Auto-fix enabled" value={rules.enabled ?? false} />
+      <BooleanRule label="Require approval" value={rules.requireApproval ?? false} />
       <div className="flex items-center justify-between text-xs">
         <span className="text-zinc-500">Max fixes per session</span>
-        <span className="text-zinc-300">{rules.maxFixesPerSession}</span>
+        <span className="text-zinc-300">{rules.maxFixesPerSession ?? 'Unlimited'}</span>
       </div>
       <RuleList
         label="Allowed Actions"
-        items={rules.allowedActions}
+        items={rules.allowedActions ?? []}
         emptyText="All actions"
         variant="success"
       />
@@ -280,10 +280,10 @@ function AutoFixRulesView({ rules }: { rules: OrganizationPolicy['autoFix'] }) {
 function ShippingRulesView({ rules }: { rules: OrganizationPolicy['shipping'] }) {
   return (
     <div className="space-y-2">
-      <BooleanRule label="Block on drift" value={rules.blockOnDrift} />
-      <BooleanRule label="Require clean ledger" value={rules.requireCleanLedger} />
-      <BooleanRule label="Require health check" value={rules.requireHealthCheck} />
-      <BooleanRule label="Require Auditor pass" value={rules.requireAuditorPass} />
+      <BooleanRule label="Block on drift" value={rules.blockOnDrift ?? false} />
+      <BooleanRule label="Require clean ledger" value={rules.requireCleanLedger ?? false} />
+      <BooleanRule label="Require health check" value={rules.requireHealthCheck ?? false} />
+      <BooleanRule label="Require Auditor pass" value={rules.requireAuditorPass ?? false} />
       {rules.allowedTargets && rules.allowedTargets.length > 0 && (
         <RuleList
           label="Allowed Targets"

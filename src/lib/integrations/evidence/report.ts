@@ -202,39 +202,45 @@ export function buildAuditReportData(params: {
   const overallStatus = hasErrors ? 'NON_COMPLIANT' : hasWarnings ? 'WARNINGS' : 'COMPLIANT'
   
   // Build integration inventory
-  const integrationList = integrations.map(i => ({
+  const integrationList: Array<{
+    id: string
+    name: string
+    category: string
+    version: string
+    status: 'DRIFT' | 'HEALTHY' | 'DEPRECATED'
+  }> = integrations.map(i => ({
     id: i.id,
     name: i.name,
     category: i.category,
     version: i.version,
-    status: i.isDeprecated ? 'DEPRECATED' : i.hasDrift ? 'DRIFT' : 'HEALTHY' as const,
+    status: i.isDeprecated ? 'DEPRECATED' : i.hasDrift ? 'DRIFT' : 'HEALTHY',
   }))
   
   // Build policy compliance
-  const policyCompliance = [
-    { rule: 'Integration allowlist', status: policyViolations.some(v => v.includes('allow')) ? 'FAIL' : 'PASS' as const },
-    { rule: 'Integration denylist', status: policyViolations.some(v => v.includes('deny')) ? 'FAIL' : 'PASS' as const },
-    { rule: 'Version constraints', status: policyViolations.some(v => v.includes('version')) ? 'FAIL' : 'PASS' as const },
-    { rule: 'Auto-fix policy', status: policyViolations.some(v => v.includes('autofix')) ? 'FAIL' : 'PASS' as const },
-    { rule: 'Shipping requirements', status: policyViolations.some(v => v.includes('shipping')) ? 'FAIL' : 'PASS' as const },
+  const policyCompliance: Array<{ rule: string; status: 'PASS' | 'FAIL' | 'N/A'; details?: string }> = [
+    { rule: 'Integration allowlist', status: policyViolations.some(v => v.includes('allow')) ? 'FAIL' : 'PASS' },
+    { rule: 'Integration denylist', status: policyViolations.some(v => v.includes('deny')) ? 'FAIL' : 'PASS' },
+    { rule: 'Version constraints', status: policyViolations.some(v => v.includes('version')) ? 'FAIL' : 'PASS' },
+    { rule: 'Auto-fix policy', status: policyViolations.some(v => v.includes('autofix')) ? 'FAIL' : 'PASS' },
+    { rule: 'Shipping requirements', status: policyViolations.some(v => v.includes('shipping')) ? 'FAIL' : 'PASS' },
   ]
   
   // Build environment compliance
-  const environmentCompliance = [
-    { rule: 'Auto-fix allowed', status: environmentViolations.some(v => v.includes('autofix')) ? 'FAIL' : 'PASS' as const },
-    { rule: 'Experimental allowed', status: environmentViolations.some(v => v.includes('experimental')) ? 'FAIL' : 'PASS' as const },
-    { rule: 'Drift blocking', status: environmentViolations.some(v => v.includes('drift')) ? 'FAIL' : 'PASS' as const },
-    { rule: 'Clean ledger required', status: environmentViolations.some(v => v.includes('ledger')) ? 'FAIL' : 'PASS' as const },
-    { rule: 'Auditor required', status: environmentViolations.some(v => v.includes('auditor')) ? 'FAIL' : 'PASS' as const },
+  const environmentCompliance: Array<{ rule: string; status: 'PASS' | 'FAIL' | 'N/A'; details?: string }> = [
+    { rule: 'Auto-fix allowed', status: environmentViolations.some(v => v.includes('autofix')) ? 'FAIL' : 'PASS' },
+    { rule: 'Experimental allowed', status: environmentViolations.some(v => v.includes('experimental')) ? 'FAIL' : 'PASS' },
+    { rule: 'Drift blocking', status: environmentViolations.some(v => v.includes('drift')) ? 'FAIL' : 'PASS' },
+    { rule: 'Clean ledger required', status: environmentViolations.some(v => v.includes('ledger')) ? 'FAIL' : 'PASS' },
+    { rule: 'Auditor required', status: environmentViolations.some(v => v.includes('auditor')) ? 'FAIL' : 'PASS' },
   ]
   
   // Build governance events from ledger
   const governanceEvents = ledgerEntries
-    .filter(e => e.type.includes('POLICY') || e.type.includes('ENVIRONMENT') || e.type.includes('AUDITOR') || e.type.includes('STRATEGIST'))
+    .filter(e => e.event.includes('POLICY') || e.event.includes('ENVIRONMENT') || e.event.includes('AUDITOR') || e.event.includes('STRATEGIST'))
     .map(e => ({
       timestamp: e.timestamp,
-      type: e.type,
-      description: e.action,
+      type: e.event,
+      description: e.summary,
     }))
   
   // Build recommendations

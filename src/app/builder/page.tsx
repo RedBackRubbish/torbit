@@ -14,6 +14,7 @@ import FuelGauge from '@/components/builder/FuelGauge'
 import ShipMenu from '@/components/builder/ShipMenu'
 import { PublishPanel } from '@/components/builder/PublishPanel'
 import { ScreenshotButton } from '@/components/builder/ScreenshotButton'
+import { UserMenu } from '@/components/builder/UserMenu'
 
 export default function BuilderPage() {
   return (
@@ -111,6 +112,7 @@ function BuilderPageContent() {
             <PublishPanel />
             <FuelGauge />
             <ShipMenu />
+            <UserMenu />
             
             {/* Tasks toggle */}
             <button

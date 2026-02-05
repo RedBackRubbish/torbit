@@ -75,7 +75,7 @@ export default function ShipMenu() {
   return (
     <div ref={menuRef} className="relative flex items-center group/deploy" role="group" aria-label="Deploy options">
       {/* Premium Deploy Button Group */}
-      <div className="flex items-center rounded-lg overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.3)] group-hover/deploy:shadow-[0_4px_16px_rgba(16,185,129,0.2)] transition-shadow duration-300">
+      <div className="flex items-center rounded-lg overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.3)] group-hover/deploy:shadow-[0_4px_12px_rgba(192,192,192,0.3)] transition-shadow duration-300">
         {/* Primary Action: Deploy */}
         <button
           onClick={handleDeploy}
@@ -83,12 +83,12 @@ export default function ShipMenu() {
           aria-label={isDeploying ? 'Deploying your web app to production' : 'Deploy your web app to production hosting'}
           aria-busy={isDeploying}
           className={`
-            group relative flex items-center gap-2 px-5 py-2 text-[13px] font-bold tracking-wide transition-all duration-200 overflow-hidden
+            group relative flex items-center gap-2 px-4 py-2 text-[13px] font-semibold transition-all duration-200 overflow-hidden
             ${isDeploying 
-              ? 'bg-gradient-to-r from-emerald-600/80 to-emerald-500/80 text-white cursor-wait' 
-              : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 text-white hover:from-emerald-500 hover:via-emerald-400 hover:to-emerald-500'
+              ? 'bg-gradient-to-r from-[#a0a0a0] via-[#c8c8c8] to-[#a0a0a0] text-black/70 cursor-wait' 
+              : 'bg-gradient-to-r from-[#c0c0c0] via-[#e8e8e8] to-[#c0c0c0] text-black hover:from-white hover:via-[#f5f5f5] hover:to-white'
             }
-            shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]
+            shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]
             active:scale-[0.98]
           `}
         >
@@ -102,7 +102,7 @@ export default function ShipMenu() {
             </>
           ) : (
             <>
-              <svg className="w-4 h-4 transition-transform group-hover:-rotate-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <svg className="w-4 h-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
               </svg>
               <span>Deploy</span>
@@ -116,12 +116,12 @@ export default function ShipMenu() {
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`
-            flex items-center justify-center w-9 py-2 border-l border-emerald-700/50 transition-all duration-200
+            flex items-center justify-center w-9 py-2 border-l border-neutral-400/30 transition-all duration-200
             ${isOpen 
-              ? 'bg-emerald-700 text-white' 
-              : 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white hover:from-emerald-500 hover:to-emerald-400'
+              ? 'bg-[#a8a8a8] text-black' 
+              : 'bg-gradient-to-r from-[#c0c0c0] to-[#d8d8d8] text-black hover:from-white hover:to-[#f5f5f5]'
             }
-            shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]
+            shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]
           `}
           aria-label="More deploy options"
           aria-expanded={isOpen}

@@ -209,7 +209,7 @@ export {
   createFactRejectedEvent,
   createSuggestionOfferedEvent,
   createSuggestionAcceptedEvent,
-  createSuggestionRejectedEvent,
+  createSuggestionDismissedEvent,
   createContextCreatedEvent,
   logKnowledgeEvent,
   getKnowledgeEvents,
@@ -318,7 +318,7 @@ export function ingestFromSource(
   }
   
   // Cache valid facts
-  addFacts(valid)
+  addFacts(domain, valid)
   
   return valid
 }

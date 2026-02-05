@@ -179,8 +179,8 @@ describe('Tool Executor', () => {
       context.mcpServers.set('test-mcp', {
         url: 'https://test.mcp.com',
         tools: [
-          { name: 'tool1', description: 'First tool' },
-          { name: 'tool2', description: 'Second tool' }
+          { name: 'tool1', description: 'First tool', parameters: {} },
+          { name: 'tool2', description: 'Second tool', parameters: {} }
         ],
         connected: true,
       })

@@ -50,14 +50,14 @@ export function recordEnvironmentEvent(
     ...additionalData,
   }
   
-  return createEntry({
-    type: eventType,
-    integrationId: integrationId || 'system',
-    action: `Environment ${eventType.toLowerCase().replace('environment_', '')}`,
-    agent: 'environment-enforcer',
-    success: eventType !== 'ENVIRONMENT_BLOCK',
-    metadata,
-  })
+  return createEntry(
+    eventType as any,
+    integrationId || 'system',
+    `Environment ${eventType.toLowerCase().replace('environment_', '')}`,
+    {
+      sessionId: metadata.environment,
+    }
+  )
 }
 
 /**
@@ -76,18 +76,14 @@ export function recordUnifiedEnforcement(
   )
   
   // Create policy entry via policy ledger events
-  const policyEntry = createEntry({
-    type: result.ledgerEvents.policy.type,
-    integrationId: integrationId || 'system',
-    action: `Policy ${result.ledgerEvents.policy.type.toLowerCase().replace('policy_', '')}`,
-    agent: 'policy-enforcer',
-    success: result.ledgerEvents.policy.type !== 'POLICY_BLOCK',
-    metadata: {
-      policyVersion: result.evaluation.policyEvaluation.policyVersion,
-      operation,
-      violations: result.ledgerEvents.policy.violations,
-    },
-  })
+  const policyEntry = createEntry(
+    result.ledgerEvents.policy.type as any,
+    integrationId || 'system',
+    `Policy ${result.ledgerEvents.policy.type.toLowerCase().replace('policy_', '')}`,
+    {
+      sessionId: operation,
+    }
+  )
   
   return { environmentEntry, policyEntry }
 }
@@ -207,15 +203,15 @@ export function getEnvironmentEventSummary(entries: LedgerEntry[]): {
   byEnvironment: Record<EnvironmentName, { checks: number; blocks: number }>
 } {
   const environmentEvents = entries.filter(e => 
-    e.type.startsWith('ENVIRONMENT_')
+    e.event.startsWith('ENVIRONMENT_')
   )
   
-  const checks = environmentEvents.filter(e => e.type === 'ENVIRONMENT_CHECK').length
-  const blocks = environmentEvents.filter(e => e.type === 'ENVIRONMENT_BLOCK').length
-  const approvals = environmentEvents.filter(e => e.type === 'ENVIRONMENT_APPROVED').length
-  const switches = environmentEvents.filter(e => e.type === 'ENVIRONMENT_SWITCHED').length
+  const checks = environmentEvents.filter(e => e.event === 'ENVIRONMENT_CHECK').length
+  const blocks = environmentEvents.filter(e => e.event === 'ENVIRONMENT_BLOCK').length
+  const approvals = environmentEvents.filter(e => e.event === 'ENVIRONMENT_APPROVED').length
+  const switches = environmentEvents.filter(e => e.event === 'ENVIRONMENT_SWITCHED').length
   
-  // Count by environment
+  // Count by environment (stored in sessionId)
   const byEnvironment: Record<EnvironmentName, { checks: number; blocks: number }> = {
     local: { checks: 0, blocks: 0 },
     staging: { checks: 0, blocks: 0 },
@@ -223,11 +219,11 @@ export function getEnvironmentEventSummary(entries: LedgerEntry[]): {
   }
   
   for (const entry of environmentEvents) {
-    const env = (entry.metadata as Record<string, unknown>)?.environment as EnvironmentName
+    const env = entry.sessionId as EnvironmentName | undefined
     if (env && byEnvironment[env]) {
-      if (entry.type === 'ENVIRONMENT_CHECK') {
+      if (entry.event === 'ENVIRONMENT_CHECK') {
         byEnvironment[env].checks++
-      } else if (entry.type === 'ENVIRONMENT_BLOCK') {
+      } else if (entry.event === 'ENVIRONMENT_BLOCK') {
         byEnvironment[env].blocks++
       }
     }

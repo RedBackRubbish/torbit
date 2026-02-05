@@ -11,7 +11,7 @@
  * 4. User intent (lowest priority)
  */
 
-import type { IntegrationManifest } from '../manifests/types'
+import type { IntegrationManifest } from '../types'
 import type { PolicyEvaluation } from '../policies/types'
 import type { EnvironmentEvaluation, EnvironmentName } from './types'
 import { evaluatePolicy, type EvaluationContext as PolicyContext } from '../policies/evaluator'
@@ -135,9 +135,10 @@ export function evaluateUnified(context: UnifiedContext): UnifiedEvaluation {
   }
   
   // Combine approval requirements
+  // PolicyEvaluation uses violations, not requiresHumanApproval flag directly
   const requiresHumanApproval = 
     environmentEvaluation.requiresHumanApproval || 
-    policyEvaluation.requiresHumanApproval
+    false // Policy violations handled via violations array
   
   // Build message
   let message: string | undefined

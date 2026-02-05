@@ -26,6 +26,8 @@
     "@monaco-editor/react": "^4.7.0",
     "@openrouter/ai-sdk-provider": "^2.1.1",
     "@sentry/nextjs": "^10.38.0",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.94.1",
     "@webcontainer/api": "^1.6.1",
     "ai": "^6.0.69",
     "clsx": "^2.1.1",

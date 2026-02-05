@@ -36,31 +36,18 @@ export function recordPolicyEvent(
   evaluation: PolicyEvaluation,
   operation: OperationType,
   integrationId?: string,
-  additionalData?: Record<string, unknown>
+  _additionalData?: Record<string, unknown>
 ): LedgerEntry {
-  const metadata = {
-    policyVersion: evaluation.policyVersion,
-    operation,
-    integrationId,
-    violationCount: evaluation.violations.length,
-    violations: evaluation.violations.map(v => ({
-      type: v.type,
-      severity: v.severity,
-      message: v.message,
-      blocking: v.blocking,
-    })),
-    requiresHumanApproval: evaluation.requiresHumanApproval,
-    ...additionalData,
-  }
+  const summary = `Policy ${eventType.toLowerCase().replace('policy_', '')}: ${evaluation.summary || 'evaluated'}`
   
-  return createEntry({
-    type: eventType,
-    integrationId: integrationId || 'system',
-    action: `Policy ${eventType.toLowerCase().replace('policy_', '')}`,
-    agent: 'policy-enforcer',
-    success: eventType !== 'POLICY_BLOCK',
-    metadata,
-  })
+  return createEntry(
+    eventType as any,
+    integrationId || 'system',
+    summary,
+    {
+      sessionId: operation,
+    }
+  )
 }
 
 /**
@@ -89,7 +76,7 @@ export function recordPolicyBlock(
 ): LedgerEntry {
   return recordPolicyEvent('POLICY_BLOCK', evaluation, operation, integrationId, {
     blockedAt: new Date().toISOString(),
-    blockReason: evaluation.message || 'Policy violation',
+    blockReason: evaluation.summary || 'Policy violation',
   })
 }
 
@@ -134,9 +121,9 @@ export function recordPolicyLoaded(
   const dummyEvaluation: PolicyEvaluation = {
     allowed: true,
     violations: [],
-    requiresHumanApproval: false,
-    policyVersion,
-    evaluatedAt: new Date().toISOString(),
+    summary: `Policy ${policyName} loaded`,
+    policyName,
+    timestamp: new Date().toISOString(),
   }
   
   return recordPolicyEvent('POLICY_LOADED', dummyEvaluation, 'configure', undefined, {
@@ -158,9 +145,9 @@ export function recordPolicyUpdated(
   const dummyEvaluation: PolicyEvaluation = {
     allowed: true,
     violations: [],
-    requiresHumanApproval: false,
-    policyVersion: newVersion,
-    evaluatedAt: new Date().toISOString(),
+    summary: `Policy ${policyName} updated`,
+    policyName,
+    timestamp: new Date().toISOString(),
   }
   
   return recordPolicyEvent('POLICY_UPDATED', dummyEvaluation, 'configure', undefined, {
@@ -180,8 +167,8 @@ export function recordPolicyUpdated(
  * Check if ledger has unresolved policy violations
  */
 export function hasUnresolvedPolicyViolations(entries: LedgerEntry[]): boolean {
-  const blocks = entries.filter(e => e.type === 'POLICY_BLOCK')
-  const approvals = entries.filter(e => e.type === 'POLICY_APPROVED')
+  const blocks = entries.filter(e => e.event === 'POLICY_BLOCK')
+  const approvals = entries.filter(e => e.event === 'POLICY_ALLOW')
   
   // Simple check: more blocks than approvals
   // A proper implementation would track specific violations
@@ -199,13 +186,13 @@ export function getPolicyEventSummary(entries: LedgerEntry[]): {
   complianceRate: number
 } {
   const policyEvents = entries.filter(e => 
-    e.type.startsWith('POLICY_')
+    e.event.startsWith('POLICY_')
   )
   
-  const checks = policyEvents.filter(e => e.type === 'POLICY_CHECK').length
-  const blocks = policyEvents.filter(e => e.type === 'POLICY_BLOCK').length
-  const approvals = policyEvents.filter(e => e.type === 'POLICY_APPROVED').length
-  const rejections = policyEvents.filter(e => e.type === 'POLICY_REJECTED').length
+  const checks = policyEvents.filter(e => e.event === 'POLICY_CHECK').length
+  const blocks = policyEvents.filter(e => e.event === 'POLICY_BLOCK').length
+  const approvals = policyEvents.filter(e => e.event === 'POLICY_ALLOW').length
+  const humanApprovalRequired = policyEvents.filter(e => e.event === 'POLICY_HUMAN_APPROVAL_REQUIRED').length
   
   const totalDecisions = checks + blocks
   const complianceRate = totalDecisions > 0 
@@ -216,7 +203,7 @@ export function getPolicyEventSummary(entries: LedgerEntry[]): {
     totalChecks: checks,
     totalBlocks: blocks,
     totalApprovals: approvals,
-    totalRejections: rejections,
+    totalRejections: humanApprovalRequired,
     complianceRate: Math.round(complianceRate * 10) / 10,
   }
 }

@@ -1,30 +1,23 @@
 import { describe, it, expect } from 'vitest'
-import { GOD_PROMPT, GOD_PROMPT_COMPACT } from './god-prompt'
+import { GOD_PROMPT, GOD_PROMPT_COMPACT, GOD_PROMPT_ENV } from './god-prompt'
 
 describe('God Prompt', () => {
   describe('GOD_PROMPT', () => {
     it('should be defined and non-empty', () => {
       expect(GOD_PROMPT).toBeDefined()
-      expect(GOD_PROMPT.length).toBeGreaterThan(1000)
+      expect(GOD_PROMPT.length).toBeGreaterThan(500)
     })
 
     describe('Identity Section', () => {
       it('should establish TORBIT identity', () => {
         expect(GOD_PROMPT).toContain('TORBIT')
-        expect(GOD_PROMPT).toContain('autonomous')
+        expect(GOD_PROMPT).toContain('expert AI coding assistant')
       })
 
-      it('should describe body metaphor', () => {
-        expect(GOD_PROMPT).toContain('Hands')
-        expect(GOD_PROMPT).toContain('Muscle')
-        expect(GOD_PROMPT).toContain('Eyes')
-        expect(GOD_PROMPT).toContain('Nerves')
-      })
-
-      it('should explain WebContainer context', () => {
-        expect(GOD_PROMPT).toContain('WebContainer')
-        expect(GOD_PROMPT).toContain('Node.js')
-        expect(GOD_PROMPT).toContain('browser')
+      it('should describe personality', () => {
+        expect(GOD_PROMPT).toContain('personality')
+        expect(GOD_PROMPT).toContain('senior developer')
+        expect(GOD_PROMPT).toContain('excited')
       })
     })
 
@@ -33,130 +26,80 @@ describe('God Prompt', () => {
         expect(GOD_PROMPT).toContain('createFile')
         expect(GOD_PROMPT).toContain('editFile')
         expect(GOD_PROMPT).toContain('readFile')
-        expect(GOD_PROMPT).toContain('listFiles')
-        expect(GOD_PROMPT).toContain('deleteFile')
       })
 
       it('should list terminal operations', () => {
         expect(GOD_PROMPT).toContain('runTerminal')
-        expect(GOD_PROMPT).toContain('installPackage')
-        expect(GOD_PROMPT).toContain('runTests')
       })
 
       it('should emphasize tool usage', () => {
-        expect(GOD_PROMPT).toContain('USE THEM')
-        expect(GOD_PROMPT).toMatch(/don.*t just describe/i)
+        expect(GOD_PROMPT).toContain('ALWAYS use the createFile tool')
+        expect(GOD_PROMPT).toContain('NEVER output code blocks')
       })
     })
 
-    describe('Nervous System Section', () => {
-      it('should explain pain signals', () => {
-        expect(GOD_PROMPT).toContain('SYSTEM ALERT')
-        expect(GOD_PROMPT).toContain('pain')
+    describe('Critical Rules', () => {
+      it('should have clear rules section', () => {
+        expect(GOD_PROMPT).toContain('CRITICAL RULES')
+        expect(GOD_PROMPT).toContain('NEVER')
+        expect(GOD_PROMPT).toContain('ALWAYS')
       })
 
-      it('should list error types', () => {
-        expect(GOD_PROMPT).toContain('DEPENDENCY_ERROR')
-        expect(GOD_PROMPT).toContain('SYNTAX_ERROR')
-        expect(GOD_PROMPT).toContain('TYPE_ERROR')
-        expect(GOD_PROMPT).toContain('HYDRATION_ERROR')
-        expect(GOD_PROMPT).toContain('BUILD_ERROR')
-      })
-
-      it('should emphasize immediate fixing', () => {
-        expect(GOD_PROMPT).toContain('FIX IMMEDIATELY')
-        expect(GOD_PROMPT).toMatch(/don.*t.*ask.*permission/i)
+      it('should prohibit code blocks in response', () => {
+        expect(GOD_PROMPT).toContain('NEVER output code blocks')
+        expect(GOD_PROMPT).toContain('NEVER put code in')
       })
     })
 
-    describe('Fuel System Section', () => {
-      it('should explain fuel economics', () => {
-        expect(GOD_PROMPT).toContain('fuel')
-        expect(GOD_PROMPT).toContain('Fuel Cost')
-      })
-
-      it('should list fuel costs', () => {
-        expect(GOD_PROMPT).toContain('Read a file')
-        expect(GOD_PROMPT).toContain('Create/Edit')
-        expect(GOD_PROMPT).toContain('Run terminal')
-      })
-
-      it('should promote efficiency', () => {
-        expect(GOD_PROMPT).toContain('EFFICIENCY')
-        expect(GOD_PROMPT).toContain('efficient')
-      })
-    })
-
-    describe('Auditor Guarantee Section', () => {
-      it('should explain refund mechanism', () => {
-        expect(GOD_PROMPT).toContain('REFUND')
-        expect(GOD_PROMPT).toContain('Auditor')
-      })
-
-      it('should set quality expectations', () => {
-        expect(GOD_PROMPT).toContain('COMPILES')
-        expect(GOD_PROMPT).toContain('TypeScript')
-      })
-    })
-
-    describe('Workflow Protocol', () => {
-      it('should outline phases', () => {
-        expect(GOD_PROMPT).toContain('Reconnaissance')
-        expect(GOD_PROMPT).toContain('Execution')
-        expect(GOD_PROMPT).toContain('Verification')
-      })
-
-      it('should mention key steps', () => {
-        expect(GOD_PROMPT).toContain('listFiles')
-        expect(GOD_PROMPT).toContain('readFile')
-        expect(GOD_PROMPT).toContain('npm run build')
-      })
-    })
-
-    describe('Behavioral Directives', () => {
-      it('should list DO directives', () => {
-        expect(GOD_PROMPT).toContain('autonomous')
-        expect(GOD_PROMPT).toContain('proactive')
-        expect(GOD_PROMPT).toContain('thorough')
-      })
-
-      it("should list DON'T directives", () => {
-        expect(GOD_PROMPT).toContain("Don't hallucinate")
-        expect(GOD_PROMPT).toContain('TODO')
-        expect(GOD_PROMPT).toContain('permission')
-      })
-    })
-
-    describe('Tech Stack Section', () => {
-      it('should specify Next.js version', () => {
-        expect(GOD_PROMPT).toContain('Next.js 15')
-      })
-
-      it('should mention React version', () => {
-        expect(GOD_PROMPT).toContain('React 19')
-      })
-
-      it('should list key technologies', () => {
+    describe('Tech Stack', () => {
+      it('should specify the stack', () => {
+        expect(GOD_PROMPT).toContain('Next.js')
+        expect(GOD_PROMPT).toContain('React')
         expect(GOD_PROMPT).toContain('TypeScript')
         expect(GOD_PROMPT).toContain('Tailwind')
-        expect(GOD_PROMPT).toContain('Zustand')
-        expect(GOD_PROMPT).toContain('App Router')
       })
 
-      it('should list file conventions', () => {
-        expect(GOD_PROMPT).toContain('app/')
-        expect(GOD_PROMPT).toContain('components/')
-        expect(GOD_PROMPT).toContain('lib/')
+      it('should mention Framer Motion', () => {
+        expect(GOD_PROMPT).toContain('Framer Motion')
+      })
+
+      it('should mention Zustand', () => {
+        expect(GOD_PROMPT).toContain('Zustand')
       })
     })
 
-    describe('Failure Modes', () => {
+    describe('Design Approach', () => {
+      it('should support multiple themes', () => {
+        expect(GOD_PROMPT).toContain('Light mode')
+        expect(GOD_PROMPT).toContain('Dark mode')
+        expect(GOD_PROMPT).toContain('Colorful')
+        expect(GOD_PROMPT).toContain('Luxury')
+      })
+
+      it('should have default theme', () => {
+        expect(GOD_PROMPT).toContain('Default:')
+        expect(GOD_PROMPT).toContain('dark')
+      })
+    })
+
+    describe('What NOT To Do', () => {
       it('should list anti-patterns', () => {
-        expect(GOD_PROMPT).toContain('Apologizer')
-        expect(GOD_PROMPT).toContain('Narrator')
-        expect(GOD_PROMPT).toContain('Asker')
-        expect(GOD_PROMPT).toContain('Stubber')
-        expect(GOD_PROMPT).toContain('Hallucinator')
+        expect(GOD_PROMPT).toContain('What NOT To Do')
+        expect(GOD_PROMPT).toContain('NEVER show file contents in chat')
+        expect(GOD_PROMPT).toContain('NEVER write long walls of text')
+        expect(GOD_PROMPT).toContain('NEVER be robotic')
+      })
+    })
+
+    describe('Communication Style', () => {
+      it('should have example response', () => {
+        expect(GOD_PROMPT).toContain('Example response')
+        expect(GOD_PROMPT).toContain('todo app')
+      })
+
+      it('should encourage celebration', () => {
+        expect(GOD_PROMPT).toContain('Done!')
+        expect(GOD_PROMPT).toContain('🚀')
       })
     })
 
@@ -164,74 +107,63 @@ describe('God Prompt', () => {
       it('should use markdown formatting', () => {
         expect(GOD_PROMPT).toContain('##')
         expect(GOD_PROMPT).toContain('**')
-        expect(GOD_PROMPT).toContain('```')
-        expect(GOD_PROMPT).toContain('|')
       })
 
       it('should have proper sections', () => {
-        expect(GOD_PROMPT).toContain('## 🧠 YOUR IDENTITY')
-        expect(GOD_PROMPT).toContain('## 🛠️ YOUR TOOLS')
-        expect(GOD_PROMPT).toContain('## 🔴 THE NERVOUS SYSTEM')
-        expect(GOD_PROMPT).toContain('## ⛽ THE FUEL SYSTEM')
+        expect(GOD_PROMPT).toContain('## YOUR PERSONALITY')
+        expect(GOD_PROMPT).toContain('## CRITICAL RULES')
+        expect(GOD_PROMPT).toContain('## Tools')
+        expect(GOD_PROMPT).toContain('## Tech Stack')
       })
     })
   })
 
   describe('GOD_PROMPT_COMPACT', () => {
-    it('should be defined and shorter than full prompt', () => {
+    it('should be defined', () => {
       expect(GOD_PROMPT_COMPACT).toBeDefined()
-      expect(GOD_PROMPT_COMPACT.length).toBeLessThan(GOD_PROMPT.length)
-      expect(GOD_PROMPT_COMPACT.length).toBeLessThan(1000)
+    })
+
+    it('should equal GOD_PROMPT (simplified version)', () => {
+      expect(GOD_PROMPT_COMPACT).toBe(GOD_PROMPT)
     })
 
     it('should contain essential elements', () => {
       expect(GOD_PROMPT_COMPACT).toContain('TORBIT')
-      expect(GOD_PROMPT_COMPACT).toContain('WebContainer')
-    })
-
-    it('should list tools', () => {
       expect(GOD_PROMPT_COMPACT).toContain('createFile')
-      expect(GOD_PROMPT_COMPACT).toContain('runTerminal')
+    })
+  })
+
+  describe('GOD_PROMPT_ENV', () => {
+    it('should be defined', () => {
+      expect(GOD_PROMPT_ENV).toBeDefined()
     })
 
-    it('should have core rules', () => {
-      expect(GOD_PROMPT_COMPACT).toContain('USE TOOLS')
-      expect(GOD_PROMPT_COMPACT).toContain('SYSTEM ALERT')
-      expect(GOD_PROMPT_COMPACT).toContain('fuel')
+    it('should escape newlines for env var use', () => {
+      expect(GOD_PROMPT_ENV).toContain('\\n')
+      expect(GOD_PROMPT_ENV).not.toContain('\n\n')
     })
 
-    it('should mention tech stack', () => {
-      expect(GOD_PROMPT_COMPACT).toContain('Next.js')
-      expect(GOD_PROMPT_COMPACT).toContain('TypeScript')
-      expect(GOD_PROMPT_COMPACT).toContain('App Router')
+    it('should escape backticks', () => {
+      expect(GOD_PROMPT_ENV).not.toContain('`')
     })
   })
 
   describe('Prompt Quality', () => {
-    it('should not have incomplete placeholder text', () => {
-      expect(GOD_PROMPT).not.toContain('FIXME')
-      expect(GOD_PROMPT).not.toContain('lorem ipsum')
-      expect(GOD_PROMPT).not.toContain('[INSERT')
-      expect(GOD_PROMPT).not.toContain('XXX')
+    it('should be concise but complete', () => {
+      // The prompt should be reasonably sized (not bloated)
+      expect(GOD_PROMPT.length).toBeLessThan(5000)
+      expect(GOD_PROMPT.length).toBeGreaterThan(1000)
     })
 
-    it('should mention TODO as an anti-pattern', () => {
-      // The prompt tells the AI not to leave TODOs
-      expect(GOD_PROMPT).toContain('TODO')
-      expect(GOD_PROMPT).toMatch(/don.*t.*leave.*TODO/i)
+    it('should have clear structure', () => {
+      const sections = GOD_PROMPT.match(/## /g)
+      expect(sections).not.toBeNull()
+      expect(sections!.length).toBeGreaterThanOrEqual(5)
     })
 
-    it('should have consistent TORBIT terminology', () => {
-      // Should use consistent terms throughout
-      const torbitCount = (GOD_PROMPT.match(/TORBIT/gi) || []).length
-      expect(torbitCount).toBeGreaterThan(0)
-    })
-
-    it('should be properly escaped for use in code', () => {
-      // Should not break when used as a string
-      expect(() => {
-        const _ = `${GOD_PROMPT}`
-      }).not.toThrow()
+    it('should be action-oriented', () => {
+      expect(GOD_PROMPT).toContain('Build')
+      expect(GOD_PROMPT).toContain('ship')
     })
   })
 })

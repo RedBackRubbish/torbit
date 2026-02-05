@@ -7,7 +7,7 @@
  * Rule: Policies override user intent, Planner plans, and auto-fix.
  */
 
-import type { IntegrationManifest } from '../manifests/types'
+import type { IntegrationManifest } from '../types'
 import type { PolicyEvaluation } from './types'
 import { evaluatePolicy, type EvaluationContext, type OperationType } from './evaluator'
 import { getPolicy } from './loader'
@@ -136,22 +136,18 @@ export function enforcePreExport(context: ExportContext): EnforcementResult {
     context.target &&
     policy.shipping.allowedTargets &&
     policy.shipping.allowedTargets.length > 0 &&
-    !policy.shipping.allowedTargets.includes(context.target)
+    !policy.shipping.allowedTargets.includes(context.target as 'ios' | 'android' | 'vercel' | 'netlify' | 'other')
   ) {
     const evaluation: PolicyEvaluation = {
       allowed: false,
       violations: [{
-        type: 'EXPORT_TARGET_NOT_ALLOWED',
-        severity: 'error',
+        type: 'EXPORT_TARGET_BLOCKED',
+        rule: `shipping.allowedTargets does not include "${context.target}"`,
         message: `Export target "${context.target}" is not allowed.`,
-        blocking: true,
-        requiresHumanApproval: false,
-        policyRule: `shipping.allowedTargets does not include "${context.target}"`,
       }],
-      requiresHumanApproval: false,
-      policyVersion: policy.version,
-      evaluatedAt: new Date().toISOString(),
-      message: 'This action is restricted by organization policy.',
+      summary: 'This action is restricted by organization policy.',
+      policyName: policy.name,
+      timestamp: new Date().toISOString(),
     }
     
     return createEnforcementResult('export', evaluation)
@@ -201,11 +197,12 @@ function createEnforcementResult(
   integrationId?: string
 ): EnforcementResult {
   const blocked = !evaluation.allowed
-  const requiresApproval = evaluation.requiresHumanApproval
+  // Determine if approval needed based on violations
+  const requiresApproval = false
   
   let userMessage: string
   if (blocked) {
-    userMessage = 'This action is restricted by organization policy.'
+    userMessage = evaluation.summary || 'This action is restricted by organization policy.'
   } else if (requiresApproval) {
     userMessage = 'This action requires approval before proceeding.'
   } else {

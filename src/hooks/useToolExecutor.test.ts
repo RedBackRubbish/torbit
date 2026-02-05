@@ -62,7 +62,7 @@ describe('useToolExecutor', () => {
         args: { path: 'test.ts', content: 'hello' },
       }
 
-      let toolResult: ToolResultEvent
+      let toolResult!: ToolResultEvent
       await act(async () => {
         toolResult = await result.current.executeToolCall(toolCall)
       })
@@ -96,7 +96,7 @@ describe('useToolExecutor', () => {
         args: { path: 'bad.ts', content: '' },
       }
 
-      let toolResult: ToolResultEvent
+      let toolResult!: ToolResultEvent
       await act(async () => {
         toolResult = await result.current.executeToolCall(toolCall)
       })
@@ -116,7 +116,7 @@ describe('useToolExecutor', () => {
         args: { path: 'test.ts', content: 'hello' },
       }
 
-      let toolResult: ToolResultEvent
+      let toolResult!: ToolResultEvent
       await act(async () => {
         toolResult = await result.current.executeToolCall(toolCall)
       })
@@ -135,7 +135,7 @@ describe('useToolExecutor', () => {
         { id: 'batch-2', name: 'createFile', args: { path: 'b.ts', content: 'b' } },
       ]
 
-      let results: ToolResultEvent[]
+      let results!: ToolResultEvent[]
       await act(async () => {
         results = await result.current.executeToolBatch(toolCalls)
       })
@@ -160,7 +160,7 @@ describe('useToolExecutor', () => {
         { id: 'batch-3', name: 'createFile', args: { path: 'c.ts', content: 'c' } },
       ]
 
-      let results: ToolResultEvent[]
+      let results!: ToolResultEvent[]
       await act(async () => {
         results = await result.current.executeToolBatch(toolCalls)
       })

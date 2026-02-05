@@ -133,11 +133,12 @@ describe('Tool Definitions', () => {
       }
     })
 
-    it('architect should have planning and delegation tools', () => {
+    it('architect should have core tools for file and terminal operations', () => {
       const tools = Object.keys(AGENT_TOOLS.architect)
       expect(tools).toContain('think')
-      expect(tools).toContain('planSteps')
-      expect(tools).toContain('delegateToAgent')
+      expect(tools).toContain('createFile')
+      expect(tools).toContain('editFile')
+      expect(tools).toContain('runCommand')
     })
 
     it('frontend should have file manipulation tools', () => {

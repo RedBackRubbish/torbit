@@ -34,6 +34,7 @@ const CATEGORY_ICONS: Record<IntegrationCategory, typeof CreditCard> = {
   analytics: Database,
   storage: Database,
   email: Globe,
+  database: Database,
 };
 
 const CATEGORY_LABELS: Record<IntegrationCategory, string> = {
@@ -43,6 +44,7 @@ const CATEGORY_LABELS: Record<IntegrationCategory, string> = {
   analytics: "Analytics",
   storage: "Database & Storage",
   email: "Email",
+  database: "Database",
 };
 
 export function IntegrationPicker({ onSelect, platform }: IntegrationPickerProps) {

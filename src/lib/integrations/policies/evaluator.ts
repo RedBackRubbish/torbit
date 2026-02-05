@@ -14,7 +14,7 @@ import type {
   PolicyViolationType,
 } from './types'
 import { getPolicy } from './loader'
-import type { IntegrationManifest, IntegrationCategory } from '../manifests/types'
+import type { IntegrationManifest, IntegrationCategory } from '../types'
 
 // ============================================
 // EVALUATION CONTEXT
@@ -69,19 +69,17 @@ export function evaluatePolicy(context: EvaluationContext): PolicyEvaluation {
     ...governanceViolations
   )
   
-  // Determine if any violations require blocking
-  const blockingViolations = violations.filter(v => v.blocking)
-  const requiresApproval = violations.some(v => v.requiresHumanApproval)
+  // All violations are blocking by default
+  const hasViolations = violations.length > 0
   
   return {
-    allowed: blockingViolations.length === 0,
+    allowed: !hasViolations,
     violations,
-    requiresHumanApproval: requiresApproval,
-    policyVersion: policy.version,
-    evaluatedAt: new Date().toISOString(),
-    message: blockingViolations.length > 0
+    summary: hasViolations
       ? 'This action is restricted by organization policy.'
-      : undefined,
+      : 'Policy check passed.',
+    policyName: policy.name,
+    timestamp: new Date().toISOString(),
   }
 }
 
@@ -92,12 +90,12 @@ export function isIntegrationAllowed(integrationId: string): boolean {
   const policy = getPolicy()
   
   // Deny list takes precedence
-  if (policy.integrations.deny.includes(integrationId)) {
+  if (policy.integrations.deny?.includes(integrationId)) {
     return false
   }
   
   // If allow list is empty, all (not denied) are allowed
-  if (policy.integrations.allow.length === 0) {
+  if (!policy.integrations.allow || policy.integrations.allow.length === 0) {
     return true
   }
   
@@ -110,7 +108,7 @@ export function isIntegrationAllowed(integrationId: string): boolean {
  */
 export function categoryRequiresApproval(category: IntegrationCategory): boolean {
   const policy = getPolicy()
-  return policy.categories.requireHumanApproval.includes(category)
+  return policy.categories.requireHumanApproval?.includes(category) ?? false
 }
 
 /**
@@ -136,56 +134,49 @@ function evaluateIntegrationRules(
   const integrationId = context.integration.id
   
   // Check deny list
-  if (policy.integrations.deny.includes(integrationId)) {
+  if (policy.integrations.deny?.includes(integrationId)) {
     violations.push({
       type: 'INTEGRATION_DENIED',
-      severity: 'error',
+      rule: `integrations.deny contains "${integrationId}"`,
       message: `Integration "${integrationId}" is explicitly denied by organization policy.`,
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: `integrations.deny contains "${integrationId}"`,
+      integration: integrationId,
     })
   }
   
   // Check allow list (if defined)
   if (
+    policy.integrations.allow &&
     policy.integrations.allow.length > 0 &&
     !policy.integrations.allow.includes(integrationId)
   ) {
     violations.push({
       type: 'INTEGRATION_NOT_ALLOWED',
-      severity: 'error',
+      rule: `integrations.allow does not contain "${integrationId}"`,
       message: `Integration "${integrationId}" is not in the allowed list.`,
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: `integrations.allow does not contain "${integrationId}"`,
+      integration: integrationId,
     })
   }
   
   // Check version constraints
-  const constraint = policy.integrations.versionConstraints[integrationId]
-  if (constraint && context.integration.sdk.version) {
-    const currentVersion = context.integration.sdk.version
+  const constraint = policy.integrations.versionConstraints?.[integrationId]
+  if (constraint && context.integration.version) {
+    const currentVersion = context.integration.version
     
     if (constraint.minVersion && compareVersions(currentVersion, constraint.minVersion) < 0) {
       violations.push({
-        type: 'VERSION_CONSTRAINT_VIOLATION',
-        severity: 'error',
+        type: 'VERSION_CONSTRAINT_FAILED',
+        rule: `Minimum version: ${constraint.minVersion}`,
         message: `Integration "${integrationId}" version ${currentVersion} is below minimum ${constraint.minVersion}.`,
-        blocking: true,
-        requiresHumanApproval: false,
-        policyRule: `Minimum version: ${constraint.minVersion}`,
+        integration: integrationId,
       })
     }
     
     if (constraint.maxVersion && compareVersions(currentVersion, constraint.maxVersion) > 0) {
       violations.push({
-        type: 'VERSION_CONSTRAINT_VIOLATION',
-        severity: 'error',
+        type: 'VERSION_CONSTRAINT_FAILED',
+        rule: `Maximum version: ${constraint.maxVersion}`,
         message: `Integration "${integrationId}" version ${currentVersion} exceeds maximum ${constraint.maxVersion}.`,
-        blocking: true,
-        requiresHumanApproval: false,
-        policyRule: `Maximum version: ${constraint.maxVersion}`,
+        integration: integrationId,
       })
     }
   }
@@ -207,50 +198,22 @@ function evaluateCategoryRules(
   if (!category) return violations
   
   // Check if category is blocked
-  if (policy.categories.blocked.includes(category)) {
+  if (policy.categories.blocked?.includes(category)) {
     violations.push({
       type: 'CATEGORY_BLOCKED',
-      severity: 'error',
+      rule: `categories.blocked contains "${category}"`,
       message: `Category "${category}" is blocked by organization policy.`,
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: `categories.blocked contains "${category}"`,
+      category,
     })
   }
   
   // Check if category requires human approval
-  if (policy.categories.requireHumanApproval.includes(category)) {
+  if (policy.categories.requireHumanApproval?.includes(category)) {
     violations.push({
-      type: 'REQUIRES_HUMAN_APPROVAL',
-      severity: 'warning',
+      type: 'CATEGORY_REQUIRES_APPROVAL',
+      rule: `categories.requireHumanApproval contains "${category}"`,
       message: `Category "${category}" requires human approval.`,
-      blocking: false,
-      requiresHumanApproval: true,
-      policyRule: `categories.requireHumanApproval contains "${category}"`,
-    })
-  }
-  
-  // Check if category requires Strategist review
-  if (policy.categories.requireStrategist.includes(category)) {
-    violations.push({
-      type: 'REQUIRES_STRATEGIST',
-      severity: 'info',
-      message: `Category "${category}" requires Strategist review.`,
-      blocking: false,
-      requiresHumanApproval: false,
-      policyRule: `categories.requireStrategist contains "${category}"`,
-    })
-  }
-  
-  // Check if category requires Auditor review
-  if (policy.categories.requireAuditor.includes(category)) {
-    violations.push({
-      type: 'REQUIRES_AUDITOR',
-      severity: 'info',
-      message: `Category "${category}" requires Auditor review.`,
-      blocking: false,
-      requiresHumanApproval: false,
-      policyRule: `categories.requireAuditor contains "${category}"`,
+      category,
     })
   }
   
@@ -273,36 +236,19 @@ function evaluateAutoFixRules(
   if (!policy.autoFix.enabled) {
     violations.push({
       type: 'AUTOFIX_DISABLED',
-      severity: 'error',
+      rule: 'autoFix.enabled = false',
       message: 'Auto-fix is disabled by organization policy.',
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: 'autoFix.enabled = false',
     })
     return violations
   }
   
   // Check if specific action is allowed
-  if (context.fixAction && !policy.autoFix.allowedActions.includes(context.fixAction)) {
+  if (context.fixAction && policy.autoFix.allowedActions && !policy.autoFix.allowedActions.includes(context.fixAction as typeof policy.autoFix.allowedActions[number])) {
     violations.push({
-      type: 'AUTOFIX_ACTION_NOT_ALLOWED',
-      severity: 'error',
+      type: 'AUTOFIX_ACTION_DENIED',
+      rule: `autoFix.allowedActions does not include "${context.fixAction}"`,
       message: `Auto-fix action "${context.fixAction}" is not allowed.`,
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: `autoFix.allowedActions does not include "${context.fixAction}"`,
-    })
-  }
-  
-  // Check if approval is required
-  if (policy.autoFix.requireApproval) {
-    violations.push({
-      type: 'REQUIRES_HUMAN_APPROVAL',
-      severity: 'warning',
-      message: 'Auto-fix requires human approval.',
-      blocking: false,
-      requiresHumanApproval: true,
-      policyRule: 'autoFix.requireApproval = true',
+      blockedAction: context.fixAction,
     })
   }
   
@@ -326,48 +272,36 @@ function evaluateShippingRules(
   // Check drift blocking
   if (policy.shipping.blockOnDrift && context.isDriftPresent) {
     violations.push({
-      type: 'DRIFT_BLOCKING',
-      severity: 'error',
+      type: 'EXPORT_DRIFT_BLOCKED',
+      rule: 'shipping.blockOnDrift = true',
       message: 'Export blocked: Version drift detected.',
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: 'shipping.blockOnDrift = true',
     })
   }
   
   // Check clean ledger requirement
   if (policy.shipping.requireCleanLedger && context.hasLedgerViolations) {
     violations.push({
-      type: 'LEDGER_VIOLATION',
-      severity: 'error',
+      type: 'EXPORT_LEDGER_DIRTY',
+      rule: 'shipping.requireCleanLedger = true',
       message: 'Export blocked: Ledger contains unresolved violations.',
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: 'shipping.requireCleanLedger = true',
     })
   }
   
   // Check health check requirement
   if (policy.shipping.requireHealthCheck && !context.healthCheckPassed) {
     violations.push({
-      type: 'HEALTH_CHECK_REQUIRED',
-      severity: 'error',
+      type: 'EXPORT_HEALTH_FAILED',
+      rule: 'shipping.requireHealthCheck = true',
       message: 'Export blocked: Health check required but not passed.',
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: 'shipping.requireHealthCheck = true',
     })
   }
   
   // Check auditor pass requirement
   if (policy.shipping.requireAuditorPass && !context.auditorPassed) {
     violations.push({
-      type: 'AUDITOR_REQUIRED',
-      severity: 'error',
+      type: 'GOVERNANCE_REQUIRED',
+      rule: 'shipping.requireAuditorPass = true',
       message: 'Export blocked: Auditor approval required.',
-      blocking: true,
-      requiresHumanApproval: false,
-      policyRule: 'shipping.requireAuditorPass = true',
     })
   }
   
@@ -387,12 +321,9 @@ function evaluateGovernanceRules(
   // Check premium model budget
   if (context.requestedModel === 'premium') {
     violations.push({
-      type: 'PREMIUM_MODEL_BUDGET',
-      severity: 'info',
+      type: 'GOVERNANCE_REQUIRED',
+      rule: `governance.premiumModelBudgetPercent = ${policy.governance.premiumModelBudgetPercent}`,
       message: `Premium model usage limited to ${policy.governance.premiumModelBudgetPercent}% of tokens.`,
-      blocking: false,
-      requiresHumanApproval: false,
-      policyRule: `governance.premiumModelBudgetPercent = ${policy.governance.premiumModelBudgetPercent}`,
     })
   }
   
@@ -426,7 +357,12 @@ function compareVersions(a: string, b: string): number {
  * Format a policy violation for user display
  */
 export function formatViolation(violation: PolicyViolation): string {
-  const icon = violation.blocking ? '🚫' : violation.requiresHumanApproval ? '⚠️' : 'ℹ️'
+  // Determine icon based on violation type
+  const isBlocking = violation.type.includes('DENIED') || 
+                     violation.type.includes('BLOCKED') || 
+                     violation.type.includes('DISABLED') ||
+                     violation.type.includes('FAILED')
+  const icon = isBlocking ? '🚫' : 'ℹ️'
   return `${icon} ${violation.message}`
 }
 

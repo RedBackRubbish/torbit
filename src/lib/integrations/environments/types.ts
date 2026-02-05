@@ -5,7 +5,7 @@
  * Rules change by environment. Most restrictive wins.
  */
 
-import type { IntegrationCategory } from '../manifests/types'
+import type { IntegrationCategory } from '../types'
 
 // ============================================
 // ENVIRONMENT NAMES

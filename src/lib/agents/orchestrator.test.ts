@@ -71,6 +71,7 @@ describe('Orchestrator', () => {
           visual: { passed: true, issues: [] },
           functional: { passed: true, issues: [] },
           hygiene: { passed: true, issues: [] },
+          security: { passed: true, issues: [] },
         },
       }
       expect(audit.passed).toBe(true)
@@ -110,6 +111,7 @@ describe('Orchestrator', () => {
           visual: { passed: false, issues: ['Color mismatch'] },
           functional: { passed: true, issues: [] },
           hygiene: { passed: false, issues: ['Console errors found'] },
+          security: { passed: true, issues: [] },
         },
       }
 
@@ -125,6 +127,7 @@ describe('Orchestrator', () => {
           visual: { passed: true, issues: [] },
           functional: { passed: false, issues: ['E2E failed'] },
           hygiene: { passed: true, issues: [] },
+          security: { passed: true, issues: [] },
         },
       }
 
@@ -268,7 +271,7 @@ describe('AuditResult with Security Gate', () => {
         visual: { passed: true, issues: [] },
         functional: { passed: true, issues: [] },
         hygiene: { passed: true, issues: [] },
-        security: { passed: true },
+        security: { passed: true, issues: [] },
       },
     }
 
@@ -285,16 +288,14 @@ describe('AuditResult with Security Gate', () => {
         hygiene: { passed: true, issues: [] },
         security: { 
           passed: false,
-          vulnerabilities: [
-            { type: 'hardcoded_secret', severity: 'critical', message: 'Stripe key exposed', file: 'src/payments.ts' }
-          ]
+          issues: ['Hardcoded Stripe key exposed in src/payments.ts']
         },
       },
     }
 
     expect(audit.gates.security?.passed).toBe(false)
-    expect(audit.gates.security?.vulnerabilities).toHaveLength(1)
-    expect(audit.gates.security?.vulnerabilities?.[0].severity).toBe('critical')
+    expect(audit.gates.security?.issues).toHaveLength(1)
+    expect(audit.gates.security?.issues?.[0]).toContain('Stripe')
   })
 })
 

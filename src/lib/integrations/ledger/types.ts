@@ -45,6 +45,17 @@ export type LedgerEventType =
   | 'DEPLOY_REQUESTED'
   | 'DEPLOY_BLOCKED'
   | 'DEPLOY_APPROVED'
+  // Environment enforcement
+  | 'ENVIRONMENT_CHECK'
+  | 'ENVIRONMENT_BLOCK'
+  | 'ENVIRONMENT_APPROVED'
+  | 'ENVIRONMENT_SWITCHED'
+  | 'ENVIRONMENT_CONFIG_LOADED'
+  // Policy enforcement
+  | 'POLICY_CHECK'
+  | 'POLICY_BLOCK'
+  | 'POLICY_ALLOW'
+  | 'POLICY_HUMAN_APPROVAL_REQUIRED'
 
 /**
  * Governance verdict snapshot (immutable record)

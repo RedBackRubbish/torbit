@@ -111,13 +111,13 @@ export function generateEvidenceBundle(
   const attestation = generateAttestation({
     exportDate: now,
     environment,
-    policyName: policy.name,
+    policyName: policy.name ?? 'Default Policy',
     integrationHealth: hasHealthIssues ? 'ERRORS' : 'CLEAN',
     driftStatus: hasDrift ? 'DETECTED' : 'NONE',
     auditorStatus: input.auditorPassed ? 'PASSED' : 'SKIPPED',
     strategistStatus: input.strategistPassed ? 'PASSED' : 'SKIPPED',
     integrationCount: input.integrations.length,
-    ledgerEntryCount: ledger.entries.length,
+    ledgerEntryCount: ledger?.entries.length ?? 0,
     policyViolations: input.policyViolations.length,
     environmentViolations: input.environmentViolations.length,
   })
@@ -126,9 +126,9 @@ export function generateEvidenceBundle(
   const reportData = buildAuditReportData({
     exportDate: now,
     environment,
-    policyName: policy.name,
+    policyName: policy.name ?? 'Default Policy',
     integrations: input.integrations,
-    ledgerEntries: ledger.entries,
+    ledgerEntries: ledger?.entries ?? [],
     policyViolations: input.policyViolations,
     environmentViolations: input.environmentViolations,
   })
@@ -146,8 +146,8 @@ export function generateEvidenceBundle(
   
   // Redact sensitive data if needed
   const ledgerEntries = options.redactSensitive 
-    ? redactLedgerEntries(ledger.entries)
-    : ledger.entries
+    ? redactLedgerEntries(ledger?.entries ?? [])
+    : (ledger?.entries ?? [])
   
   const bundle: EvidenceBundle = {
     version: '1.0.0',
@@ -271,9 +271,10 @@ function simpleHash(input: string): string {
 }
 
 function redactLedgerEntries(entries: LedgerEntry[]): LedgerEntry[] {
+  // LedgerEntry doesn't have a metadata property, so just return entries as-is
+  // In the future, if sensitive data needs redaction, it would be in specific fields
   return entries.map(entry => ({
     ...entry,
-    metadata: redactMetadata(entry.metadata),
   }))
 }
 
@@ -315,13 +316,13 @@ export function generateQuickBundle(
   const attestation = generateAttestation({
     exportDate: new Date().toISOString(),
     environment,
-    policyName: policy.name,
+    policyName: policy.name ?? 'Default Policy',
     integrationHealth: 'CLEAN',
     driftStatus: 'NONE',
     auditorStatus: 'SKIPPED',
     strategistStatus: 'SKIPPED',
     integrationCount: 0,
-    ledgerEntryCount: ledger.entries.length,
+    ledgerEntryCount: ledger?.entries.length ?? 0,
     policyViolations: 0,
     environmentViolations: 0,
   })

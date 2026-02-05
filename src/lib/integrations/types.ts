@@ -11,7 +11,8 @@ export type IntegrationCategory =
   | "maps" 
   | "analytics" 
   | "storage" 
-  | "email";
+  | "email"
+  | "database";
 
 export type IntegrationPlatform = "web" | "mobile";
 

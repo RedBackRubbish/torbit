@@ -21,7 +21,7 @@ import type {
   EnvironmentViolationType,
 } from './types'
 import { getActiveProfile, getActiveEnvironment } from './loader'
-import type { IntegrationManifest, IntegrationCategory } from '../manifests/types'
+import type { IntegrationManifest, IntegrationCategory } from '../types'
 import type { OperationType } from '../policies/evaluator'
 
 // ============================================
