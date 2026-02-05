@@ -235,6 +235,212 @@ export const ANTI_PATTERNS = [
 ]
 
 // ============================================================================
+// DESIGN DECISION HIERARCHY
+// ============================================================================
+// When design choices conflict, the higher rule wins. This is JUDGMENT.
+// Senior designers spend more time removing than adding.
+
+export const DESIGN_DECISION_HIERARCHY = [
+  'Clarity over density — if it's not immediately understandable, simplify',
+  'Structure before decoration — layout and hierarchy first, styling second',
+  'Fewer components over richer components — one good component beats three mediocre ones',
+  'Remove before adding — can you achieve the same with less?',
+  'One primary action per screen — don't compete for attention',
+  'Obvious over clever — if you need to explain it, redesign it',
+  'Content before chrome — UI should serve content, not overshadow it',
+] as const
+
+// ============================================================================
+// SCREEN INTENT MODIFIERS
+// ============================================================================
+// Different screens need different treatment. Intent drives design.
+
+export const SCREEN_INTENT_MODIFIERS = {
+  hero: {
+    intent: 'Capture attention, single CTA',
+    headlineScale: 'text-5xl md:text-6xl lg:text-7xl',
+    ctaCount: 1,
+    sectionPadding: 'py-24 md:py-32 lg:py-40',
+    density: 'spacious',
+    emphasis: 'headline > visual > cta',
+    rules: [
+      'Maximum 12 words in headline',
+      'Single primary CTA, optional secondary',
+      'Visual or illustration as support, not focus',
+      'No navigation links in hero area',
+    ],
+  },
+  onboarding: {
+    intent: 'Guide without overwhelming',
+    headlineScale: 'text-2xl md:text-3xl',
+    ctaCount: 1,
+    sectionPadding: 'py-12 md:py-16',
+    density: 'comfortable',
+    emphasis: 'progress > content > action',
+    rules: [
+      'Show progress (step 1 of 3)',
+      'One question or action per step',
+      'Clear back/skip options',
+      'Never more than 5 form fields visible',
+    ],
+  },
+  dashboard: {
+    intent: 'Information at a glance',
+    headlineScale: 'text-xl md:text-2xl',
+    ctaCount: 0,
+    sectionPadding: 'py-6 md:py-8',
+    density: 'comfortable',
+    emphasis: 'data > navigation > actions',
+    rules: [
+      'Key metrics above the fold',
+      'Cards for discrete data sets',
+      'Consistent card heights in rows',
+      'No decorative elements',
+    ],
+  },
+  adminList: {
+    intent: 'Scan and manage data efficiently',
+    headlineScale: 'text-lg',
+    ctaCount: 1,
+    sectionPadding: 'py-4 md:py-6',
+    density: 'compact',
+    emphasis: 'table > filters > bulk-actions',
+    rules: [
+      'Table over cards for >5 items',
+      'Inline actions, not modals',
+      'Sortable columns with clear indicators',
+      'Bulk select for power users',
+    ],
+  },
+  detailView: {
+    intent: 'Complete information with actions',
+    headlineScale: 'text-2xl md:text-3xl',
+    ctaCount: 2,
+    sectionPadding: 'py-8 md:py-12',
+    density: 'comfortable',
+    emphasis: 'title > metadata > content > actions',
+    rules: [
+      'Sticky header with key info',
+      'Related actions grouped together',
+      'Metadata above main content',
+      'Back navigation always visible',
+    ],
+  },
+  emptyState: {
+    intent: 'Guide to first action',
+    headlineScale: 'text-xl',
+    ctaCount: 1,
+    sectionPadding: 'py-16 md:py-24',
+    density: 'spacious',
+    emphasis: 'message > illustration > action',
+    rules: [
+      'One clear CTA',
+      'Explain what this area will contain',
+      'Optional: subtle illustration',
+      'No sad faces or negative language',
+    ],
+  },
+  settings: {
+    intent: 'Configure without confusion',
+    headlineScale: 'text-lg',
+    ctaCount: 1,
+    sectionPadding: 'py-6 md:py-8',
+    density: 'comfortable',
+    emphasis: 'sections > fields > save',
+    rules: [
+      'Group related settings',
+      'Descriptions under each field',
+      'Sticky save button',
+      'Danger zone at bottom',
+    ],
+  },
+  pricing: {
+    intent: 'Compare and convert',
+    headlineScale: 'text-3xl md:text-4xl',
+    ctaCount: 3,
+    sectionPadding: 'py-16 md:py-24',
+    density: 'comfortable',
+    emphasis: 'recommended > features > cta',
+    rules: [
+      'Highlight one recommended plan',
+      'Feature comparison aligned',
+      'Price prominent, period small',
+      'No more than 4 plans visible',
+    ],
+  },
+} as const
+
+// ============================================================================
+// DENSITY CONTROL
+// ============================================================================
+// Not everything should be spacious. Data-heavy screens need different treatment.
+
+export const DENSITY_PRESETS = {
+  spacious: {
+    name: 'Spacious',
+    use: 'Landing pages, marketing, hero sections',
+    rowHeight: 'h-14 md:h-16',
+    cellPadding: 'px-6 py-4',
+    sectionGap: 'gap-8 md:gap-12',
+    fontSize: 'text-base',
+    borderVisibility: 'border-opacity-6',
+  },
+  comfortable: {
+    name: 'Comfortable',
+    use: 'Dashboards, settings, detail pages',
+    rowHeight: 'h-12',
+    cellPadding: 'px-4 py-3',
+    sectionGap: 'gap-6',
+    fontSize: 'text-sm',
+    borderVisibility: 'border-opacity-8',
+  },
+  compact: {
+    name: 'Compact',
+    use: 'Admin tables, data grids, power-user UIs',
+    rowHeight: 'h-10',
+    cellPadding: 'px-3 py-2',
+    sectionGap: 'gap-4',
+    fontSize: 'text-sm',
+    borderVisibility: 'border-opacity-10',
+  },
+} as const
+
+// ============================================================================
+// NO-DRIBBBLE RULES (Seriously)
+// ============================================================================
+// These are the #1 reason AI UIs look fake. Explicitly forbidden.
+
+export const DRIBBBLE_BANS = [
+  // Visual Noise
+  'Gradients on backgrounds (unless explicitly luxury/creative)',
+  'Floating shapes or blobs in backgrounds',
+  'Mesh gradients or aurora effects',
+  'Glassmorphism / frosted glass effects',
+  'Neumorphism / soft 3D shadows',
+  
+  // Over-styling
+  'Excessive rounded corners (rounded-3xl, rounded-full on containers)',
+  'Glow effects on buttons or cards',
+  'Animated gradient borders',
+  'Rainbow or multi-color gradients',
+  'Drop shadows larger than shadow-md',
+  
+  // Decorative Waste
+  'Illustration-heavy heroes by default',
+  'Abstract decorative patterns',
+  '3D icons or isometric graphics',
+  'Floating badges or ribbons',
+  'Confetti or particle effects',
+  
+  // Layout Crimes
+  'Cards tilted at angles',
+  'Overlapping elements for style',
+  'Text over busy backgrounds',
+  'Split-screen layouts without purpose',
+  'Masonry grids for simple content',
+] as const
+
+// ============================================================================
 // HIGH-END PATTERNS
 // ============================================================================
 // What makes apps feel premium
@@ -276,6 +482,50 @@ export const HIGH_END_PATTERNS = [
 // ============================================================================
 // These get injected into the system prompt based on context
 
+function detectScreenIntent(prompt: string): keyof typeof SCREEN_INTENT_MODIFIERS | null {
+  const lower = prompt.toLowerCase()
+  
+  if (lower.includes('hero') || lower.includes('landing') || lower.includes('homepage')) {
+    return 'hero'
+  }
+  if (lower.includes('onboarding') || lower.includes('signup flow') || lower.includes('wizard')) {
+    return 'onboarding'
+  }
+  if (lower.includes('dashboard') || lower.includes('analytics') || lower.includes('metrics')) {
+    return 'dashboard'
+  }
+  if (lower.includes('admin') || lower.includes('list') || lower.includes('table') || lower.includes('manage')) {
+    return 'adminList'
+  }
+  if (lower.includes('detail') || lower.includes('view') || lower.includes('profile')) {
+    return 'detailView'
+  }
+  if (lower.includes('empty') || lower.includes('no data') || lower.includes('getting started')) {
+    return 'emptyState'
+  }
+  if (lower.includes('settings') || lower.includes('preferences') || lower.includes('config')) {
+    return 'settings'
+  }
+  if (lower.includes('pricing') || lower.includes('plans') || lower.includes('subscription')) {
+    return 'pricing'
+  }
+  
+  return null
+}
+
+function detectDensity(prompt: string): keyof typeof DENSITY_PRESETS {
+  const lower = prompt.toLowerCase()
+  
+  if (lower.includes('compact') || lower.includes('dense') || lower.includes('admin') || lower.includes('data-heavy')) {
+    return 'compact'
+  }
+  if (lower.includes('spacious') || lower.includes('landing') || lower.includes('hero') || lower.includes('marketing')) {
+    return 'spacious'
+  }
+  
+  return 'comfortable'
+}
+
 export function getDesignGuidance(userPrompt: string): string {
   const lowerPrompt = userPrompt.toLowerCase()
   
@@ -288,7 +538,40 @@ export function getDesignGuidance(userPrompt: string): string {
     preset = DESIGN_PRESETS.saasProf
   }
   
+  // Detect screen intent and density
+  const screenIntent = detectScreenIntent(userPrompt)
+  const density = detectDensity(userPrompt)
+  const densityPreset = DENSITY_PRESETS[density]
+  
+  // Build intent-specific guidance
+  let intentGuidance = ''
+  if (screenIntent) {
+    const intent = SCREEN_INTENT_MODIFIERS[screenIntent]
+    intentGuidance = `
+SCREEN INTENT: ${screenIntent.toUpperCase()}
+Goal: ${intent.intent}
+- Headline: ${intent.headlineScale}
+- CTAs allowed: ${intent.ctaCount}
+- Padding: ${intent.sectionPadding}
+- Priority: ${intent.emphasis}
+
+Rules for this screen:
+${intent.rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+`
+  }
+  
   return `
+═══════════════════════════════════════════════════════════════════════════════
+                        DESIGN JUDGMENT (READ FIRST)
+═══════════════════════════════════════════════════════════════════════════════
+
+Before applying any styles, follow this hierarchy. Higher rules ALWAYS win:
+
+${DESIGN_DECISION_HIERARCHY.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+SENIOR DESIGNERS REMOVE MORE THAN THEY ADD.
+Before adding any component, ask: "Can I achieve this with less?"
+
 ═══════════════════════════════════════════════════════════════════════════════
                            DESIGN SYSTEM (MANDATORY)
 ═══════════════════════════════════════════════════════════════════════════════
@@ -315,21 +598,42 @@ COMPONENT STYLES:
 
 DESIGN RULES:
 ${preset.rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+${intentGuidance}
 
-NEVER DO:
-- Saturated colors except for one accent
-- Heavy shadows (shadow-lg, shadow-xl)
-- Cramped spacing
-- Multiple colors competing for attention
-- Inconsistent border radius
+═══════════════════════════════════════════════════════════════════════════════
+                              DENSITY: ${density.toUpperCase()}
+═══════════════════════════════════════════════════════════════════════════════
 
-ALWAYS DO:
-- Generous whitespace (py-16 minimum for sections)
-- Subtle borders (opacity 0.06-0.12)
-- One accent color for CTAs
-- Consistent sizing (h-10 buttons, 16px icons)
-- Smooth transitions (transition-colors, transition-all)
+This screen uses "${densityPreset.name}" density (${densityPreset.use}):
+- Row height: ${densityPreset.rowHeight}
+- Cell padding: ${densityPreset.cellPadding}
+- Section gap: ${densityPreset.sectionGap}
+- Font size: ${densityPreset.fontSize}
+
+═══════════════════════════════════════════════════════════════════════════════
+                          NEVER DO (DRIBBBLE BANS)
+═══════════════════════════════════════════════════════════════════════════════
+
+These patterns make apps look fake. They are FORBIDDEN:
+
+${DRIBBBLE_BANS.slice(0, 10).map(b => `✗ ${b}`).join('\n')}
+
+═══════════════════════════════════════════════════════════════════════════════
+                        SELF-CRITIQUE (BEFORE FINISHING)
+═══════════════════════════════════════════════════════════════════════════════
+
+Before completing, run this mental checklist:
+
+1. Does this screen have more than one primary CTA? → Remove extras
+2. Is there unnecessary visual noise? → Simplify
+3. Can any section be removed without losing clarity? → Remove it
+4. Are there competing colors or accents? → Reduce to one
+5. Would a senior designer at Linear approve this? → If not, iterate
+
+The best designs don't look fancy. They look OBVIOUS.
 `
 }
 
 export type DesignPreset = keyof typeof DESIGN_PRESETS
+export type ScreenIntent = keyof typeof SCREEN_INTENT_MODIFIERS
+export type DensityPreset = keyof typeof DENSITY_PRESETS
