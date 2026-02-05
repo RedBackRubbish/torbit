@@ -26,6 +26,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@openrouter/ai-sdk-provider": "^2.1.1",
     "@sentry/nextjs": "^10.38.0",
+    "@stripe/stripe-js": "^8.7.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.94.1",
     "@webcontainer/api": "^1.6.1",
@@ -41,6 +42,7 @@
     "openai": "^6.17.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "stripe": "^20.3.0",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useFuelStore } from '@/store/fuel'
+import { loadStripe } from '@stripe/stripe-js'
 
 /**
  * RefuelModal - The "Refueling Station"
@@ -15,6 +16,11 @@ import { useFuelStore } from '@/store/fuel'
  * - Jerry Can (2,500) - $29: Feature builds  
  * - Reactor Core (10,000) - $99: Full MVP
  */
+
+// Initialize Stripe (lazy load)
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null
 
 interface FuelPack {
   id: string
@@ -77,6 +83,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [purchasedAmount, setPurchasedAmount] = useState(0)
+  const [error, setError] = useState<string | null>(null)
 
   const status = getFuelStatus()
   const isCritical = status === 'critical'
@@ -84,24 +91,61 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
   const handlePurchase = async (pack: FuelPack) => {
     setSelectedPack(pack.id)
     setIsProcessing(true)
+    setError(null)
 
-    // TODO: In production, integrate with Stripe Checkout
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    try {
+      // Check if Stripe is configured
+      if (!stripePromise) {
+        // Fallback to demo mode if Stripe not configured
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        topUp(pack.amount)
+        setPurchasedAmount(pack.amount)
+        setShowSuccess(true)
+        setTimeout(() => {
+          setShowSuccess(false)
+          setSelectedPack(null)
+          onOpenChange(false)
+        }, 2000)
+        return
+      }
 
-    // Optimistic update - instant gratification!
-    topUp(pack.amount)
-    setPurchasedAmount(pack.amount)
-    setIsProcessing(false)
-    setShowSuccess(true)
+      // Create Stripe Checkout session
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'payment',
+          fuelPackId: pack.id,
+        }),
+      })
 
-    // Close after success animation
-    setTimeout(() => {
-      setShowSuccess(false)
+      const data = await response.json()
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to create checkout session')
+      }
+
+      // Redirect to Stripe Checkout
+      const stripe = await stripePromise
+      if (stripe && data.sessionId) {
+        const { error: stripeError } = await stripe.redirectToCheckout({
+          sessionId: data.sessionId,
+        })
+        if (stripeError) {
+          throw new Error(stripeError.message)
+        }
+      } else if (data.url) {
+        // Fallback to direct URL redirect
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error('Purchase error:', err)
+      setError(err instanceof Error ? err.message : 'Purchase failed')
+      setIsProcessing(false)
       setSelectedPack(null)
-      onOpenChange(false)
-    }, 2000)
+    }
   }
+
 
   if (!open) return null
 
@@ -218,6 +262,13 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
               {Math.round((currentFuel / maxFuel) * 100)}% capacity
             </span>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+              {error}
+            </div>
+          )}
 
           {/* Fuel Pack Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

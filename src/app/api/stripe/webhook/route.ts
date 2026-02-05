@@ -1,0 +1,346 @@
+/**
+ * TORBIT - Stripe Webhook Handler
+ * 
+ * Handles Stripe webhook events for subscriptions and payments.
+ * 
+ * Events handled:
+ * - checkout.session.completed: Initial subscription or fuel purchase
+ * - customer.subscription.created: New subscription activated
+ * - customer.subscription.updated: Subscription changed (upgrade/downgrade)
+ * - customer.subscription.deleted: Subscription canceled
+ * - invoice.payment_succeeded: Monthly subscription renewal
+ * - invoice.payment_failed: Payment failed
+ */
+
+import { NextRequest, NextResponse } from 'next/server'
+import { headers } from 'next/headers'
+import Stripe from 'stripe'
+import { getStripe, verifyWebhookSignature } from '@/lib/billing/stripe'
+import { createClient } from '@supabase/supabase-js'
+import type { SubscriptionTier } from '@/lib/billing/types'
+import { TIER_CONFIG } from '@/lib/billing/types'
+
+// Use service role client for webhook (bypasses RLS)
+function getAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Supabase credentials not configured')
+  }
+  
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}
+
+// Disable body parsing - we need raw body for signature verification
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    // 1. Get raw body for signature verification
+    const body = await request.text()
+    const headersList = await headers()
+    const signature = headersList.get('stripe-signature')
+
+    if (!signature) {
+      console.error('Missing stripe-signature header')
+      return NextResponse.json(
+        { error: 'Missing signature' },
+        { status: 400 }
+      )
+    }
+
+    // 2. Verify webhook signature
+    let event: Stripe.Event
+    try {
+      event = verifyWebhookSignature(body, signature)
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err)
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 400 }
+      )
+    }
+
+    // 3. Handle the event
+    const supabase = getAdminClient()
+
+    switch (event.type) {
+      // ====================================
+      // CHECKOUT COMPLETED
+      // ====================================
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session
+        const metadata = session.metadata || {}
+        const userId = metadata.supabase_user_id
+
+        if (!userId) {
+          console.error('Missing supabase_user_id in checkout session metadata')
+          break
+        }
+
+        if (metadata.checkout_type === 'fuel_purchase') {
+          // One-time fuel purchase
+          const fuelAmount = parseInt(metadata.fuel_amount || '0', 10)
+          
+          if (fuelAmount > 0) {
+            await supabase.rpc('add_fuel', {
+              p_user_id: userId,
+              p_amount: fuelAmount,
+              p_type: 'purchase',
+              p_description: `Fuel pack: ${metadata.fuel_pack_id}`,
+              p_stripe_payment_intent_id: session.payment_intent as string,
+              p_metadata: { fuel_pack_id: metadata.fuel_pack_id },
+            })
+
+            console.log(`Added ${fuelAmount} fuel to user ${userId}`)
+          }
+        }
+        // Subscription checkout is handled by customer.subscription.created
+        break
+      }
+
+      // ====================================
+      // SUBSCRIPTION CREATED
+      // ====================================
+      case 'customer.subscription.created': {
+        const subscription = event.data.object as Stripe.Subscription
+        const metadata = subscription.metadata || {}
+        const userId = metadata.supabase_user_id
+        const tier = (metadata.tier || 'pro') as SubscriptionTier
+
+        if (!userId) {
+          // Try to get from customer
+          const stripe = getStripe()
+          const customer = await stripe.customers.retrieve(subscription.customer as string)
+          if (customer.deleted) break
+          
+          const { data: customerRecord } = await supabase
+            .from('stripe_customers')
+            .select('user_id')
+            .eq('stripe_customer_id', subscription.customer)
+            .single()
+          
+          if (!customerRecord) {
+            console.error('Could not find user for subscription')
+            break
+          }
+          
+          await handleSubscriptionCreated(supabase, customerRecord.user_id, subscription, tier)
+        } else {
+          await handleSubscriptionCreated(supabase, userId, subscription, tier)
+        }
+        break
+      }
+
+      // ====================================
+      // SUBSCRIPTION UPDATED
+      // ====================================
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription
+        
+        // Get user from customer
+        const { data: customerRecord } = await supabase
+          .from('stripe_customers')
+          .select('user_id')
+          .eq('stripe_customer_id', subscription.customer)
+          .single()
+        
+        if (!customerRecord) break
+
+        const status = mapStripeStatus(subscription.status)
+        const tier = subscription.metadata?.tier as SubscriptionTier || 'pro'
+
+        await supabase
+          .from('subscriptions')
+          .update({
+            status,
+            tier,
+            stripe_price_id: subscription.items.data[0]?.price.id,
+            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            cancel_at_period_end: subscription.cancel_at_period_end,
+            monthly_fuel_allowance: TIER_CONFIG[tier].fuelAllowance,
+          })
+          .eq('user_id', customerRecord.user_id)
+
+        console.log(`Updated subscription for user ${customerRecord.user_id} to ${tier}`)
+        break
+      }
+
+      // ====================================
+      // SUBSCRIPTION DELETED
+      // ====================================
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription
+
+        const { data: customerRecord } = await supabase
+          .from('stripe_customers')
+          .select('user_id')
+          .eq('stripe_customer_id', subscription.customer)
+          .single()
+        
+        if (!customerRecord) break
+
+        // Downgrade to free tier
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: 'canceled',
+            tier: 'free',
+            monthly_fuel_allowance: TIER_CONFIG.free.fuelAllowance,
+            stripe_subscription_id: null,
+            stripe_price_id: null,
+          })
+          .eq('user_id', customerRecord.user_id)
+
+        console.log(`Subscription canceled for user ${customerRecord.user_id}, downgraded to free`)
+        break
+      }
+
+      // ====================================
+      // INVOICE PAYMENT SUCCEEDED (Monthly renewal)
+      // ====================================
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object as Stripe.Invoice
+        
+        // Skip if not a subscription invoice
+        if (!invoice.subscription) break
+
+        const { data: customerRecord } = await supabase
+          .from('stripe_customers')
+          .select('user_id')
+          .eq('stripe_customer_id', invoice.customer)
+          .single()
+        
+        if (!customerRecord) break
+
+        // Get user's subscription tier
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('tier')
+          .eq('user_id', customerRecord.user_id)
+          .single()
+        
+        if (!subscription) break
+
+        const tier = subscription.tier as SubscriptionTier
+        const fuelAmount = TIER_CONFIG[tier].fuelAllowance
+
+        // Refill fuel for the new period
+        await supabase.rpc('add_fuel', {
+          p_user_id: customerRecord.user_id,
+          p_amount: fuelAmount,
+          p_type: 'subscription_refill',
+          p_description: `Monthly ${tier} subscription refill`,
+          p_stripe_invoice_id: invoice.id,
+          p_metadata: { tier, period: invoice.period_end },
+        })
+
+        console.log(`Monthly refill: ${fuelAmount} fuel for user ${customerRecord.user_id}`)
+        break
+      }
+
+      // ====================================
+      // INVOICE PAYMENT FAILED
+      // ====================================
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice
+        
+        if (!invoice.subscription) break
+
+        const { data: customerRecord } = await supabase
+          .from('stripe_customers')
+          .select('user_id')
+          .eq('stripe_customer_id', invoice.customer)
+          .single()
+        
+        if (!customerRecord) break
+
+        // Mark subscription as past_due
+        await supabase
+          .from('subscriptions')
+          .update({ status: 'past_due' })
+          .eq('user_id', customerRecord.user_id)
+
+        console.log(`Payment failed for user ${customerRecord.user_id}`)
+        // TODO: Send email notification to user
+        break
+      }
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`)
+    }
+
+    return NextResponse.json({ received: true })
+
+  } catch (error) {
+    console.error('Webhook error:', error)
+    return NextResponse.json(
+      { error: 'Webhook handler failed' },
+      { status: 500 }
+    )
+  }
+}
+
+// Helper functions
+
+async function handleSubscriptionCreated(
+  supabase: ReturnType<typeof getAdminClient>,
+  userId: string,
+  subscription: Stripe.Subscription,
+  tier: SubscriptionTier
+) {
+  const fuelAllowance = TIER_CONFIG[tier].fuelAllowance
+
+  // Update or create subscription record
+  await supabase
+    .from('subscriptions')
+    .upsert({
+      user_id: userId,
+      stripe_subscription_id: subscription.id,
+      stripe_price_id: subscription.items.data[0]?.price.id,
+      tier,
+      status: mapStripeStatus(subscription.status),
+      monthly_fuel_allowance: fuelAllowance,
+      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      trial_end: subscription.trial_end 
+        ? new Date(subscription.trial_end * 1000).toISOString() 
+        : null,
+    }, {
+      onConflict: 'user_id',
+    })
+
+  // Add initial fuel allocation
+  await supabase.rpc('add_fuel', {
+    p_user_id: userId,
+    p_amount: fuelAllowance,
+    p_type: 'subscription_refill',
+    p_description: `Initial ${tier} subscription activation`,
+    p_metadata: { tier, subscription_id: subscription.id },
+  })
+
+  console.log(`Created ${tier} subscription for user ${userId} with ${fuelAllowance} fuel`)
+}
+
+function mapStripeStatus(status: Stripe.Subscription.Status): string {
+  const statusMap: Record<Stripe.Subscription.Status, string> = {
+    active: 'active',
+    canceled: 'canceled',
+    incomplete: 'incomplete',
+    incomplete_expired: 'canceled',
+    past_due: 'past_due',
+    paused: 'canceled',
+    trialing: 'trialing',
+    unpaid: 'past_due',
+  }
+  return statusMap[status] || 'active'
+}
