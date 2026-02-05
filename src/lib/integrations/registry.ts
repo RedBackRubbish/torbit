@@ -10,20 +10,74 @@
 import type { IntegrationManifest, IntegrationCategory, IntegrationPlatform, ValidationResult, ValidationError } from "./types";
 import { validatePackageVersions, isValidManifest } from "./types";
 
+// Tier 1 - Auth
 import { stripeManifest } from "./stripe/manifest";
-import { googleMapsManifest } from "./google-maps/manifest";
+import { paypalManifest } from "./paypal/manifest";
 import { clerkManifest } from "./clerk/manifest";
+import { authJsManifest } from "./authjs/manifest";
+import { firebaseAuthManifest } from "./firebase-auth/manifest";
+
+// Tier 1 - Database
 import { supabaseManifest } from "./supabase/manifest";
+import { firebaseManifest } from "./firebase/manifest";
+import { neonManifest } from "./neon/manifest";
+
+// Tier 2 - Maps
+import { googleMapsManifest } from "./google-maps/manifest";
+import { mapboxManifest } from "./mapbox/manifest";
+
+// Tier 2 - Email & Messaging
+import { sendgridManifest } from "./sendgrid/manifest";
+import { resendManifest } from "./resend/manifest";
+import { twilioManifest } from "./twilio/manifest";
+import { slackManifest } from "./slack/manifest";
+
+// Tier 2 - Analytics
+import { googleAnalyticsManifest } from "./google-analytics/manifest";
+import { posthogManifest } from "./posthog/manifest";
+import { sentryManifest } from "./sentry/manifest";
+
+// Tier 3 - Storage
+import { s3Manifest } from "./aws-s3/manifest";
+import { r2Manifest } from "./cloudflare-r2/manifest";
 
 // ============================================================================
 // Registry
 // ============================================================================
 
 const INTEGRATION_REGISTRY: Map<string, IntegrationManifest> = new Map([
+  // Payments
   ["stripe", stripeManifest],
-  ["google-maps", googleMapsManifest],
+  ["paypal", paypalManifest],
+  
+  // Auth
   ["clerk", clerkManifest],
+  ["authjs", authJsManifest],
+  ["firebase-auth", firebaseAuthManifest],
+  
+  // Database
   ["supabase", supabaseManifest],
+  ["firebase", firebaseManifest],
+  ["neon", neonManifest],
+  
+  // Maps
+  ["google-maps", googleMapsManifest],
+  ["mapbox", mapboxManifest],
+  
+  // Email & Messaging
+  ["sendgrid", sendgridManifest],
+  ["resend", resendManifest],
+  ["twilio", twilioManifest],
+  ["slack", slackManifest],
+  
+  // Analytics
+  ["google-analytics", googleAnalyticsManifest],
+  ["posthog", posthogManifest],
+  ["sentry", sentryManifest],
+  
+  // Storage
+  ["aws-s3", s3Manifest],
+  ["cloudflare-r2", r2Manifest],
 ]);
 
 // ============================================================================
