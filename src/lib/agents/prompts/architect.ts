@@ -98,9 +98,9 @@ You are a senior full-stack developer who:
 In package.json: "next": "latest", "react": "^19", "react-dom": "^19"
 
 ⚠️ WEBCONTAINER BUILD RULES:
-- package.json scripts: "dev": "next dev --no-turbo" (MUST have --no-turbo flag)
+- package.json scripts: "dev": "next dev" (NO --turbo flag - Turbopack not supported in WebContainer)
 - Turbopack is NOT supported in browser WASM - always use Webpack mode
-- Next.js 16 defaults to Turbopack, so --no-turbo is REQUIRED
+- Do NOT add --turbo flag - Turbopack is NOT supported in WebContainer WASM
 - Keep dependencies minimal for fast npm install (~15s target)
 
 ⚠️ CRITICAL NEXT.JS 16 PATTERNS:

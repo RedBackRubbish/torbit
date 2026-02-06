@@ -501,10 +501,10 @@ module.exports = {
         }
         
         // Start dev server regardless - it will error if deps are missing
-        // Use npx next dev with --no-turbo (Turbopack not supported in WebContainer WASM)
+        // Use npx next dev (no --turbo flag - Turbopack not supported in WebContainer WASM)
         addLog('Starting development server (Webpack mode)', 'info')
         
-        const devProcess = await container.spawn('npx', ['next', 'dev', '--no-turbo'])
+        const devProcess = await container.spawn('npx', ['next', 'dev'])
         devProcess.output.pipeTo(new WritableStream({
           write(data) {
             addLog(data, 'output')
@@ -628,7 +628,7 @@ module.exports = {
       version: '0.1.0',
       private: true,
       scripts: {
-        dev: 'next dev --no-turbo',
+        dev: 'next dev',
         build: 'next build',
         start: 'next start',
       },
@@ -744,8 +744,8 @@ module.exports = nextConfig
     addLog('Validating runtime (Webpack mode)', 'info')
     
     // Don't await - let it run in background
-    // Use npx next dev with --no-turbo (Turbopack not supported in WebContainer WASM)
-    container.spawn('npx', ['next', 'dev', '--no-turbo']).then(process => {
+    // Use npx next dev (no --turbo flag - Turbopack not supported in WebContainer WASM)
+    container.spawn('npx', ['next', 'dev']).then(process => {
       process.output.pipeTo(new WritableStream({
         write(data) {
           addLog(data, 'output')

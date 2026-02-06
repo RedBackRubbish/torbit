@@ -121,9 +121,8 @@ Use these tools to create code:
 In package.json: "next": "latest", "react": "^19", "react-dom": "^19"
 
 ⚠️ WEBCONTAINER BUILD RULES (CRITICAL - READ CAREFULLY):
-- In package.json scripts, use "dev": "next dev --no-turbo"
-- Turbopack is NOT supported in WebContainer WASM - MUST use Webpack mode
-- The --no-turbo flag is REQUIRED because Next.js 16 defaults to Turbopack
+- In package.json scripts, use "dev": "next dev" (NO flags)
+- Do NOT use --turbo flag - Turbopack is NOT supported in WebContainer WASM
 - Keep dependencies minimal - large packages slow npm install
 
 ⚠️ NEXT.JS 16 PATTERNS (CRITICAL):
