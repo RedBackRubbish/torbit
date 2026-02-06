@@ -326,10 +326,8 @@ export default function RootLayout({
 `)
         }
         
-        // 3. Ensure globals.css exists
-        await container.fs.writeFile('app/globals.css', `@tailwind base;
-@tailwind components;
-@tailwind utilities;
+        // 3. Ensure globals.css exists (Tailwind v4 syntax)
+        await container.fs.writeFile('app/globals.css', `@import "tailwindcss";
 
 body {
   background-color: #0a0a0a;
@@ -346,30 +344,15 @@ module.exports = nextConfig
 `)
         }
         
-        // 5. Ensure tailwind.config.js exists  
-        const hasTailwindConfig = files.some(f => f.path.includes('tailwind.config'))
-        if (!hasTailwindConfig) {
-          await container.fs.writeFile('tailwind.config.js', `/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: [
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}
-`)
-        }
+        // 5. Tailwind v4 doesn't need tailwind.config.js - auto-detects content
+        // Only create one if the AI didn't generate one and we need customizations
         
-        // 6. Ensure postcss.config.js exists
+        // 6. Ensure postcss.config.mjs exists (Tailwind v4 uses @tailwindcss/postcss)
         const hasPostcssConfig = files.some(f => f.path.includes('postcss.config'))
         if (!hasPostcssConfig) {
-          await container.fs.writeFile('postcss.config.js', `module.exports = {
+          await container.fs.writeFile('postcss.config.mjs', `export default {
   plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
+    '@tailwindcss/postcss': {},
   },
 }
 `)
@@ -437,17 +420,13 @@ module.exports = {
               needsUpdate = true
             }
             
-            // Add missing essential deps
+            // Add missing essential deps (Tailwind v4 uses @tailwindcss/postcss)
             if (!deps.tailwindcss && !devDeps.tailwindcss) {
-              devDeps.tailwindcss = '^3.4.0'
+              devDeps.tailwindcss = '^4.0.0'
               needsUpdate = true
             }
-            if (!deps.autoprefixer && !devDeps.autoprefixer) {
-              devDeps.autoprefixer = '^10.4.0'
-              needsUpdate = true
-            }
-            if (!deps.postcss && !devDeps.postcss) {
-              devDeps.postcss = '^8.4.0'
+            if (!devDeps['@tailwindcss/postcss']) {
+              devDeps['@tailwindcss/postcss'] = '^4.0.0'
               needsUpdate = true
             }
             
