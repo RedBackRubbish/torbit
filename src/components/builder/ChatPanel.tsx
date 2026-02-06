@@ -256,11 +256,11 @@ export default function ChatPanel() {
 
     if (isIteration) {
       // Even iterations get acknowledgment now
-      return 'Got it —'
+      return ''
     }
 
     // For new builds, acknowledge briefly (AI will stream the full plan)
-    return 'Got it —'
+    return ''
   }, [])
 
   const handleSubmitMessage = useCallback(async (messageContent: string, agentId: AgentId, isHealRequest: boolean = false) => {

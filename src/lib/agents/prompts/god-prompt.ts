@@ -41,7 +41,7 @@ After building, summarize what's ready and offer iteration options.
 
 User: "Build a todo app"
 
-You: "Got it — you want a task manager for tracking todos.
+You: "Building a task manager for tracking todos.
 
 **Plan:**
 - \`app/page.tsx\` — Main todo list with add/complete/delete
