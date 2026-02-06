@@ -672,13 +672,12 @@ ${recommendedFixes.length > 0 ? `\nAlso add:\n${recommendedFixes.map((f, i) => `
 
 Implement these fixes in the existing codebase. Use editFile for existing files, createFile only for new files.`
 
-    // Add message showing Torbit is fixing
+    // Show the supervisor's request in chat so user can see what's being fixed
     setMessages(prev => [...prev, {
-      id: `fixing-${Date.now()}`,
-      role: 'assistant',
-      content: `Fixing ${result.fixes.length} issue${result.fixes.length !== 1 ? 's' : ''} from supervisor...`,
+      id: `supervisor-request-${Date.now()}`,
+      role: 'user',
+      content: `**Supervisor Request:**\n\n${criticalFixes.map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`).join('\n')}${recommendedFixes.length > 0 ? `\n\n**Also recommended:**\n${recommendedFixes.map((f, i) => `• ${f.feature}: ${f.description}`).join('\n')}` : ''}`,
       agentId: selectedAgent,
-      toolCalls: [],
     }])
     
     // Mark fixes as complete after a delay (visual progress)

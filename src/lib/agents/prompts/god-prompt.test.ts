@@ -151,7 +151,8 @@ describe('God Prompt', () => {
   describe('Prompt Quality', () => {
     it('should be concise but complete', () => {
       // The prompt should be reasonably sized (not bloated)
-      expect(GOD_PROMPT.length).toBeLessThan(5000)
+      // Increased from 5000 to allow for critical file creation instructions
+      expect(GOD_PROMPT.length).toBeLessThan(6000)
       expect(GOD_PROMPT.length).toBeGreaterThan(1000)
     })
 
