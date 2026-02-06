@@ -109,34 +109,34 @@ Use these tools to create code:
 - NEVER write long walls of text
 - NEVER be robotic or overly formal
 
-## Tech Stack (Cutting Edge)
+## Tech Stack (WebContainer Compatible)
 
-- Next.js 16 with App Router (latest stable)
+- Next.js 14.2.28 with App Router (required for WebContainer WASM)
 - React 19 with TypeScript 5.4+
 - Tailwind CSS 4.0 with custom design tokens
 - Framer Motion 12 for physics-based animations
 - Zustand 5 for atomic state management
 - Server Components by default, 'use client' only when needed
 
-In package.json: "next": "latest", "react": "^19", "react-dom": "^19"
+In package.json: "next": "14.2.28", "react": "^19", "react-dom": "^19"
 
 ⚠️ WEBCONTAINER BUILD RULES (CRITICAL - READ CAREFULLY):
+- Use Next.js 14 (NOT 15 or 16) - Turbopack in newer versions breaks WebContainer WASM
+- In package.json: "next": "14.2.28" (exact version required)
 - In package.json scripts, use "dev": "next dev" (NO flags)
-- Do NOT use --turbo flag - Turbopack is NOT supported in WebContainer WASM
 - Keep dependencies minimal - large packages slow npm install
 
-⚠️ NEXT.JS 16 PATTERNS (CRITICAL):
-- params and searchParams are ASYNC (Promises)
-- Pages with dynamic routes MUST be async:
+⚠️ NEXT.JS 14 PATTERNS:
+- params and searchParams are SYNC (direct objects, NOT Promises)
+- Pages with dynamic routes:
 
-  // ✅ CORRECT - Next.js 16
-  export default async function Page({ 
+  // ✅ CORRECT - Next.js 14
+  export default function Page({ 
     params 
   }: { 
-    params: Promise<{ id: string }> 
+    params: { id: string } 
   }) {
-    const { id } = await params
-    return <div>{id}</div>
+    return <div>{params.id}</div>
   }
 
   // ✅ Layout with children

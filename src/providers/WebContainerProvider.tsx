@@ -633,7 +633,7 @@ module.exports = {
         start: 'next start',
       },
       dependencies: {
-        next: 'latest',
+        next: '14.2.28',
         react: '^19',
         'react-dom': '^19',
         'lucide-react': 'latest',

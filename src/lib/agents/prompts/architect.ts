@@ -88,43 +88,41 @@ You are a senior full-stack developer who:
                                  TECH STACK
 ═══════════════════════════════════════════════════════════════════════════════
 
-- Next.js 16 (latest) with App Router
+- Next.js 14 (NOT 15 or 16 - Turbopack breaks WebContainer WASM)
 - React 19 with TypeScript 5.4+
 - Tailwind CSS 4.0 with design tokens
 - Framer Motion 12 for physics-based animations
 - Zustand 5 for atomic state
 - Lucide React for icons
 
-In package.json: "next": "latest", "react": "^19", "react-dom": "^19"
+In package.json: "next": "14.2.28", "react": "^19", "react-dom": "^19"
 
 ⚠️ WEBCONTAINER BUILD RULES:
-- package.json scripts: "dev": "next dev" (NO --turbo flag - Turbopack not supported in WebContainer)
-- Turbopack is NOT supported in browser WASM - always use Webpack mode
-- Do NOT add --turbo flag - Turbopack is NOT supported in WebContainer WASM
+- MUST use Next.js 14.2.28 (exact version) - newer versions use Turbopack which breaks WASM
+- package.json scripts: "dev": "next dev" (NO flags)
 - Keep dependencies minimal for fast npm install (~15s target)
 
-⚠️ CRITICAL NEXT.JS 16 PATTERNS:
+⚠️ NEXT.JS 14 PATTERNS:
 
-Dynamic routes MUST be async (params are Promises):
+Dynamic routes - params are sync objects (NOT Promises):
 
   // app/[id]/page.tsx
-  export default async function Page({ 
+  export default function Page({ 
     params 
   }: { 
-    params: Promise<{ id: string }> 
+    params: { id: string } 
   }) {
-    const { id } = await params
-    return <div>{id}</div>
+    return <div>{params.id}</div>
   }
 
-Static pages (no dynamic params) - sync is fine:
+Static pages (no dynamic params):
 
   // app/page.tsx
   export default function Page() {
     return <main>Hello</main>
   }
 
-Layouts are always sync:
+Layouts:
 
   export default function Layout({ children }: { children: React.ReactNode }) {
     return <html><body>{children}</body></html>
