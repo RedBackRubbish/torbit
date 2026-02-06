@@ -365,6 +365,7 @@ export async function POST(req: Request) {
                 sendChunk({ type: 'text', content: part.text })
               } else if (part.type === 'tool-call') {
                 // Stream tool call immediately when it starts (with complete args)
+                // AI SDK v6 uses 'input' not 'args' for tool parameters
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const tc = part as any
                 if (!sentToolCalls.has(tc.toolCallId)) {
@@ -374,7 +375,7 @@ export async function POST(req: Request) {
                     toolCall: {
                       id: tc.toolCallId,
                       name: tc.toolName,
-                      args: tc.args as Record<string, unknown>,
+                      args: (tc.input ?? tc.args) as Record<string, unknown>,
                     },
                   })
                 }
