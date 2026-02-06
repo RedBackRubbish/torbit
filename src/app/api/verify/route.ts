@@ -96,7 +96,7 @@ ${safeFilesCreated.length > 10 ? `... and ${safeFilesCreated.length - 10} more` 
 `
 
     const { object } = await generateObject({
-      model: anthropic('claude-sonnet-4-5-20250929'),
+      model: anthropic('claude-opus-4-6-20260206'),
       schema: SupervisorResponseSchema,
       system: SUPERVISOR_PROMPT,
       prompt: `Review this build:\n${buildSummary}`,

@@ -39,6 +39,14 @@ export default function ChatPanel() {
   const [showSupervisor, setShowSupervisor] = useState(false)
   const [supervisorLoading, setSupervisorLoading] = useState(false)
   const [supervisorResult, setSupervisorResult] = useState<SupervisorReviewResult | null>(null)
+  // Pending verification - waits for serverUrl to trigger supervisor
+  const [pendingVerification, setPendingVerification] = useState<{
+    originalPrompt: string
+    filesCreated: string[]
+    componentNames: (string | undefined)[]
+    pageNames: string[]
+    fileCount: number
+  } | null>(null)
   
   // Track auto-fix to prevent loops
   const hasAutoFixedRef = useRef(false)
@@ -333,9 +341,15 @@ export default function ChatPanel() {
       
       // Generate completion summary if this was a build (not a heal request)
       if (!isHealRequest && files.length > 0) {
-        const componentCount = files.filter(f => f.path.includes('/components/')).length
-        const pageCount = files.filter(f => f.path.includes('page.tsx') || f.path.includes('page.js')).length
-        const storeCount = files.filter(f => f.path.includes('/store/') || f.path.includes('Store')).length
+        // Get file paths for verification
+        const filePaths = files.map(f => f.path)
+        
+        // Get component names
+        const componentNames = files
+          .filter(f => f.path.includes('/components/'))
+          .map(f => f.path.split('/').pop()?.replace(/\.(tsx|ts|jsx|js)$/, ''))
+          .filter(Boolean)
+          .slice(0, 5) // max 5
         
         // Get page names
         const pageNames = files
@@ -347,96 +361,23 @@ export default function ChatPanel() {
           })
           .filter((v, i, a) => a.indexOf(v) === i) // unique
         
-        // Get component names
-        const componentNames = files
-          .filter(f => f.path.includes('/components/'))
-          .map(f => f.path.split('/').pop()?.replace(/\.(tsx|ts|jsx|js)$/, ''))
-          .filter(Boolean)
-          .slice(0, 5) // max 5
-        
-        // Get file paths for verification
-        const filePaths = files.map(f => f.path)
-        
-        // Show completion message in chat
+        // Show message that we're waiting for build, NOT that supervisor is reviewing yet
         setMessages(prev => [...prev, {
           id: `complete-${Date.now()}`,
           role: 'assistant',
-          content: `**${files.length} files generated.** Supervisor is reviewing...`,
+          content: `**${files.length} files generated.** Building preview...`,
           agentId,
           toolCalls: [],
         }])
         
-        // Open supervisor panel and call verification API
-        setShowSupervisor(true)
-        setSupervisorLoading(true)
-        setSupervisorResult(null)
-        
-        setTimeout(async () => {
-          try {
-            const verifyResponse = await fetch('/api/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                originalPrompt: prompt || messages.find(m => m.role === 'user')?.content || '',
-                filesCreated: filePaths,
-                componentNames,
-                pageNames,
-                fileCount: files.length,
-              }),
-            })
-            
-            if (verifyResponse.ok) {
-              const result = await verifyResponse.json() as SupervisorReviewResult
-              setSupervisorLoading(false)
-              setSupervisorResult(result)
-              
-              // Update chat message based on result
-              if (result.status === 'APPROVED') {
-                setMessages(prev => prev.map(m =>
-                  m.content?.includes('Supervisor is reviewing')
-                    ? { ...m, content: `**${files.length} files generated.**\n\n✓ **Supervisor approved** — Build meets quality standards.\n\nPreview is live. What would you like to iterate on?` }
-                    : m
-                ))
-                // Auto-dismiss after approval
-                setTimeout(() => setShowSupervisor(false), 2000)
-              } else {
-                // NEEDS_FIXES - Show what Supervisor found VISIBLY before fixing
-                const issueList = result.fixes
-                  .map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`)
-                  .join('\n')
-
-                setMessages(prev => prev.map(m =>
-                  m.content?.includes('Supervisor is reviewing')
-                    ? { ...m, content: `**${files.length} files generated.** Supervisor review:\n\n**Issues found:**\n${issueList}\n\nApplying fixes...` }
-                    : m
-                ))
-                // Give user time to see what Supervisor found (2 seconds)
-                setTimeout(() => {
-                  autoApplyFixes(result)
-                }, 2000)
-              }
-            } else {
-              // Verification failed - just approve
-              setSupervisorLoading(false)
-              setSupervisorResult({ status: 'APPROVED', summary: 'Build complete', fixes: [] })
-              setShowSupervisor(false)
-              setMessages(prev => prev.map(m => 
-                m.content?.includes('Supervisor is reviewing')
-                  ? { ...m, content: `**${files.length} files generated.** Preview is live.\n\nWhat would you like to iterate on?` }
-                  : m
-              ))
-            }
-          } catch (err) {
-            console.error('Supervisor verification failed:', err)
-            setSupervisorLoading(false)
-            setShowSupervisor(false)
-            setMessages(prev => prev.map(m => 
-              m.content?.includes('Supervisor is reviewing')
-                ? { ...m, content: `**${files.length} files generated.** Preview is live.\n\nWhat would you like to iterate on?` }
-                : m
-            ))
-          }
-        }, 300)
+        // Store pending verification data - supervisor will run when serverUrl is available
+        setPendingVerification({
+          originalPrompt: prompt || messages.find(m => m.role === 'user')?.content || '',
+          filesCreated: filePaths,
+          componentNames,
+          pageNames,
+          fileCount: files.length,
+        })
       }
     } catch (error) {
       setAgentStatus(agentId, 'error', 'Failed')
@@ -585,6 +526,87 @@ Analyze the error, identify the problematic file, and use editFile to fix it imm
       healAttemptCountRef.current = 0
     }
   }, [serverUrl])
+
+  // Trigger supervisor verification when serverUrl becomes available AND we have pending verification
+  // This ensures supervisor only approves after the build actually succeeds
+  useEffect(() => {
+    if (!serverUrl || !pendingVerification) return
+    
+    // Update message to show supervisor is now reviewing (build succeeded)
+    setMessages(prev => prev.map(m =>
+      m.content?.includes('Building preview')
+        ? { ...m, content: `**${pendingVerification.fileCount} files generated.** Supervisor is reviewing...` }
+        : m
+    ))
+    
+    // Open supervisor panel and call verification API
+    setShowSupervisor(true)
+    setSupervisorLoading(true)
+    setSupervisorResult(null)
+    
+    const runVerification = async () => {
+      try {
+        const verifyResponse = await fetch('/api/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingVerification),
+        })
+        
+        if (verifyResponse.ok) {
+          const result = await verifyResponse.json() as SupervisorReviewResult
+          setSupervisorLoading(false)
+          setSupervisorResult(result)
+          
+          if (result.status === 'APPROVED') {
+            setMessages(prev => prev.map(m =>
+              m.content?.includes('Supervisor is reviewing')
+                ? { ...m, content: `**${pendingVerification.fileCount} files generated.**\n\n✓ **Supervisor approved** — Build meets quality standards.\n\nPreview is live. What would you like to iterate on?` }
+                : m
+            ))
+            setTimeout(() => setShowSupervisor(false), 2000)
+          } else {
+            // NEEDS_FIXES - Show what Supervisor found
+            const issueList = result.fixes
+              .map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`)
+              .join('\n')
+
+            setMessages(prev => prev.map(m =>
+              m.content?.includes('Supervisor is reviewing')
+                ? { ...m, content: `**${pendingVerification.fileCount} files generated.** Supervisor review:\n\n**Issues found:**\n${issueList}\n\nApplying fixes...` }
+                : m
+            ))
+            setTimeout(() => {
+              autoApplyFixes(result)
+            }, 2000)
+          }
+        } else {
+          // Verification API failed - just approve since build succeeded
+          setSupervisorLoading(false)
+          setSupervisorResult({ status: 'APPROVED', summary: 'Build complete', fixes: [] })
+          setShowSupervisor(false)
+          setMessages(prev => prev.map(m => 
+            m.content?.includes('Supervisor is reviewing')
+              ? { ...m, content: `**${pendingVerification.fileCount} files generated.** Preview is live.\n\nWhat would you like to iterate on?` }
+              : m
+          ))
+        }
+      } catch (err) {
+        console.error('Supervisor verification failed:', err)
+        setSupervisorLoading(false)
+        setShowSupervisor(false)
+        setMessages(prev => prev.map(m => 
+          m.content?.includes('Supervisor is reviewing')
+            ? { ...m, content: `**${pendingVerification.fileCount} files generated.** Preview is live.\n\nWhat would you like to iterate on?` }
+            : m
+        ))
+      } finally {
+        // Clear pending verification
+        setPendingVerification(null)
+      }
+    }
+    
+    runVerification()
+  }, [serverUrl, pendingVerification, autoApplyFixes])
 
   // ============================================================================
   // Activity Ledger Recording
