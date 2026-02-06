@@ -23,30 +23,48 @@ const SupervisorResponseSchema = z.object({
     description: z.string().describe('What needs to be added/fixed'),
     severity: z.enum(['critical', 'recommended']),
   })).describe('List of fixes needed. Empty if APPROVED.'),
+  suggestions: z.array(z.object({
+    idea: z.string().describe('Name of the enhancement idea'),
+    description: z.string().describe('What it would add to the experience'),
+    effort: z.enum(['quick', 'moderate', 'significant']).describe('Implementation effort'),
+  })).describe('Optional improvements to make the build even better. Include 1-3 even for APPROVED builds.'),
 })
 
 const SUPERVISOR_PROMPT = `You are TORBIT's SUPERVISOR — a senior engineer who reviews builds for completeness.
 
-Your job: Check if the build includes everything the user explicitly asked for.
+Your job: Check if the build includes everything the user explicitly asked for, AND suggest improvements.
 
 ## RULES
 1. APPROVED = All explicitly requested features are present
 2. NEEDS_FIXES = User asked for something specific that's missing
-3. Only flag things the user EXPLICITLY requested (not nice-to-haves)
+3. Only flag things the user EXPLICITLY requested as fixes (not nice-to-haves)
 4. Be specific about what's missing so the builder can fix it
 5. "critical" = core feature user requested, "recommended" = enhancement they mentioned
+
+## SUGGESTIONS (REQUIRED even for APPROVED builds)
+Always include 1-3 suggestions that would make the build even better:
+- "quick" = 5-10 min to add (hover effects, loading states, keyboard shortcuts)
+- "moderate" = 30 min to add (animations, local storage, responsive tweaks)
+- "significant" = 1+ hour (backend integration, auth, complex features)
+
+Think like a product designer reviewing a v1 build. What polish would delight users?
 
 ## EXAMPLES
 
 User asked: "Build a todo app with categories and dark mode"
 Built: Todo app with categories, no dark mode
 → NEEDS_FIXES: [{ feature: "Dark mode", description: "Add dark/light theme toggle", severity: "critical" }]
+→ suggestions: [{ idea: "Keyboard shortcuts", description: "⌘+N to add, ⌘+D to complete", effort: "quick" }]
 
 User asked: "Build a landing page"  
 Built: Landing page with hero, features, footer
 → APPROVED (user didn't request specific features beyond "landing page")
+→ suggestions: [
+  { idea: "Scroll animations", description: "Fade in sections on scroll for polish", effort: "quick" },
+  { idea: "Mobile menu", description: "Hamburger menu for mobile nav", effort: "moderate" }
+]
 
-Be strict about explicit requests. Be lenient about implied features.`
+Be strict about explicit requests. Be lenient about implied features. Always suggest improvements.`
 
 export async function POST(req: Request) {
   // ========================================================================
@@ -112,6 +130,12 @@ ${safeFilesCreated.length > 10 ? `... and ${safeFilesCreated.length - 10} more` 
         description: fix.description,
         severity: fix.severity,
         status: 'pending' as const,
+      })),
+      suggestions: object.suggestions.map((s: { idea: string; description: string; effort: 'quick' | 'moderate' | 'significant' }, i: number) => ({
+        id: `suggestion-${i + 1}`,
+        idea: s.idea,
+        description: s.description,
+        effort: s.effort,
       })),
     })
   } catch (error) {

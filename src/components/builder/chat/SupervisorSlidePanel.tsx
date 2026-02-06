@@ -18,10 +18,18 @@ export interface SupervisorFix {
   status: 'pending' | 'fixing' | 'complete'
 }
 
+export interface SupervisorSuggestion {
+  id: string
+  idea: string
+  description: string
+  effort: 'quick' | 'moderate' | 'significant'
+}
+
 export interface SupervisorReviewResult {
   status: 'APPROVED' | 'NEEDS_FIXES'
   summary: string
   fixes: SupervisorFix[]
+  suggestions?: SupervisorSuggestion[]
 }
 
 interface SupervisorSlidePanelProps {
@@ -96,12 +104,49 @@ export function SupervisorSlidePanel({
                 </div>
               ) : result?.status === 'APPROVED' ? (
                 /* Approved state */
-                <div className="py-8 text-center">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                <div className="space-y-4">
+                  <div className="py-6 text-center">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <p className="text-[14px] font-medium text-emerald-400 mb-1">Build Approved</p>
+                    <p className="text-[12px] text-[#606060]">All requirements verified</p>
                   </div>
-                  <p className="text-[14px] font-medium text-emerald-400 mb-1">Build Approved</p>
-                  <p className="text-[12px] text-[#606060]">All requirements verified</p>
+                  
+                  {/* Suggestions for improvement */}
+                  {result.suggestions && result.suggestions.length > 0 && (
+                    <div className="border-t border-[#151515] pt-4">
+                      <p className="text-[11px] uppercase tracking-wider text-[#505050] mb-3">
+                        Suggestions for improvement
+                      </p>
+                      <div className="space-y-2">
+                        {result.suggestions.map((suggestion) => (
+                          <div
+                            key={suggestion.id}
+                            className="p-3 rounded-lg bg-[#111] border border-[#1a1a1a]"
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <p className="text-[13px] font-medium text-[#c5c5c5]">
+                                {suggestion.idea}
+                              </p>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                suggestion.effort === 'quick' 
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : suggestion.effort === 'moderate'
+                                  ? 'bg-amber-500/10 text-amber-400'
+                                  : 'bg-blue-500/10 text-blue-400'
+                              }`}>
+                                {suggestion.effort}
+                              </span>
+                            </div>
+                            <p className="text-[12px] text-[#707070] leading-relaxed">
+                              {suggestion.description}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : result?.status === 'NEEDS_FIXES' ? (
                 /* Fixes needed */

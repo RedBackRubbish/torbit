@@ -527,6 +527,62 @@ Analyze the error, identify the problematic file, and use editFile to fix it imm
     }
   }, [serverUrl])
 
+  // Auto-apply fixes from supervisor (called automatically, no button needed)
+  const autoApplyFixes = useCallback((result: SupervisorReviewResult) => {
+    if (!result || result.fixes.length === 0) return
+    
+    // Mark all fixes as "fixing"
+    setSupervisorResult(prev => prev ? {
+      ...prev,
+      fixes: prev.fixes.map(f => ({ ...f, status: 'fixing' as const }))
+    } : null)
+    
+    // Build the fix prompt
+    const criticalFixes = result.fixes.filter(f => f.severity === 'critical')
+    const recommendedFixes = result.fixes.filter(f => f.severity === 'recommended')
+    
+    const fixPrompt = `Supervisor review found issues. Fix these:
+
+${criticalFixes.map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`).join('\n')}
+${recommendedFixes.length > 0 ? `\nAlso add:\n${recommendedFixes.map((f, i) => `${criticalFixes.length + i + 1}. ${f.feature}: ${f.description}`).join('\n')}` : ''}
+
+Implement these fixes in the existing codebase. Use editFile for existing files, createFile only for new files.`
+
+    // Show the supervisor's request in chat so user can see what's being fixed
+    setMessages(prev => [...prev, {
+      id: `supervisor-request-${Date.now()}`,
+      role: 'user',
+      content: `**Supervisor Request:**\n\n${criticalFixes.map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`).join('\n')}${recommendedFixes.length > 0 ? `\n\n**Also recommended:**\n${recommendedFixes.map((f, i) => `• ${f.feature}: ${f.description}`).join('\n')}` : ''}`,
+      agentId: selectedAgent,
+    }])
+    
+    // Mark fixes as complete after a delay (visual progress)
+    const updateFixStatus = (index: number) => {
+      setTimeout(() => {
+        setSupervisorResult(prev => {
+          if (!prev) return null
+          const newFixes = [...prev.fixes]
+          if (newFixes[index]) {
+            newFixes[index] = { ...newFixes[index], status: 'complete' }
+          }
+          // Auto-close panel when all fixes are complete
+          const allComplete = newFixes.every(f => f.status === 'complete')
+          if (allComplete) {
+            setTimeout(() => setShowSupervisor(false), 1000)
+          }
+          return { ...prev, fixes: newFixes }
+        })
+        if (index < (result?.fixes.length || 0) - 1) {
+          updateFixStatus(index + 1)
+        }
+      }, 1500 + (index * 800)) // Stagger the visual updates
+    }
+    updateFixStatus(0)
+    
+    // Submit the fix request - isHealRequest=true skips another review
+    handleSubmitMessage(fixPrompt, selectedAgent, true)
+  }, [selectedAgent, handleSubmitMessage])
+
   // Trigger supervisor verification when serverUrl becomes available AND we have pending verification
   // This ensures supervisor only approves after the build actually succeeds
   useEffect(() => {
@@ -558,9 +614,21 @@ Analyze the error, identify the problematic file, and use editFile to fix it imm
           setSupervisorResult(result)
           
           if (result.status === 'APPROVED') {
+            // Build message with optional suggestions
+            let approvedMessage = `**${pendingVerification.fileCount} files generated.**\n\n✓ **Supervisor approved** — Build meets quality standards.`
+            
+            if (result.suggestions && result.suggestions.length > 0) {
+              approvedMessage += `\n\n**Suggestions for improvement:**\n`
+              approvedMessage += result.suggestions
+                .map((s, i) => `${i + 1}. **${s.idea}** (${s.effort}) — ${s.description}`)
+                .join('\n')
+            }
+            
+            approvedMessage += `\n\nPreview is live. What would you like to iterate on?`
+            
             setMessages(prev => prev.map(m =>
               m.content?.includes('Supervisor is reviewing')
-                ? { ...m, content: `**${pendingVerification.fileCount} files generated.**\n\n✓ **Supervisor approved** — Build meets quality standards.\n\nPreview is live. What would you like to iterate on?` }
+                ? { ...m, content: approvedMessage }
                 : m
             ))
             setTimeout(() => setShowSupervisor(false), 2000)
@@ -672,62 +740,6 @@ Analyze the error, identify the problematic file, and use editFile to fix it imm
     if (toolName === 'verifyDependencyGraph') return 'verify Dependency Graph'
     return toolName.replace(/([A-Z])/g, ' $1').trim()
   }
-
-  // Auto-apply fixes from supervisor (called automatically, no button needed)
-  const autoApplyFixes = useCallback((result: SupervisorReviewResult) => {
-    if (!result || result.fixes.length === 0) return
-    
-    // Mark all fixes as "fixing"
-    setSupervisorResult(prev => prev ? {
-      ...prev,
-      fixes: prev.fixes.map(f => ({ ...f, status: 'fixing' as const }))
-    } : null)
-    
-    // Build the fix prompt
-    const criticalFixes = result.fixes.filter(f => f.severity === 'critical')
-    const recommendedFixes = result.fixes.filter(f => f.severity === 'recommended')
-    
-    const fixPrompt = `Supervisor review found issues. Fix these:
-
-${criticalFixes.map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`).join('\n')}
-${recommendedFixes.length > 0 ? `\nAlso add:\n${recommendedFixes.map((f, i) => `${criticalFixes.length + i + 1}. ${f.feature}: ${f.description}`).join('\n')}` : ''}
-
-Implement these fixes in the existing codebase. Use editFile for existing files, createFile only for new files.`
-
-    // Show the supervisor's request in chat so user can see what's being fixed
-    setMessages(prev => [...prev, {
-      id: `supervisor-request-${Date.now()}`,
-      role: 'user',
-      content: `**Supervisor Request:**\n\n${criticalFixes.map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`).join('\n')}${recommendedFixes.length > 0 ? `\n\n**Also recommended:**\n${recommendedFixes.map((f, i) => `• ${f.feature}: ${f.description}`).join('\n')}` : ''}`,
-      agentId: selectedAgent,
-    }])
-    
-    // Mark fixes as complete after a delay (visual progress)
-    const updateFixStatus = (index: number) => {
-      setTimeout(() => {
-        setSupervisorResult(prev => {
-          if (!prev) return null
-          const newFixes = [...prev.fixes]
-          if (newFixes[index]) {
-            newFixes[index] = { ...newFixes[index], status: 'complete' }
-          }
-          // Auto-close panel when all fixes are complete
-          const allComplete = newFixes.every(f => f.status === 'complete')
-          if (allComplete) {
-            setTimeout(() => setShowSupervisor(false), 1000)
-          }
-          return { ...prev, fixes: newFixes }
-        })
-        if (index < (result?.fixes.length || 0) - 1) {
-          updateFixStatus(index + 1)
-        }
-      }, 1500 + (index * 800)) // Stagger the visual updates
-    }
-    updateFixStatus(0)
-    
-    // Submit the fix request - isHealRequest=true skips another review
-    handleSubmitMessage(fixPrompt, selectedAgent, true)
-  }, [selectedAgent, handleSubmitMessage])
 
   return (
     <motion.div
