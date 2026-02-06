@@ -92,6 +92,8 @@ export default function ChatPanel() {
     // Start with initial content (greeting) so we don't lose it
     let fullContent = initialContent ? initialContent + '\n\n' : ''
     const toolCalls: Map<string, ToolCall> = new Map()
+    // Track tool execution promises so we can wait for them before supervisor check
+    const toolExecutionPromises: Promise<void>[] = []
 
     while (true) {
       const { done, value } = await reader.read()
@@ -149,7 +151,7 @@ export default function ChatPanel() {
                 // Execute tool only for new calls (we now receive complete args from API)
                 if (isNewCall && ExecutorService.isToolAvailable(tc.name)) {
                   console.log('[DEBUG] Executing tool:', tc.name, 'with args:', tc.args)
-                  ExecutorService.executeTool(tc.name, tc.args).then((result) => {
+                  const executionPromise = ExecutorService.executeTool(tc.name, tc.args).then((result) => {
                     console.log('[DEBUG] Tool result:', tc.name, result.success, result.output?.slice(0, 100))
                     const existingTc = toolCalls.get(tc.id)
                     if (existingTc) {
@@ -191,6 +193,7 @@ export default function ChatPanel() {
                       ))
                     }
                   })
+                  toolExecutionPromises.push(executionPromise)
                 }
               }
               break
@@ -235,6 +238,14 @@ export default function ChatPanel() {
           // Ignore parse errors
         }
       }
+    }
+
+    // Wait for all tool executions to complete before returning
+    // This ensures files are in the store before supervisor check runs
+    if (toolExecutionPromises.length > 0) {
+      console.log('[DEBUG] Waiting for', toolExecutionPromises.length, 'tool executions to complete')
+      await Promise.all(toolExecutionPromises)
+      console.log('[DEBUG] All tool executions completed')
     }
 
     setCurrentTask(null)
