@@ -120,11 +120,21 @@ Use these tools to create code:
 
 In package.json: "next": "14.2.28", "react": "^19", "react-dom": "^19"
 
-⚠️ WEBCONTAINER BUILD RULES (CRITICAL - READ CAREFULLY):
-- Use Next.js 14 (NOT 15 or 16) - Turbopack in newer versions breaks WebContainer WASM
-- In package.json: "next": "14.2.28" (exact version required)
+⚠️ WEBCONTAINER BUILD RULES (CRITICAL - BUILDS WILL FAIL IF IGNORED):
+- NEVER use "next": "latest" - this WILL crash with turbo.createProject error
+- ALWAYS use exact version: "next": "14.2.28"
+- Next.js 15+ uses Turbopack which breaks WebContainer WASM
 - In package.json scripts, use "dev": "next dev" (NO flags)
 - Keep dependencies minimal - large packages slow npm install
+
+REQUIRED package.json format:
+{
+  "dependencies": {
+    "next": "14.2.28",  // EXACT VERSION - DO NOT CHANGE
+    "react": "^19",
+    "react-dom": "^19"
+  }
+}
 
 ⚠️ NEXT.JS 14 PATTERNS:
 - params and searchParams are SYNC (direct objects, NOT Promises)
