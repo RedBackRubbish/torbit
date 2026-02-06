@@ -405,8 +405,23 @@ module.exports = {
             const deps = pkg.dependencies || {}
             const devDeps = pkg.devDependencies || {}
             
-            // Add missing essential deps
+            // CRITICAL: Force Next.js 14.2.28 - newer versions use Turbopack which breaks WebContainer WASM
             let needsUpdate = false
+            if (deps.next && deps.next !== '14.2.28') {
+              console.log(`⚠️ Overriding Next.js version from "${deps.next}" to "14.2.28" (Turbopack fix)`)
+              addLog(`Fixing Next.js version: ${deps.next} → 14.2.28`, 'warning')
+              deps.next = '14.2.28'
+              needsUpdate = true
+            }
+            
+            // Ensure dev script doesn't have --turbo flag
+            if (pkg.scripts?.dev?.includes('--turbo')) {
+              pkg.scripts.dev = pkg.scripts.dev.replace('--turbo', '').trim()
+              addLog('Removed --turbo flag from dev script', 'warning')
+              needsUpdate = true
+            }
+            
+            // Add missing essential deps
             if (!deps.tailwindcss && !devDeps.tailwindcss) {
               devDeps.tailwindcss = '^3.4.0'
               needsUpdate = true
@@ -421,9 +436,10 @@ module.exports = {
             }
             
             if (needsUpdate) {
+              pkg.dependencies = deps
               pkg.devDependencies = devDeps
               await container.fs.writeFile('package.json', JSON.stringify(pkg, null, 2))
-              addLog('Added missing Tailwind dependencies', 'info')
+              addLog('Updated package.json', 'info')
             }
           }
         } catch (e) {
