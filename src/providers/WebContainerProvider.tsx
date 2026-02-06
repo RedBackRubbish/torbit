@@ -197,6 +197,21 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
 
   // Track if we've already started the build process
   const [hasStartedBuild, setHasStartedBuild] = useState(false)
+  
+  // Track previous isGenerating value to detect new generations
+  const prevIsGeneratingRef = useRef(isGenerating)
+  
+  // Reset hasStartedBuild when a NEW generation starts
+  // This allows rebuilding when user asks for a new project
+  useEffect(() => {
+    // Detect transition from false -> true (new generation starting)
+    if (isGenerating && !prevIsGeneratingRef.current) {
+      console.log('🔄 New generation detected, resetting build state')
+      setHasStartedBuild(false)
+      setServerUrl(null) // Also reset server URL so preview resets
+    }
+    prevIsGeneratingRef.current = isGenerating
+  }, [isGenerating])
 
   // Auto-detect package.json and start build process
   useEffect(() => {
