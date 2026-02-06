@@ -17,6 +17,8 @@ export type ErrorType =
   | 'SYNTAX_ERROR'
   | 'HYDRATION_ERROR'
   | 'NETWORK_ERROR'
+  | 'TAILWIND_ERROR'
+  | 'CSS_ERROR'
 
 export type ErrorSeverity = 'critical' | 'warning' | 'info'
 
@@ -103,11 +105,19 @@ export class NervousSystem {
     },
     
     // ========== Type Errors (Critical) ==========
+    // Only match TypeErrors that include useful context like "Cannot read property" or "is not a function" 
+    // Exclude internal WebContainer errors
     { 
       type: 'TYPE_ERROR', 
       severity: 'critical',
-      regex: /TypeError: (.*)/,
-      suggestion: 'A type mismatch occurred. Check variable types.'
+      regex: /TypeError: Cannot read propert(?:y|ies)/,
+      suggestion: 'Trying to access a property on undefined/null. Add null checks.'
+    },
+    { 
+      type: 'TYPE_ERROR', 
+      severity: 'critical',
+      regex: /TypeError: (\w+) is not a function/,
+      suggestion: 'Calling something that is not a function. Check the variable type and imports.'
     },
     { 
       type: 'TYPE_ERROR', 
@@ -181,6 +191,26 @@ export class NervousSystem {
       regex: /ETIMEDOUT/,
       suggestion: 'Connection timed out. Check network connectivity.'
     },
+    
+    // ========== Tailwind CSS Errors (Critical) ==========
+    { 
+      type: 'TAILWIND_ERROR', 
+      severity: 'critical',
+      regex: /The ['"`]([^'"`]+)['"`] class does not exist/,
+      suggestion: 'Invalid Tailwind class. Use only valid Tailwind utilities or define custom classes in globals.css.'
+    },
+    { 
+      type: 'TAILWIND_ERROR', 
+      severity: 'critical',
+      regex: /class does not exist.*@layer/,
+      suggestion: 'Custom class used without @layer directive. Define it in globals.css with @layer components or utilities.'
+    },
+    {
+      type: 'CSS_ERROR',
+      severity: 'critical',
+      regex: /Syntax error:.*\.css/,
+      suggestion: 'CSS syntax error. Check for invalid selectors, properties, or values.'
+    },
   ]
 
   // Debounce tracking to prevent notification storms
@@ -195,6 +225,28 @@ export class NervousSystem {
     if (!log || log.trim().length < 5) return null
     if (log.includes('[webpack.cache.Pack]')) return null
     if (log.includes('Compiling')) return null
+    
+    // Skip WebContainer internal errors (not user code errors)
+    if (log.includes('_onTimeout')) return null
+    if (log.includes('blitz.') && log.includes('.js')) return null
+    if (log.includes('webcontainer')) return null
+    if (log.includes('Contextify')) return null
+    if (log.includes('fetch.worker')) return null
+    if (log.includes('preloaded using link preload')) return null
+    
+    // Skip webpack cache warnings (not actual errors)
+    if (log.includes('webpack.cache.PackFileCacheStrategy')) return null
+    if (log.includes('Caching failed for pack')) return null
+    
+    // Skip node_modules resolution issues (often benign)
+    if (log.includes('node_modules/sharp')) return null
+    if (log.includes('tunnel-agent')) return null
+    
+    // Skip normal Next.js compilation messages (not errors)
+    if (log.includes('Compiled /_error')) return null
+    if (log.includes('○ Compiling')) return null
+    if (log.includes('✓ Compiled')) return null
+    if (log.includes('Compiled successfully')) return null
     
     for (const pattern of this.patterns) {
       const match = log.match(pattern.regex)

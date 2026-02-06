@@ -13,6 +13,8 @@ import { useWebContainerContext } from '@/providers/WebContainerProvider'
 import { VerificationDetailDrawer, type VerificationData } from './governance/VerificationDetailDrawer'
 import { ActivityLedgerTimeline } from './governance/ActivityLedgerTimeline'
 import { useLedger, generateLedgerHash } from '@/store/ledger'
+import { useGenerationSound, useFileSound, useNotificationSound } from '@/lib/audio'
+import { SupervisorSlidePanel, type SupervisorReviewResult, type SupervisorFix } from './chat/SupervisorSlidePanel'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
@@ -33,7 +35,26 @@ export default function ChatPanel() {
   const [selectedAgent] = useState<AgentId>('architect')
   const [showVerificationDrawer, setShowVerificationDrawer] = useState(false)
   
+  // Supervisor slide panel state
+  const [showSupervisor, setShowSupervisor] = useState(false)
+  const [supervisorLoading, setSupervisorLoading] = useState(false)
+  const [supervisorResult, setSupervisorResult] = useState<SupervisorReviewResult | null>(null)
+  
+  // Track auto-fix to prevent loops
+  const hasAutoFixedRef = useRef(false)
+  const [isMounted, setIsMounted] = useState(false)
+  
   const { isBooting, isReady, serverUrl, error, verification } = useWebContainerContext()
+  
+  // Sound effects
+  const generationSound = useGenerationSound()
+  const fileSound = useFileSound()
+  const notificationSound = useNotificationSound()
+  
+  // Prevent hydration mismatch by only showing client-dependent UI after mount
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
   
   // Activity Ledger
   const { 
@@ -55,17 +76,21 @@ export default function ChatPanel() {
     capabilities,
     chatInput,
     setChatInput,
+    pendingHealRequest,
+    setPendingHealRequest,
   } = useBuilderStore()
 
   // Parse SSE stream
   const parseSSEStream = useCallback(async (
     reader: ReadableStreamDefaultReader<Uint8Array>,
     assistantId: string,
-    agentId: AgentId
+    agentId: AgentId,
+    initialContent: string = ''
   ) => {
     const decoder = new TextDecoder()
     let buffer = ''
-    let fullContent = ''
+    // Start with initial content (greeting) so we don't lose it
+    let fullContent = initialContent ? initialContent + '\n\n' : ''
     const toolCalls: Map<string, ToolCall> = new Map()
 
     while (true) {
@@ -94,17 +119,26 @@ export default function ChatPanel() {
 
             case 'tool-call':
               if (chunk.toolCall) {
+                // Check if we already have this tool call
+                const existing = toolCalls.get(chunk.toolCall.id)
+                
                 const tc: ToolCall = {
                   id: chunk.toolCall.id,
                   name: chunk.toolCall.name,
                   args: chunk.toolCall.args,
-                  status: 'running',
+                  status: existing?.status || 'running',
                 }
+                
+                // Only process if this is a new tool call (complete args come from onStepFinish)
+                const isNewCall = !existing
+                
                 toolCalls.set(tc.id, tc)
                 
-                const taskName = getTaskName(tc.name, tc.args)
-                setCurrentTask(taskName)
-                setAgentStatus(agentId, 'working', taskName)
+                if (isNewCall) {
+                  const taskName = getTaskName(tc.name, tc.args)
+                  setCurrentTask(taskName)
+                  setAgentStatus(agentId, 'working', taskName)
+                }
                 
                 setMessages(prev => prev.map(m => 
                   m.id === assistantId 
@@ -112,9 +146,11 @@ export default function ChatPanel() {
                     : m
                 ))
                 
-                // Execute tool
-                if (ExecutorService.isToolAvailable(tc.name)) {
+                // Execute tool only for new calls (we now receive complete args from API)
+                if (isNewCall && ExecutorService.isToolAvailable(tc.name)) {
+                  console.log('[DEBUG] Executing tool:', tc.name, 'with args:', tc.args)
                   ExecutorService.executeTool(tc.name, tc.args).then((result) => {
+                    console.log('[DEBUG] Tool result:', tc.name, result.success, result.output?.slice(0, 100))
                     const existingTc = toolCalls.get(tc.id)
                     if (existingTc) {
                       existingTc.status = result.success ? 'complete' : 'error'
@@ -129,6 +165,11 @@ export default function ChatPanel() {
                           content: tc.args.content as string,
                           language: path.split('.').pop() || 'text',
                         })
+                        // 🔊 File created sound
+                        fileSound.onCreate()
+                      } else if (tc.name === 'editFile' && result.success) {
+                        // 🔊 File edited sound
+                        fileSound.onEdit()
                       }
                       
                       setMessages(prev => prev.map(m => 
@@ -200,19 +241,58 @@ export default function ChatPanel() {
     return { content: fullContent, toolCalls: Array.from(toolCalls.values()) }
   }, [setAgentStatus, addFile])
 
-  const handleSubmitMessage = useCallback(async (messageContent: string, agentId: AgentId) => {
+  // Generate a brief acknowledgment - no verbose stack info
+  const generateGreeting = useCallback((prompt: string): string => {
+    const promptLower = prompt.toLowerCase()
+    
+    // Detect if this is an iteration/edit request vs new build
+    const isIteration = promptLower.includes('add ') || 
+                        promptLower.includes('change ') || 
+                        promptLower.includes('update ') ||
+                        promptLower.includes('fix ') ||
+                        promptLower.includes('make it ') ||
+                        promptLower.includes('modify ') ||
+                        promptLower.includes('remove ')
+    
+    if (isIteration) {
+      return '' // No greeting for iterations, just show files being created
+    }
+    
+    // For new builds, just acknowledge briefly
+    return 'On it.'
+  }, [])
+
+  const handleSubmitMessage = useCallback(async (messageContent: string, agentId: AgentId, isHealRequest: boolean = false) => {
     if (!messageContent.trim() || isLoading) return
 
     setIsLoading(true)
     setIsGenerating(true)
-    setAgentStatus(agentId, 'thinking', 'Thinking...')
-    setCurrentTask('Thinking...')
+    setAgentStatus(agentId, 'thinking', isHealRequest ? 'Analyzing...' : 'Planning...')
+    setCurrentTask(isHealRequest ? 'Diagnosing...' : 'Planning architecture...')
+    
+    // 🔊 Start generation sound
+    generationSound.onStart()
 
+    // Create a single streaming message that shows progress immediately
     const assistantId = crypto.randomUUID()
+    
+    // Initial greeting content - will be updated as streaming progresses
+    let initialContent: string
+    if (isHealRequest) {
+      const errorMatch = messageContent.match(/Error Type:\s*(\w+)/i) || 
+                         messageContent.match(/(\w+_ERROR)/i) ||
+                         messageContent.match(/Error:\s*(.+?)(?:\n|$)/i)
+      const errorType = errorMatch?.[1] || 'issue'
+      initialContent = `Detected: ${errorType.toLowerCase().replace(/_/g, ' ')}. Patching...`
+    } else {
+      initialContent = generateGreeting(messageContent)
+    }
+    
+    // Show message immediately - no delay, instant feedback
     setMessages(prev => [...prev, {
       id: assistantId,
       role: 'assistant',
-      content: '',
+      content: initialContent,
       agentId,
       toolCalls: [],
     }])
@@ -236,10 +316,116 @@ export default function ChatPanel() {
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No response body')
 
-      await parseSSEStream(reader, assistantId, agentId)
+      await parseSSEStream(reader, assistantId, agentId, initialContent)
       setAgentStatus(agentId, 'complete', 'Done')
+      
+      // Generate completion summary if this was a build (not a heal request)
+      if (!isHealRequest && files.length > 0) {
+        const componentCount = files.filter(f => f.path.includes('/components/')).length
+        const pageCount = files.filter(f => f.path.includes('page.tsx') || f.path.includes('page.js')).length
+        const storeCount = files.filter(f => f.path.includes('/store/') || f.path.includes('Store')).length
+        
+        // Get page names
+        const pageNames = files
+          .filter(f => f.path.includes('page.'))
+          .map(f => {
+            const parts = f.path.split('/')
+            const folder = parts[parts.length - 2]
+            return folder === 'app' ? 'Home' : folder.charAt(0).toUpperCase() + folder.slice(1)
+          })
+          .filter((v, i, a) => a.indexOf(v) === i) // unique
+        
+        // Get component names
+        const componentNames = files
+          .filter(f => f.path.includes('/components/'))
+          .map(f => f.path.split('/').pop()?.replace(/\.(tsx|ts|jsx|js)$/, ''))
+          .filter(Boolean)
+          .slice(0, 5) // max 5
+        
+        // Get file paths for verification
+        const filePaths = files.map(f => f.path)
+        
+        // Show completion message in chat
+        setMessages(prev => [...prev, {
+          id: `complete-${Date.now()}`,
+          role: 'assistant',
+          content: `**${files.length} files generated.** Supervisor is reviewing...`,
+          agentId,
+          toolCalls: [],
+        }])
+        
+        // Open supervisor panel and call verification API
+        setShowSupervisor(true)
+        setSupervisorLoading(true)
+        setSupervisorResult(null)
+        
+        setTimeout(async () => {
+          try {
+            const verifyResponse = await fetch('/api/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                originalPrompt: prompt || messages.find(m => m.role === 'user')?.content || '',
+                filesCreated: filePaths,
+                componentNames,
+                pageNames,
+                fileCount: files.length,
+              }),
+            })
+            
+            if (verifyResponse.ok) {
+              const result = await verifyResponse.json() as SupervisorReviewResult
+              setSupervisorLoading(false)
+              setSupervisorResult(result)
+              
+              // Update chat message based on result
+              if (result.status === 'APPROVED') {
+                setMessages(prev => prev.map(m => 
+                  m.content?.includes('Supervisor is reviewing')
+                    ? { ...m, content: `**${files.length} files generated.** ✓ Approved by supervisor.\n\nPreview is live. What would you like to iterate on?` }
+                    : m
+                ))
+                // Auto-dismiss after approval
+                setTimeout(() => setShowSupervisor(false), 1500)
+              } else {
+                // NEEDS_FIXES - auto-apply fixes immediately
+                setMessages(prev => prev.map(m => 
+                  m.content?.includes('Supervisor is reviewing')
+                    ? { ...m, content: `**${files.length} files generated.** Supervisor found ${result.fixes.length} issue${result.fixes.length !== 1 ? 's' : ''}. Fixing automatically...` }
+                    : m
+                ))
+                // Auto-trigger fix after a brief delay to show the panel
+                setTimeout(() => {
+                  autoApplyFixes(result)
+                }, 500)
+              }
+            } else {
+              // Verification failed - just approve
+              setSupervisorLoading(false)
+              setSupervisorResult({ status: 'APPROVED', summary: 'Build complete', fixes: [] })
+              setShowSupervisor(false)
+              setMessages(prev => prev.map(m => 
+                m.content?.includes('Supervisor is reviewing')
+                  ? { ...m, content: `**${files.length} files generated.** Preview is live.\n\nWhat would you like to iterate on?` }
+                  : m
+              ))
+            }
+          } catch (err) {
+            console.error('Supervisor verification failed:', err)
+            setSupervisorLoading(false)
+            setShowSupervisor(false)
+            setMessages(prev => prev.map(m => 
+              m.content?.includes('Supervisor is reviewing')
+                ? { ...m, content: `**${files.length} files generated.** Preview is live.\n\nWhat would you like to iterate on?` }
+                : m
+            ))
+          }
+        }, 300)
+      }
     } catch (error) {
       setAgentStatus(agentId, 'error', 'Failed')
+      // 🔊 Error sound
+      generationSound.onError()
       setMessages(prev => prev.map(m => 
         m.id === assistantId 
           ? { ...m, content: '', error: { type: 'network', message: error instanceof Error ? error.message : 'Unknown error', retryable: true }}
@@ -249,8 +435,10 @@ export default function ChatPanel() {
       setIsLoading(false)
       setIsGenerating(false)
       setCurrentTask(null)
+      // 🔊 Complete sound (if not error)
+      if (!error) generationSound.onComplete()
     }
-  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectType, capabilities])
+  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectType, capabilities, files, generationSound])
 
   // Auto-submit initial prompt
   useEffect(() => {
@@ -264,6 +452,123 @@ export default function ChatPanel() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // ============================================================================
+  // AUTO-HEAL: Watch for pending heal requests from Nervous System
+  // ============================================================================
+  
+  // Track consecutive heal failures for escalation
+  const healAttemptCountRef = useRef(0)
+  const MAX_HEAL_ATTEMPTS = 2 // After 2 failed attempts, escalate with more context
+  
+  useEffect(() => {
+    if (!pendingHealRequest || isLoading) return
+    
+    console.log('🔧 Processing heal request:', pendingHealRequest)
+    
+    // Clear the pending request immediately to prevent loops
+    setPendingHealRequest(null)
+    
+    // Increment heal attempt counter
+    healAttemptCountRef.current += 1
+    const attemptNum = healAttemptCountRef.current
+    
+    // After 2 failed attempts, call supervisor
+    if (attemptNum > MAX_HEAL_ATTEMPTS) {
+      // Show message that we're escalating to supervisor
+      setMessages(prev => [...prev, { 
+        id: `escalate-${Date.now()}`, 
+        role: 'assistant',
+        content: `I've tried ${MAX_HEAL_ATTEMPTS} times but the issue persists. Let me call in the supervisor for a deeper review...`,
+        agentId: selectedAgent,
+        toolCalls: [],
+      }])
+      
+      // Open supervisor panel
+      setShowSupervisor(true)
+      setSupervisorLoading(true)
+      
+      // Call supervisor with the error context
+      setTimeout(async () => {
+        try {
+          const verifyResponse = await fetch('/api/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              originalPrompt: `FIX REQUIRED: ${pendingHealRequest.error}\n\nSuggestion: ${pendingHealRequest.suggestion}`,
+              filesCreated: files.map(f => f.path),
+              componentNames: [],
+              pageNames: [],
+              fileCount: files.length,
+            }),
+          })
+          
+          if (verifyResponse.ok) {
+            const result = await verifyResponse.json() as SupervisorReviewResult
+            setSupervisorLoading(false)
+            // Force NEEDS_FIXES with the error as a fix item
+            setSupervisorResult({
+              status: 'NEEDS_FIXES',
+              summary: `Build error after ${MAX_HEAL_ATTEMPTS} attempts: ${pendingHealRequest.error}`,
+              fixes: result.fixes.length > 0 ? result.fixes : [{
+                id: 'error-fix-1',
+                feature: 'Fix build error',
+                description: pendingHealRequest.suggestion,
+                severity: 'critical',
+                status: 'pending',
+              }],
+            })
+          } else {
+            setSupervisorLoading(false)
+            setSupervisorResult({
+              status: 'NEEDS_FIXES',
+              summary: `Build error: ${pendingHealRequest.error}`,
+              fixes: [{
+                id: 'error-fix-1',
+                feature: 'Fix build error',
+                description: pendingHealRequest.suggestion,
+                severity: 'critical',
+                status: 'pending',
+              }],
+            })
+          }
+        } catch (err) {
+          console.error('Supervisor call failed:', err)
+          setSupervisorLoading(false)
+          setShowSupervisor(false)
+        }
+      }, 300)
+      
+      return // Don't continue with normal heal flow
+    }
+    
+    const targetAgent: AgentId = 'architect' // Always use architect - only agent that can edit
+    
+    // Create the heal message
+    const healPrompt = `🔧 BUILD ERROR (Attempt ${attemptNum}/${MAX_HEAL_ATTEMPTS}) - Fix needed:
+
+**Error Type:** ${pendingHealRequest.error.split(':')[0] || 'Unknown'}
+**Details:** ${pendingHealRequest.error}
+**Suggested Fix:** ${pendingHealRequest.suggestion}
+
+Analyze the error, identify the problematic file, and use editFile to fix it immediately.`
+    
+    // Add as user message and trigger AI
+    setMessages(prev => [...prev, { 
+      id: `heal-${Date.now()}`, 
+      role: 'user', 
+      content: healPrompt 
+    }])
+    
+    handleSubmitMessage(healPrompt, targetAgent, true) // Pass true for isHealRequest
+  }, [pendingHealRequest, isLoading, setPendingHealRequest, handleSubmitMessage, files, selectedAgent])
+  
+  // Reset heal counter when build succeeds (serverUrl becomes available)
+  useEffect(() => {
+    if (serverUrl) {
+      healAttemptCountRef.current = 0
+    }
+  }, [serverUrl])
 
   // ============================================================================
   // Activity Ledger Recording
@@ -301,23 +606,16 @@ export default function ChatPanel() {
 
   // Auto-fix errors
   useEffect(() => {
+    // DISABLED: Duplicate auto-heal path removed - using Zustand pendingHealRequest instead
+    // The pendingHealRequest flow in WebContainerProvider → ChatPanel is cleaner
     const handlePain = (e: CustomEvent<PainSignal>) => {
-      const signal = e.detail
-      if (signal.severity !== 'critical') return
-      
-      const lastAutoFix = (window as unknown as { __lastAutoFix?: number }).__lastAutoFix || 0
-      if (Date.now() - lastAutoFix < 5000) return
-      (window as unknown as { __lastAutoFix: number }).__lastAutoFix = Date.now()
-      
-      const errorMessage = NervousSystem.formatForAI(signal)
-      setMessages(prev => [...prev, { id: `pain-${signal.id}`, role: 'user', content: errorMessage }])
-      setAgentStatus(selectedAgent, 'working', 'Auto-fixing...')
-      handleSubmitMessage(errorMessage, selectedAgent)
+      // Log for debugging but don't trigger duplicate heal
+      console.log('🔔 Pain signal received (handled via pendingHealRequest):', e.detail.type)
     }
 
     window.addEventListener('torbit-pain-signal', handlePain as EventListener)
     return () => window.removeEventListener('torbit-pain-signal', handlePain as EventListener)
-  }, [selectedAgent, handleSubmitMessage, setAgentStatus])
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -336,6 +634,63 @@ export default function ChatPanel() {
     if (toolName === 'verifyDependencyGraph') return 'verify Dependency Graph'
     return toolName.replace(/([A-Z])/g, ' $1').trim()
   }
+
+  // Auto-apply fixes from supervisor (called automatically, no button needed)
+  const autoApplyFixes = useCallback((result: SupervisorReviewResult) => {
+    if (!result || result.fixes.length === 0) return
+    
+    // Mark all fixes as "fixing"
+    setSupervisorResult(prev => prev ? {
+      ...prev,
+      fixes: prev.fixes.map(f => ({ ...f, status: 'fixing' as const }))
+    } : null)
+    
+    // Build the fix prompt
+    const criticalFixes = result.fixes.filter(f => f.severity === 'critical')
+    const recommendedFixes = result.fixes.filter(f => f.severity === 'recommended')
+    
+    const fixPrompt = `Supervisor review found issues. Fix these:
+
+${criticalFixes.map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`).join('\n')}
+${recommendedFixes.length > 0 ? `\nAlso add:\n${recommendedFixes.map((f, i) => `${criticalFixes.length + i + 1}. ${f.feature}: ${f.description}`).join('\n')}` : ''}
+
+Implement these fixes in the existing codebase. Use editFile for existing files, createFile only for new files.`
+
+    // Add message showing Torbit is fixing
+    setMessages(prev => [...prev, {
+      id: `fixing-${Date.now()}`,
+      role: 'assistant',
+      content: `Fixing ${result.fixes.length} issue${result.fixes.length !== 1 ? 's' : ''} from supervisor...`,
+      agentId: selectedAgent,
+      toolCalls: [],
+    }])
+    
+    // Mark fixes as complete after a delay (visual progress)
+    const updateFixStatus = (index: number) => {
+      setTimeout(() => {
+        setSupervisorResult(prev => {
+          if (!prev) return null
+          const newFixes = [...prev.fixes]
+          if (newFixes[index]) {
+            newFixes[index] = { ...newFixes[index], status: 'complete' }
+          }
+          // Auto-close panel when all fixes are complete
+          const allComplete = newFixes.every(f => f.status === 'complete')
+          if (allComplete) {
+            setTimeout(() => setShowSupervisor(false), 1000)
+          }
+          return { ...prev, fixes: newFixes }
+        })
+        if (index < (result?.fixes.length || 0) - 1) {
+          updateFixStatus(index + 1)
+        }
+      }, 1500 + (index * 800)) // Stagger the visual updates
+    }
+    updateFixStatus(0)
+    
+    // Submit the fix request - isHealRequest=true skips another review
+    handleSubmitMessage(fixPrompt, selectedAgent, true)
+  }, [selectedAgent, handleSubmitMessage])
 
   return (
     <motion.div
@@ -407,7 +762,7 @@ export default function ChatPanel() {
 
       {/* Execution Status Rail - The authoritative spine */}
       <AnimatePresence mode="wait">
-        {!chatCollapsed && (isLoading || isBooting || (messages.length > 0 && files.length > 0)) && (
+        {isMounted && !chatCollapsed && (isLoading || isBooting || (messages.length > 0 && files.length > 0)) && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -526,6 +881,14 @@ export default function ChatPanel() {
           auditorTimestamp: isReady && serverUrl ? Date.now() : null,
         }}
       />
+      
+      {/* Supervisor Slide Panel - Reviews build and auto-fixes issues */}
+      <SupervisorSlidePanel
+        isOpen={showSupervisor}
+        isLoading={supervisorLoading}
+        result={supervisorResult}
+        onDismiss={() => setShowSupervisor(false)}
+      />
     </motion.div>
   )
 }
@@ -632,6 +995,7 @@ interface ExecutionStatusRailProps {
   isBuilding: boolean
   currentTask: string | null
   hasFiles: boolean
+  isVerified?: boolean
   onOpenVerification?: () => void
 }
 
@@ -643,14 +1007,18 @@ function ExecutionStatusRail({
   isBuilding,
   currentTask,
   hasFiles,
+  isVerified = false,
   onOpenVerification,
 }: ExecutionStatusRailProps) {
   // Derive status steps with error awareness
   const hasError = !!error
   
+  // Determine if we're fully complete (has files, not building, no errors, preview running)
+  const isFullyComplete = hasFiles && !isBuilding && !hasError && serverUrl
+  
   const steps: Array<{
     label: string
-    status: 'complete' | 'active' | 'pending' | 'error'
+    status: 'complete' | 'active' | 'pending' | 'error' | 'verified'
     errorMessage?: string
     recoveryAction?: string
   }> = [
@@ -677,24 +1045,28 @@ function ExecutionStatusRail({
       recoveryAction: hasError && isReady && serverUrl ? 'Retry build' : undefined,
     },
     {
-      label: 'Awaiting verification',
-      status: 'pending',
+      label: isFullyComplete ? 'Build verified' : (isBuilding ? 'Verification pending' : 'Awaiting verification'),
+      status: isFullyComplete ? 'verified' : 'pending',
     },
   ]
 
   // Only show relevant steps (hide pending ones after active)
   const activeIndex = steps.findIndex(s => s.status === 'active')
   const errorIndex = steps.findIndex(s => s.status === 'error')
+  const verifiedIndex = steps.findIndex(s => s.status === 'verified')
   
   let visibleSteps: typeof steps
   
   if (errorIndex >= 0) {
     // Show up to and including the error
     visibleSteps = steps.slice(0, errorIndex + 1)
+  } else if (verifiedIndex >= 0) {
+    // Show all steps when verified - user sees full completion
+    visibleSteps = steps
   } else if (activeIndex >= 0) {
     visibleSteps = steps.slice(0, Math.min(activeIndex + 2, steps.length))
   } else {
-    visibleSteps = steps.filter(s => s.status === 'complete').slice(-3)
+    visibleSteps = steps.filter(s => s.status === 'complete' || s.status === 'verified').slice(-3)
   }
 
   if (visibleSteps.length === 0) return null
@@ -705,13 +1077,18 @@ function ExecutionStatusRail({
   return (
     <div className="space-y-1.5">
       {visibleSteps.map((step, i) => {
-        const isClickable = step.status === 'complete' && onOpenVerification
+        const isClickable = (step.status === 'complete' || step.status === 'verified') && onOpenVerification
         
         const content = (
           <>
             {step.status === 'complete' && (
               <svg className="w-3 h-3 text-white/40 group-hover:text-white/60 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            {step.status === 'verified' && (
+              <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
               </svg>
             )}
             {step.status === 'active' && (
@@ -731,6 +1108,7 @@ function ExecutionStatusRail({
             )}
             <span className={`text-[11px] ${
               step.status === 'complete' ? 'text-white/40 group-hover:text-white/60' :
+              step.status === 'verified' ? 'text-emerald-400 font-medium' :
               step.status === 'active' ? 'text-white/60' :
               step.status === 'error' ? 'text-red-400/70' :
               'text-white/20'

@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { AgentMessage } from './AgentMessage'
+import { StreamingMessage } from './StreamingMessage'
 import type { Message } from './types'
 
 interface MessageBubbleProps {
@@ -32,9 +32,9 @@ export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps
     )
   }
 
-  // Assistant message - Rork-style structured output
+  // Assistant message - Enhanced streaming experience
   return (
-    <AgentMessage 
+    <StreamingMessage 
       message={message} 
       isLast={isLast} 
       isLoading={isLoading} 

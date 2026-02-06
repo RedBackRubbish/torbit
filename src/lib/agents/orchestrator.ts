@@ -94,20 +94,19 @@ export interface ParallelResult {
 }
 
 // ============================================
-// MODEL SELECTION (Opus-Sonnet Handoff + Kimi Router)
+// MODEL SELECTION (Kimi K2.5 Primary + Claude Governance)
 // ============================================
 
 const MODELS = {
-  opus: anthropic('claude-sonnet-4-20250514'), // Use Sonnet as Opus proxy for now
-  sonnet: anthropic('claude-sonnet-4-20250514'),
-  flash: google('gemini-2.0-flash'),
+  opus: anthropic('claude-opus-4-6'), // Governance only - different brain
+  sonnet: anthropic('claude-sonnet-4-5-20250929'), // Fallback/governance
+  flash: google('gemini-2.0-flash'),            // Quick queries
 } as const
 
 /**
  * Select model based on task complexity (legacy fallback)
- * - Opus: Architecture planning, complex debugging, multi-file refactors
- * - Sonnet: Standard code generation, single-file edits
- * - Flash: Simple queries, formatting, quick lookups
+ * Primary: Kimi K2.5 for all building (via models.ts)
+ * Governance: Claude for oversight (different brain principle)
  */
 function selectModel(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: ModelTier) {
   if (preferredTier) return MODELS[preferredTier]

@@ -10,6 +10,7 @@ import { NervousSystem } from '@/lib/nervous-system'
 import { IPhoneFrame, BrowserFrame } from './DeviceFrame'
 import { DEVICE_PRESETS } from '@/lib/mobile/types'
 import { TorbitSpinner, TorbitLogo } from '@/components/ui/TorbitLogo'
+import { SafariFallback, SafariBanner } from './SafariFallback'
 
 // ============================================================================
 // Device Preset Selector
@@ -103,6 +104,7 @@ const CodeEditor = dynamic(() => import('./CodeEditor'), {
 
 /**
  * PreviewPanel - Clean, minimal preview with WebContainer
+ * Includes Safari fallback for browsers without SharedArrayBuffer support
  */
 export default function PreviewPanel() {
   const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, projectType, chatInput, isGenerating } = useBuilderStore()
@@ -110,6 +112,7 @@ export default function PreviewPanel() {
   const terminalLines = useTerminalStore((s) => s.lines)
   const [showRuntimeLog, setShowRuntimeLog] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const [designModeActive, setDesignModeActive] = useState(false)
   const wasBootingRef = useRef(false)
   
   useEffect(() => {
@@ -261,6 +264,8 @@ export default function PreviewPanel() {
                 devicePreset={devicePreset}
                 isTyping={chatInput.length > 0}
                 isGenerating={isGenerating}
+                onContinueWithoutExecution={() => setDesignModeActive(true)}
+                designModeActive={designModeActive}
               />
             </div>
 
@@ -303,6 +308,8 @@ interface PreviewContentProps {
   devicePreset: string
   isTyping: boolean
   isGenerating: boolean
+  onContinueWithoutExecution?: () => void
+  designModeActive?: boolean
 }
 
 function PreviewContent({
@@ -317,6 +324,8 @@ function PreviewContent({
   devicePreset,
   isTyping,
   isGenerating,
+  onContinueWithoutExecution,
+  designModeActive,
 }: PreviewContentProps) {
   const [isMounted, setIsMounted] = useState(false)
   const [showVerified, setShowVerified] = useState(false)
@@ -343,13 +352,21 @@ function PreviewContent({
     return <StatusCard icon="loading" title="Loading..." subtitle="Initializing preview" />
   }
   
-  if (!isSupported) {
+  // Safari / Unsupported browser - show honest fallback gate
+  if (!isSupported && !designModeActive) {
     return (
-      <StatusCard 
-        icon="error" 
-        title="Browser Not Supported" 
-        subtitle="WebContainers require Chrome or Edge with SharedArrayBuffer support."
-        variant="error"
+      <SafariFallback 
+        onContinue={onContinueWithoutExecution}
+      />
+    )
+  }
+  
+  // Design mode active - user chose to continue without live execution
+  if (!isSupported && designModeActive) {
+    return (
+      <DesignModePreview 
+        files={files}
+        isGenerating={isGenerating}
       />
     )
   }
@@ -501,6 +518,81 @@ function ExpectationPanel() {
   )
 }
 
+// ============================================================================
+// Design Mode Preview - For Safari/unsupported browsers
+// ============================================================================
+
+interface DesignModePreviewProps {
+  files: { path: string; content: string }[]
+  isGenerating: boolean
+}
+
+function DesignModePreview({ files, isGenerating }: DesignModePreviewProps) {
+  return (
+    <div className="h-full flex flex-col">
+      {/* Design Mode Banner */}
+      <SafariBanner />
+      
+      {/* Design Mode Content */}
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center max-w-md">
+          {isGenerating ? (
+            <>
+              <TorbitSpinner size="xl" speed="normal" />
+              <h3 className="text-[14px] font-medium text-white mt-6 mb-2">
+                Generating code
+              </h3>
+              <p className="text-[12px] text-[#606060]">
+                Code will appear in the file tree when complete
+              </p>
+            </>
+          ) : files.length > 0 ? (
+            <>
+              {/* Success state - files generated */}
+              <div className="w-16 h-16 mx-auto mb-6 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-[14px] font-medium text-white mb-2">
+                {files.length} artifact{files.length !== 1 ? 's' : ''} ready
+              </h3>
+              <p className="text-[12px] text-[#606060] mb-6">
+                Review in Code tab or export to run locally
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-2 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg text-[12px] text-[#808080]">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                  </svg>
+                  View in Code tab
+                </div>
+                <div className="flex items-center gap-2 px-3 py-2 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg text-[12px] text-[#808080]">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  Export project
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Empty state */}
+              <TorbitLogo size="xl" variant="muted" />
+              <h3 className="text-[14px] font-medium text-[#606060] mt-6 mb-2">
+                Design mode active
+              </h3>
+              <p className="text-[12px] text-[#404040]">
+                Start building - code will appear in the file tree
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Status card component - Premium minimal design with TORBIT branding
 function StatusCard({ 
   icon, 
@@ -571,6 +663,10 @@ interface LivePreviewFrameProps {
 }
 
 function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths, devicePreset = 'iphone-15-pro-max' }: LivePreviewFrameProps) {
+  const { setPendingHealRequest, isGenerating } = useBuilderStore()
+  const lastAutoHealRef = useRef<number>(0)
+  const AUTO_HEAL_DEBOUNCE_MS = 10000
+  
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'TORBIT_CONSOLE_ERROR') {
@@ -578,13 +674,24 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths, devicePreset
         const pain = NervousSystem.analyzeBrowserError(errorMessage)
         if (pain) {
           NervousSystem.dispatchPain(pain)
+          
+          // Also trigger auto-heal for browser errors
+          const now = Date.now()
+          if (!isGenerating && (now - lastAutoHealRef.current) > AUTO_HEAL_DEBOUNCE_MS) {
+            lastAutoHealRef.current = now
+            console.log('🔧 PreviewPanel: Auto-heal triggered for browser error:', pain.type)
+            setPendingHealRequest({
+              error: `${pain.type}: ${pain.message}`,
+              suggestion: pain.suggestion || 'Fix the runtime error',
+            })
+          }
         }
       }
     }
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [])
+  }, [setPendingHealRequest, isGenerating])
 
   const handleIframeLoad = () => {
     try {

@@ -99,6 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (active) setLoading(false)
     }).catch((err) => {
+      // Ignore AbortError - happens during HMR or fast unmount, not a real error
+      if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+        console.debug('[AuthProvider] Session check aborted (expected during HMR)')
+        return
+      }
       console.error('[AuthProvider] getSession exception:', err)
       if (active) setLoading(false)
     })

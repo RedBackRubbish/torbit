@@ -255,10 +255,11 @@ export function useWebContainer(): UseWebContainerReturn {
   const startDevServer = useCallback(async () => {
     if (!container) throw new Error('Container not ready')
     
-    addLog('🚀 Starting development server...', 'info')
+    addLog('🚀 Starting development server (Webpack mode)...', 'info')
     
     // Start in background (don't await exit)
-    spawnProcess('npm', ['run', 'dev'])
+    // Use npx next dev with --no-turbo (Turbopack not supported in WebContainer WASM)
+    spawnProcess('npx', ['next', 'dev', '--no-turbo'])
   }, [container, spawnProcess, addLog])
 
   return {
@@ -297,15 +298,16 @@ function getPackageJson(template: 'nextjs' | 'react' | 'node') {
       return {
         ...base,
         scripts: {
-          dev: 'next dev',
+          dev: 'next dev --no-turbo',
           build: 'next build',
           start: 'next start',
         },
         dependencies: {
-          next: '14.1.0',
-          react: '^18',
-          'react-dom': '^18',
+          next: 'latest',
+          react: '^19',
+          'react-dom': '^19',
           'lucide-react': 'latest',
+          'framer-motion': 'latest',
           clsx: 'latest',
           'tailwind-merge': 'latest',
         },

@@ -84,6 +84,7 @@ export interface BuilderState {
   messages: ChatMessage[]
   isGenerating: boolean
   chatInput: string
+  pendingHealRequest: { error: string; suggestion: string } | null
   
   // UI State
   sidebarTab: 'agents' | 'files'
@@ -121,6 +122,7 @@ export interface BuilderActions {
   updateLastMessage: (content: string) => void
   setIsGenerating: (isGenerating: boolean) => void
   setChatInput: (input: string) => void
+  setPendingHealRequest: (request: { error: string; suggestion: string } | null) => void
   
   // UI
   setSidebarTab: (tab: 'agents' | 'files') => void
@@ -224,6 +226,7 @@ const initialState: BuilderState = {
   messages: [],
   isGenerating: false,
   chatInput: '',
+  pendingHealRequest: null,
   sidebarTab: 'agents',
   previewTab: 'preview',
   previewDevice: 'desktop',
@@ -416,6 +419,12 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
     setChatInput: (input) => {
       set((state) => {
         state.chatInput = input
+      })
+    },
+
+    setPendingHealRequest: (request) => {
+      set((state) => {
+        state.pendingHealRequest = request
       })
     },
 

@@ -11,6 +11,7 @@ import ChatPanel from '@/components/builder/ChatPanel'
 import PreviewPanel from '@/components/builder/PreviewPanel'
 import TasksPanel from '@/components/builder/TasksPanel'
 import FuelGauge from '@/components/builder/FuelGauge'
+import SoundToggle from '@/components/builder/SoundToggle'
 import ShipMenu from '@/components/builder/ShipMenu'
 import { PublishPanel } from '@/components/builder/PublishPanel'
 import { ScreenshotButton } from '@/components/builder/ScreenshotButton'
@@ -138,6 +139,7 @@ function BuilderPageContent() {
             
             <ScreenshotButton />
             <PublishPanel />
+            <SoundToggle />
             <FuelGauge />
             <ShipMenu />
             <UserMenu />

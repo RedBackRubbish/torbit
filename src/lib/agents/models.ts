@@ -40,16 +40,16 @@ export interface ModelConfig {
 export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'claude-opus': {
     provider: 'claude-opus',
-    model: 'claude-opus-4-20250514',
-    description: 'Boss brain - plans builds, orchestrates architecture',
+    model: 'claude-opus-4-6',
+    description: 'Claude Opus 4.6 - most intelligent for complex reasoning',
     costTier: 'premium',
     inputCostPer1k: 0.015,
     outputCostPer1k: 0.075,
   },
   'claude-sonnet': {
     provider: 'claude-sonnet',
-    model: 'claude-sonnet-4-20250514',
-    description: 'Executor - code generation, implements the plan',
+    model: 'claude-sonnet-4-5-20250929',
+    description: 'Claude Sonnet 4.5 - fast, intelligent, great for code generation',
     costTier: 'standard',
     inputCostPer1k: 0.003,
     outputCostPer1k: 0.015,
@@ -72,16 +72,16 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   },
   'gemini-pro': {
     provider: 'gemini-pro',
-    model: 'gemini-3-pro',
-    description: 'Gemini 3 Pro - most intelligent, agentic, deep reasoning',
+    model: 'gemini-2.5-pro',
+    description: 'Gemini 2.5 Pro - most intelligent, agentic, deep reasoning',
     costTier: 'standard',
     inputCostPer1k: 0.00125,
     outputCostPer1k: 0.005,
   },
   'gemini-flash': {
     provider: 'gemini-flash',
-    model: 'gemini-3-flash',
-    description: 'Gemini 3 Flash - balanced speed + intelligence',
+    model: 'gemini-2.5-flash',
+    description: 'Gemini 2.5 Flash - balanced speed + intelligence',
     costTier: 'economy',
     inputCostPer1k: 0.000075,
     outputCostPer1k: 0.0003,
@@ -89,7 +89,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'kimi': {
     provider: 'kimi',
     model: 'moonshotai/kimi-k2.5',
-    description: 'Kimi K2.5 - Planner + Fullstack Core (Backend/DB)',
+    description: 'Kimi K2.5 - THE BEAST. 1T params, 32B active MoE. Beats Claude/GPT/Gemini on code.',
     costTier: 'standard',
     inputCostPer1k: 0.00045,
     outputCostPer1k: 0.0025,
@@ -151,18 +151,19 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * ═══════════════════════════════════════════════════════════════
  */
 export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  // BUILDER LAYER - cognitive diversity
-  planner: 'kimi',               // Orchestration, API contracts (Kimi K2.5)
-  architect: 'gemini-pro',       // System design - DIFFERENT BRAIN from Planner
-  backend: 'kimi',               // APIs + business logic (Kimi K2.5)
-  database: 'kimi',              // Schemas + queries (Kimi K2.5)
-  frontend: 'claude-sonnet',     // Visual/spatial reasoning - DIFFERENT BRAIN
-  devops: 'gemini-flash',        // Fast config/deploy loops
+  // BUILDER LAYER - Claude Sonnet 4 for complex multi-step tool calling
+  // Kimi K2.5 via OpenRouter has issues with AI SDK streaming/tool calls
+  planner: 'claude-sonnet',      // Orchestration, task decomposition
+  architect: 'claude-sonnet',    // PRIMARY BUILDER - reliable multi-step tool calling
+  backend: 'claude-sonnet',      // APIs + business logic
+  database: 'claude-sonnet',     // Schemas + queries
+  frontend: 'claude-sonnet',     // UI components
+  devops: 'gemini-flash',        // Fast config, CI/CD
   qa: 'gemini-flash',            // Quick test cycles
   
-  // GOVERNANCE - must be different brain (<10% tokens)
-  strategist: 'gpt-5.2',         // Plan VALIDATION only
-  auditor: 'claude-opus',        // Quality gate JUDGE only
+  // GOVERNANCE - MUST be different brain for oversight (cognitive diversity)
+  strategist: 'gemini-pro',      // Plan VALIDATION - different perspective
+  auditor: 'claude-opus',        // Quality gate JUDGE - never grades own work
 }
 
 // ============================================
@@ -188,7 +189,7 @@ export function getModel(provider: ModelProvider): LanguageModel {
     case 'kimi':
       return openrouter(config.model)
     default:
-      return anthropic('claude-sonnet-4-20250514')
+      return anthropic('claude-sonnet-4-5-20250929')
   }
 }
 

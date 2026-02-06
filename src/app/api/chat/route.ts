@@ -255,36 +255,65 @@ export async function POST(req: Request) {
     
     const stream = new ReadableStream({
       async start(controller) {
+        let isClosed = false
+        
         const sendChunk = (chunk: StreamChunk) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+          if (isClosed) return // Guard against writing to closed controller
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+          } catch {
+            // Controller may be closed, ignore
+            isClosed = true
+          }
+        }
+        
+        const safeClose = () => {
+          if (!isClosed) {
+            isClosed = true
+            try {
+              controller.close()
+            } catch {
+              // Already closed
+            }
+          }
         }
 
         // Retry wrapper for transient errors
         const executeWithRetry = async (attempt = 1): Promise<void> => {
+          // Track tool calls we've already sent to avoid duplicates
+          const sentToolCalls = new Set<string>()
+          
           try {
             const result = await streamText({
               model,
               system: systemPrompt,
               messages,
               tools: agentTools,
-              stopWhen: stepCountIs(10), // Limited steps - AI should batch file creation in text
+              stopWhen: stepCountIs(15), // Allow more steps for complex builds
+              // Only send complete tool calls from onStepFinish to ensure full args
               onStepFinish: async (step) => {
-                // Stream tool calls to UI for visibility
+                // Send complete tool calls with full args
+                // Note: AI SDK v6+ uses 'input' instead of 'args' for tool parameters
                 if (step.toolCalls) {
                   for (const tc of step.toolCalls) {
-                    // Send tool call to UI
-                    sendChunk({
-                      type: 'tool-call',
-                      toolCall: {
-                        id: tc.toolCallId,
-                        name: tc.toolName,
-                        args: (tc as { input?: Record<string, unknown> }).input ?? {},
-                      },
-                    })
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const toolCall = tc as any
+                    if (!sentToolCalls.has(toolCall.toolCallId)) {
+                      sentToolCalls.add(toolCall.toolCallId)
+                      sendChunk({
+                        type: 'tool-call',
+                        toolCall: {
+                          id: toolCall.toolCallId,
+                          name: toolCall.toolName,
+                          // AI SDK v6 uses 'input' not 'args'
+                          args: toolCall.input as Record<string, unknown>,
+                        },
+                      })
+                    }
                   }
                 }
                 
-                // Stream tool results to UI
+                // Stream tool results after execution completes
                 if (step.toolResults) {
                   for (const tr of step.toolResults) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -327,7 +356,7 @@ export async function POST(req: Request) {
               })
             }
 
-            controller.close()
+            safeClose()
           } catch (error) {
             const classified = classifyError(error)
             console.error(`[TORBIT] Stream error (attempt ${attempt}):`, classified)
@@ -356,7 +385,7 @@ export async function POST(req: Request) {
                 retryable: classified.retryable,
               }
             })
-            controller.close()
+            safeClose()
           }
         }
 

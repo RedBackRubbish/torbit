@@ -16,7 +16,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Only apply COOP/COEP headers to the builder page
+        // Apply COOP/COEP headers to /builder exactly
+        source: '/builder',
+        headers: [
+          { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        ],
+      },
+      {
+        // Apply COOP/COEP headers to /builder sub-paths
         source: '/builder/:path*',
         headers: [
           { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },

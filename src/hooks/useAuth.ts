@@ -41,6 +41,11 @@ export function useAuth() {
         if (cancelled) return
         
         if (error) {
+          // Ignore AbortError - happens during HMR or fast unmount
+          if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+            console.debug('[useAuth] Session check aborted (expected during HMR)')
+            return
+          }
           console.error('[useAuth] getSession error:', error)
           setState(s => ({ ...s, loading: false, error }))
           return
@@ -69,7 +74,12 @@ export function useAuth() {
           console.log('[useAuth] No session')
           setState(s => ({ ...s, loading: false }))
         }
-      } catch (err) {
+      } catch (err: any) {
+        // Ignore AbortError - happens during HMR or fast unmount
+        if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+          console.debug('[useAuth] Request aborted (expected during HMR)')
+          return
+        }
         console.error('[useAuth] Error:', err)
         if (!cancelled) {
           setState(s => ({ ...s, loading: false, error: err as Error }))

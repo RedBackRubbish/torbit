@@ -224,7 +224,9 @@ export default function FuelGauge() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all ${
-            status === 'critical' 
+            !isMounted
+              ? 'bg-[#0a0a0a] border border-[#1a1a1a] text-[#606060]'
+              : status === 'critical' 
               ? 'bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white' 
               : status === 'low'
               ? 'bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-black'

@@ -6,7 +6,7 @@
  * User account, billing, and preferences management.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -30,7 +30,24 @@ import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 type SettingsTab = 'account' | 'billing' | 'preferences' | 'security'
 
+// Wrapper component to handle Suspense for useSearchParams
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsPageLoading />}>
+      <SettingsPageContent />
+    </Suspense>
+  )
+}
+
+function SettingsPageLoading() {
+  return (
+    <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+      <TorbitSpinner size="lg" />
+    </div>
+  )
+}
+
+function SettingsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, profile, loading: authLoading } = useAuth()

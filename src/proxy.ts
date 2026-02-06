@@ -1,11 +1,11 @@
 /**
- * TORBIT - Next.js Middleware
+ * TORBIT - Next.js Proxy (formerly Middleware)
  * 
- * Handles Supabase session refresh and route protection.
+ * Handles Supabase session refresh, route protection, and security headers.
  * 
  * RULES:
  * - Only refresh session when auth cookies are present
- * - Keep middleware lightweight (Edge runtime)
+ * - Keep proxy lightweight (Edge runtime)
  * - No heavy logic here
  */
 
@@ -18,7 +18,7 @@ const protectedRoutes = ['/builder', '/dashboard']
 // Routes that should redirect to dashboard if already authenticated
 const authRoutes = ['/login', '/signup']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   
   // Check if user has any Supabase auth cookies
@@ -36,6 +36,12 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from auth pages
   if (authRoutes.includes(pathname) && hasAuthCookies) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // Add COOP/COEP headers for /builder route (required for WebContainers)
+  if (pathname === '/builder' || pathname.startsWith('/builder/')) {
+    response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp')
+    response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
   }
 
   return response

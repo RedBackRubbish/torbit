@@ -74,9 +74,10 @@ export class ExecutorService {
     const fuel = useFuelStore.getState()
     const timeline = useTimeline.getState()
     
-    // 3. Check fuel before execution
+    // 3. Check fuel before execution (bypass if disabled for testing)
+    const fuelDisabled = process.env.NEXT_PUBLIC_FUEL_DISABLED === 'true'
     const fuelCost = TOOL_FUEL_COSTS[toolName] || TOOL_FUEL_COSTS.default
-    if (!fuel.canAfford(fuelCost)) {
+    if (!fuelDisabled && !fuel.canAfford(fuelCost)) {
       terminal.addLog(`Insufficient fuel for ${toolName} (need ${fuelCost}, have ${fuel.currentFuel})`, 'error')
       return {
         success: false,

@@ -50,6 +50,7 @@ export interface Message {
     retryable: boolean
   }
   retrying?: boolean
+  isSupervisor?: boolean // Supervisor verification message
 }
 
 // Stream chunk types from API

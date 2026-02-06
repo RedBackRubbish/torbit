@@ -20,9 +20,158 @@ import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 import type { ToolCall } from './types'
 
 // ============================================================================
-// VS CODE STYLE ACTION LOG
-// Clean, minimal action tracking with diff indicators
+// VS CODE STYLE ACTION LOG WITH FRIENDLY COMMENTARY
+// Clean, minimal action tracking with personality
 // ============================================================================
+
+/**
+ * Generate friendly commentary based on the file being created
+ */
+function getFriendlyCommentary(fileName: string, filePath: string): string {
+  const lowerPath = filePath.toLowerCase()
+  const lowerName = fileName.toLowerCase()
+  
+  // Layout components
+  if (lowerName.includes('layout')) {
+    return '✨ Setting up the app shell with a clean layout'
+  }
+  if (lowerName.includes('sidebar')) {
+    return '📱 Crafting a sleek sidebar navigation'
+  }
+  if (lowerName.includes('navbar') || lowerName.includes('nav') || lowerName.includes('header')) {
+    return '🧭 Building the navigation — keeping it minimal'
+  }
+  if (lowerName.includes('footer')) {
+    return '👟 Adding a clean footer'
+  }
+  
+  // Page files
+  if (lowerPath.includes('app/page') || lowerName === 'page.tsx') {
+    return '🏠 Creating the main page — first impressions matter'
+  }
+  if (lowerPath.includes('dashboard')) {
+    return '📊 Building your dashboard with key metrics'
+  }
+  if (lowerPath.includes('settings')) {
+    return '⚙️ Adding a settings page'
+  }
+  if (lowerPath.includes('profile')) {
+    return '👤 Setting up the profile view'
+  }
+  
+  // UI Components
+  if (lowerName.includes('button')) {
+    return '🔘 Crafting reusable button components'
+  }
+  if (lowerName.includes('card')) {
+    return '🃏 Building beautiful card components'
+  }
+  if (lowerName.includes('modal') || lowerName.includes('dialog')) {
+    return '💬 Adding smooth modal interactions'
+  }
+  if (lowerName.includes('input') || lowerName.includes('form')) {
+    return '📝 Creating form inputs with validation'
+  }
+  if (lowerName.includes('table')) {
+    return '📋 Building a clean data table'
+  }
+  if (lowerName.includes('chart') || lowerName.includes('graph')) {
+    return '📈 Adding beautiful data visualizations'
+  }
+  if (lowerName.includes('avatar')) {
+    return '🎭 Creating avatar components'
+  }
+  if (lowerName.includes('badge') || lowerName.includes('tag')) {
+    return '🏷️ Adding status badges'
+  }
+  if (lowerName.includes('dropdown') || lowerName.includes('menu')) {
+    return '📜 Building dropdown menus'
+  }
+  if (lowerName.includes('toast') || lowerName.includes('notification')) {
+    return '🔔 Adding notification toasts'
+  }
+  if (lowerName.includes('skeleton') || lowerName.includes('loading')) {
+    return '⏳ Creating smooth loading states'
+  }
+  
+  // Data & State
+  if (lowerName.includes('store') || lowerPath.includes('store/')) {
+    return '🗄️ Setting up state management'
+  }
+  if (lowerName.includes('hook') || lowerName.startsWith('use')) {
+    return '🪝 Creating a custom hook'
+  }
+  if (lowerName.includes('context') || lowerName.includes('provider')) {
+    return '🔌 Building a context provider'
+  }
+  if (lowerName.includes('types') || lowerName.includes('.d.ts')) {
+    return '📐 Defining TypeScript types'
+  }
+  if (lowerName.includes('utils') || lowerName.includes('helpers')) {
+    return '🛠️ Adding utility functions'
+  }
+  if (lowerName.includes('constants') || lowerName.includes('config')) {
+    return '⚙️ Setting up configuration'
+  }
+  if (lowerName.includes('data') || lowerName.includes('mock')) {
+    return '📦 Preparing sample data'
+  }
+  
+  // API & Backend
+  if (lowerPath.includes('api/') || lowerPath.includes('route')) {
+    return '🔌 Building an API endpoint'
+  }
+  if (lowerName.includes('service') || lowerName.includes('client')) {
+    return '🌐 Creating API service layer'
+  }
+  
+  // Styling
+  if (lowerName.includes('globals') || lowerName.includes('.css')) {
+    return '🎨 Setting up global styles'
+  }
+  if (lowerName.includes('tailwind')) {
+    return '🎨 Configuring Tailwind CSS'
+  }
+  
+  // Config files
+  if (lowerName === 'package.json') {
+    return '📦 Initializing the project'
+  }
+  if (lowerName.includes('tsconfig')) {
+    return '⚙️ Configuring TypeScript'
+  }
+  if (lowerName.includes('next.config')) {
+    return '⚙️ Setting up Next.js config'
+  }
+  if (lowerName.includes('postcss')) {
+    return '⚙️ Configuring PostCSS'
+  }
+  
+  // Hero & Landing
+  if (lowerName.includes('hero')) {
+    return '🦸 Building an eye-catching hero section'
+  }
+  if (lowerName.includes('feature')) {
+    return '✨ Showcasing your features'
+  }
+  if (lowerName.includes('pricing')) {
+    return '💰 Creating the pricing section'
+  }
+  if (lowerName.includes('testimonial')) {
+    return '💬 Adding social proof'
+  }
+  if (lowerName.includes('cta')) {
+    return '🎯 Building a call-to-action'
+  }
+  
+  // Generic component
+  if (lowerPath.includes('components/')) {
+    return `🧩 Building the ${fileName.replace(/\.(tsx?|jsx?)$/, '')} component`
+  }
+  
+  // Fallback
+  return `📄 Creating ${fileName}`
+}
 
 interface ActionLogProps {
   toolCalls: ToolCall[]
@@ -145,7 +294,7 @@ function getActionMeta(toolCall: ToolCall): ActionMeta {
 }
 
 /**
- * Single action item with VS Code styling
+ * Single action item with VS Code styling and friendly commentary
  */
 function ActionItem({ toolCall }: { toolCall: ToolCall }) {
   const meta = getActionMeta(toolCall)
@@ -153,70 +302,97 @@ function ActionItem({ toolCall }: { toolCall: ToolCall }) {
   const isComplete = toolCall.status === 'complete'
   const isError = toolCall.status === 'error'
   
+  // Get friendly commentary for file creation
+  const args = toolCall.args || {}
+  const path = (args.path || args.filePath || '') as string
+  const fileName = path.split('/').pop() || ''
+  
+  // Commentary for different action types
+  let commentary: string | null = null
+  if (toolCall.name === 'createFile') {
+    commentary = getFriendlyCommentary(fileName, path)
+  } else if (toolCall.name === 'think') {
+    commentary = '🧠 Planning the best approach...'
+  } else if (toolCall.name === 'editFile' || toolCall.name === 'replaceInFile') {
+    commentary = `✏️ Tweaking ${fileName}...`
+  } else if (toolCall.name === 'installPackage' || toolCall.name === 'installDependency') {
+    commentary = '📦 Adding dependencies...'
+  }
+  
   return (
     <motion.div
       initial={{ opacity: 0, x: -4 }}
       animate={{ opacity: 1, x: 0 }}
-      className="flex items-center gap-2 py-1 text-[12px]"
+      className="flex flex-col gap-0.5 py-1"
     >
-      {/* Status indicator */}
-      <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-        {isRunning ? (
-          <TorbitSpinner size="xs" speed="fast" />
-        ) : isComplete ? (
-          <Check className="w-3.5 h-3.5 text-[#666]" />
-        ) : isError ? (
-          <AlertCircle className="w-3.5 h-3.5 text-red-400" />
-        ) : (
-          <div className="w-1.5 h-1.5 rounded-full bg-[#404040]" />
+      {/* Friendly commentary (for createFile only) */}
+      {commentary && isRunning && (
+        <div className="text-[11px] text-white/60 ml-6 italic">
+          {commentary}
+        </div>
+      )}
+      
+      {/* Main action row */}
+      <div className="flex items-center gap-2 text-[12px]">
+        {/* Status indicator */}
+        <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+          {isRunning ? (
+            <TorbitSpinner size="xs" speed="fast" />
+          ) : isComplete ? (
+            <Check className="w-3.5 h-3.5 text-[#666]" />
+          ) : isError ? (
+            <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+          ) : (
+            <div className="w-1.5 h-1.5 rounded-full bg-[#404040]" />
+          )}
+        </div>
+        
+        {/* Action icon */}
+        <span className={`flex-shrink-0 ${
+          isError ? 'text-red-400' : 
+          isComplete ? 'text-[#606060]' : 
+          'text-[#808080]'
+        }`}>
+          {meta.icon}
+        </span>
+        
+        {/* Verb */}
+        <span className={`${
+          isError ? 'text-red-400' : 
+          isComplete ? 'text-[#808080]' : 
+          'text-[#a8a8a8]'
+        }`}>
+          {meta.verb}
+        </span>
+        
+        {/* Label (file name, command, etc) */}
+        <span className={`font-mono truncate ${
+          isError ? 'text-red-400/70' :
+          isComplete ? 'text-[#666]' : 
+          'text-[#c0c0c0]'
+        }`}>
+          {meta.label}
+        </span>
+      
+        {/* Sublabel (line range, etc) */}
+        {meta.sublabel && (
+          <span className="text-[#505050] hidden sm:inline">
+            , {meta.sublabel}
+          </span>
+        )}
+        
+        {/* Diff indicator */}
+        {meta.diff && (isComplete || isRunning) && (
+          <span className="flex items-center gap-1 ml-auto flex-shrink-0">
+            {meta.diff.added > 0 && (
+              <span className="text-emerald-500/80">+{meta.diff.added}</span>
+            )}
+            {meta.diff.removed > 0 && (
+              <span className="text-red-400/80">-{meta.diff.removed}</span>
+            )}
+          </span>
         )}
       </div>
-      
-      {/* Action icon */}
-      <span className={`flex-shrink-0 ${
-        isError ? 'text-red-400' : 
-        isComplete ? 'text-[#606060]' : 
-        'text-[#808080]'
-      }`}>
-        {meta.icon}
-      </span>
-      
-      {/* Verb */}
-      <span className={`${
-        isError ? 'text-red-400' : 
-        isComplete ? 'text-[#808080]' : 
-        'text-[#a8a8a8]'
-      }`}>
-        {meta.verb}
-      </span>
-      
-      {/* Label (file name, command, etc) */}
-      <span className={`font-mono truncate ${
-        isError ? 'text-red-400/70' :
-        isComplete ? 'text-[#666]' : 
-        'text-[#c0c0c0]'
-      }`}>
-        {meta.label}
-      </span>
-      
-      {/* Sublabel (line range, etc) */}
-      {meta.sublabel && (
-        <span className="text-[#505050] hidden sm:inline">
-          , {meta.sublabel}
-        </span>
-      )}
-      
-      {/* Diff indicator */}
-      {meta.diff && (isComplete || isRunning) && (
-        <span className="flex items-center gap-1 ml-auto flex-shrink-0">
-          {meta.diff.added > 0 && (
-            <span className="text-emerald-500/80">+{meta.diff.added}</span>
-          )}
-          {meta.diff.removed > 0 && (
-            <span className="text-red-400/80">-{meta.diff.removed}</span>
-          )}
-        </span>
-      )}
     </motion.div>
   )
 }
