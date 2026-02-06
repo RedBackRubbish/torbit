@@ -258,8 +258,8 @@ export function useWebContainer(): UseWebContainerReturn {
     addLog('🚀 Starting development server (Webpack mode)...', 'info')
     
     // Start in background (don't await exit)
-    // --no-turbopack forces webpack (Turbopack crashes in WebContainer WASM)
-    spawnProcess('npx', ['next', 'dev', '--no-turbopack'])
+    // --webpack forces webpack mode (Turbopack crashes in WebContainer WASM)
+    spawnProcess('npx', ['next', 'dev', '--webpack'])
   }, [container, spawnProcess, addLog])
 
   return {
@@ -298,7 +298,7 @@ function getPackageJson(template: 'nextjs' | 'react' | 'node') {
       return {
         ...base,
         scripts: {
-          dev: 'next dev --no-turbopack',
+          dev: 'next dev --webpack',
           build: 'next build',
           start: 'next start',
         },

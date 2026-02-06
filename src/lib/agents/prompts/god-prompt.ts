@@ -119,15 +119,15 @@ Use these tools to create code:
 - Server Components by default, 'use client' only when needed
 
 ⚠️ WEBCONTAINER BUILD RULES (CRITICAL):
-- In package.json scripts: "dev": "next dev --no-turbopack"
-- The --no-turbopack flag is MANDATORY — Turbopack crashes in WebContainer WASM
+- In package.json scripts: "dev": "next dev --webpack"
+- The --webpack flag is MANDATORY — Turbopack crashes in WebContainer WASM
 - Keep dependencies minimal - large packages slow npm install
 - ALWAYS use TypeScript (.tsx/.ts files, never .jsx/.js)
 
 REQUIRED package.json format:
 {
   "scripts": {
-    "dev": "next dev --no-turbopack"
+    "dev": "next dev --webpack"
   },
   "dependencies": {
     "next": "latest",

@@ -14,7 +14,7 @@ import { NervousSystem } from '@/lib/nervous-system'
 // This prevents multiple boot attempts and allows any component to access
 // the container, file operations, and command execution.
 //
-// ⚠️ INVARIANT: WebContainer + Next.js MUST run with --no-turbopack
+// ⚠️ INVARIANT: WebContainer + Next.js MUST run with --webpack
 // Turbopack uses native bindings that do not exist in WASM. This is structural,
 // not a bug that will be fixed. Any code that enables Turbopack will break.
 //
@@ -413,27 +413,27 @@ module.exports = {
             const deps = pkg.dependencies || {}
             const devDeps = pkg.devDependencies || {}
             
-            // CRITICAL: Ensure dev script uses --no-turbopack
+            // CRITICAL: Ensure dev script uses --webpack
             // Turbopack crashes in WebContainer WASM with 'turbo.createProject is not supported'
-            // Using --no-turbopack forces webpack mode which works perfectly
+            // Using --webpack forces webpack mode which works perfectly
             let needsUpdate = false
             
-            // Ensure dev script has --no-turbopack (disables Turbopack, uses webpack)
+            // Ensure dev script has --webpack (forces webpack, avoids Turbopack)
             if (pkg.scripts?.dev) {
-              // Remove any --turbo flag (old opt-in for Turbopack)
-              if (pkg.scripts.dev.includes('--turbo') && !pkg.scripts.dev.includes('--no-turbopack')) {
-                pkg.scripts.dev = pkg.scripts.dev.replace('--turbo', '').trim()
+              // Remove any --turbo or --turbopack flags
+              if (pkg.scripts.dev.includes('--turbo')) {
+                pkg.scripts.dev = pkg.scripts.dev.replace(/--turbo(pack)?/g, '').trim()
               }
-              // Add --no-turbopack if not already present
-              if (!pkg.scripts.dev.includes('--no-turbopack')) {
-                pkg.scripts.dev = pkg.scripts.dev.replace('next dev', 'next dev --no-turbopack')
-                addLog('Added --no-turbopack flag (WebContainer WASM fix)', 'info')
+              // Add --webpack if not already present
+              if (!pkg.scripts.dev.includes('--webpack')) {
+                pkg.scripts.dev = pkg.scripts.dev.replace('next dev', 'next dev --webpack')
+                addLog('Added --webpack flag (WebContainer WASM fix)', 'info')
                 needsUpdate = true
               }
             } else {
               // No dev script - add one
               if (!pkg.scripts) pkg.scripts = {}
-              pkg.scripts.dev = 'next dev --no-turbopack'
+              pkg.scripts.dev = 'next dev --webpack'
               needsUpdate = true
             }
             
@@ -580,10 +580,10 @@ module.exports = {
         }
         
         // Start dev server regardless - it will error if deps are missing
-        // --no-turbopack forces webpack mode (Turbopack crashes in WebContainer WASM)
+        // --webpack forces webpack mode (Turbopack crashes in WebContainer WASM)
         addLog('Starting development server (Webpack mode)', 'info')
         
-        const devProcess = await container.spawn('npx', ['next', 'dev', '--no-turbopack'])
+        const devProcess = await container.spawn('npx', ['next', 'dev', '--webpack'])
         devProcess.output.pipeTo(new WritableStream({
           write(data) {
             addLog(data, 'output')

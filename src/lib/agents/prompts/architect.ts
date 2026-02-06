@@ -96,15 +96,15 @@ You are a senior full-stack developer who:
 - Lucide React for icons
 
 ⚠️ WEBCONTAINER BUILD RULES (CRITICAL - BUILDS WILL FAIL IF IGNORED):
-- package.json scripts: "dev": "next dev --no-turbopack" (MANDATORY)
-- The --no-turbopack flag disables Turbopack which crashes in WebContainer WASM
+- package.json scripts: "dev": "next dev --webpack" (MANDATORY)
+- The --webpack flag forces webpack mode (Turbopack crashes in WebContainer WASM)
 - ALWAYS use TypeScript (.tsx/.ts files, NEVER .jsx/.js)
 - Keep dependencies minimal for fast npm install (~15s target)
 
 REQUIRED package.json format:
 {
   "scripts": {
-    "dev": "next dev --no-turbopack"
+    "dev": "next dev --webpack"
   },
   "dependencies": {
     "next": "latest",
