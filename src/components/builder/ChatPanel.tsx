@@ -241,25 +241,26 @@ export default function ChatPanel() {
     return { content: fullContent, toolCalls: Array.from(toolCalls.values()) }
   }, [setAgentStatus, addFile])
 
-  // Generate a brief acknowledgment - no verbose stack info
+  // Generate initial acknowledgment - AI will stream the full response with plan
   const generateGreeting = useCallback((prompt: string): string => {
     const promptLower = prompt.toLowerCase()
-    
+
     // Detect if this is an iteration/edit request vs new build
-    const isIteration = promptLower.includes('add ') || 
-                        promptLower.includes('change ') || 
+    const isIteration = promptLower.includes('add ') ||
+                        promptLower.includes('change ') ||
                         promptLower.includes('update ') ||
                         promptLower.includes('fix ') ||
                         promptLower.includes('make it ') ||
                         promptLower.includes('modify ') ||
                         promptLower.includes('remove ')
-    
+
     if (isIteration) {
-      return '' // No greeting for iterations, just show files being created
+      // Even iterations get acknowledgment now
+      return 'Got it —'
     }
-    
-    // For new builds, just acknowledge briefly
-    return 'On it.'
+
+    // For new builds, acknowledge briefly (AI will stream the full plan)
+    return 'Got it —'
   }, [])
 
   const handleSubmitMessage = useCallback(async (messageContent: string, agentId: AgentId, isHealRequest: boolean = false) => {
@@ -380,24 +381,28 @@ export default function ChatPanel() {
               
               // Update chat message based on result
               if (result.status === 'APPROVED') {
-                setMessages(prev => prev.map(m => 
+                setMessages(prev => prev.map(m =>
                   m.content?.includes('Supervisor is reviewing')
-                    ? { ...m, content: `**${files.length} files generated.** ✓ Approved by supervisor.\n\nPreview is live. What would you like to iterate on?` }
+                    ? { ...m, content: `**${files.length} files generated.**\n\n✓ **Supervisor approved** — Build meets quality standards.\n\nPreview is live. What would you like to iterate on?` }
                     : m
                 ))
                 // Auto-dismiss after approval
-                setTimeout(() => setShowSupervisor(false), 1500)
+                setTimeout(() => setShowSupervisor(false), 2000)
               } else {
-                // NEEDS_FIXES - auto-apply fixes immediately
-                setMessages(prev => prev.map(m => 
+                // NEEDS_FIXES - Show what Supervisor found VISIBLY before fixing
+                const issueList = result.fixes
+                  .map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`)
+                  .join('\n')
+
+                setMessages(prev => prev.map(m =>
                   m.content?.includes('Supervisor is reviewing')
-                    ? { ...m, content: `**${files.length} files generated.** Supervisor found ${result.fixes.length} issue${result.fixes.length !== 1 ? 's' : ''}. Fixing automatically...` }
+                    ? { ...m, content: `**${files.length} files generated.** Supervisor review:\n\n**Issues found:**\n${issueList}\n\nApplying fixes...` }
                     : m
                 ))
-                // Auto-trigger fix after a brief delay to show the panel
+                // Give user time to see what Supervisor found (2 seconds)
                 setTimeout(() => {
                   autoApplyFixes(result)
-                }, 500)
+                }, 2000)
               }
             } else {
               // Verification failed - just approve

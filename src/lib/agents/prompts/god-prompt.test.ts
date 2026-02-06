@@ -93,7 +93,7 @@ describe('God Prompt', () => {
 
     describe('Communication Style', () => {
       it('should have example response', () => {
-        expect(GOD_PROMPT).toContain('Example response')
+        expect(GOD_PROMPT).toContain('Example Response')
         expect(GOD_PROMPT).toContain('todo app')
       })
 

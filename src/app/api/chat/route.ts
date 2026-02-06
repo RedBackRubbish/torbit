@@ -328,7 +328,7 @@ export async function POST(req: Request) {
         const executeWithRetry = async (attempt = 1): Promise<void> => {
           // Track tool calls we've already sent to avoid duplicates
           const sentToolCalls = new Set<string>()
-          
+
           try {
             const result = await streamText({
               model,
@@ -336,30 +336,9 @@ export async function POST(req: Request) {
               messages,
               tools: agentTools,
               stopWhen: stepCountIs(15), // Allow more steps for complex builds
-              // Only send complete tool calls from onStepFinish to ensure full args
+              // Stream tool calls AS THEY HAPPEN for real-time file visibility
               onStepFinish: async (step) => {
-                // Send complete tool calls with full args
-                // Note: AI SDK v6+ uses 'input' instead of 'args' for tool parameters
-                if (step.toolCalls) {
-                  for (const tc of step.toolCalls) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const toolCall = tc as any
-                    if (!sentToolCalls.has(toolCall.toolCallId)) {
-                      sentToolCalls.add(toolCall.toolCallId)
-                      sendChunk({
-                        type: 'tool-call',
-                        toolCall: {
-                          id: toolCall.toolCallId,
-                          name: toolCall.toolName,
-                          // AI SDK v6 uses 'input' not 'args'
-                          args: toolCall.input as Record<string, unknown>,
-                        },
-                      })
-                    }
-                  }
-                }
-                
-                // Stream tool results after execution completes
+                // Send tool results after execution completes
                 if (step.toolResults) {
                   for (const tr of step.toolResults) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -379,9 +358,27 @@ export async function POST(req: Request) {
               },
             })
 
-            // Stream the text response
-            for await (const chunk of result.textStream) {
-              sendChunk({ type: 'text', content: chunk })
+            // Use fullStream to get tool calls IMMEDIATELY as they happen
+            // This enables real-time file visibility in the sidebar
+            for await (const part of result.fullStream) {
+              if (part.type === 'text-delta') {
+                sendChunk({ type: 'text', content: part.text })
+              } else if (part.type === 'tool-call') {
+                // Stream tool call immediately when it starts (with complete args)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const tc = part as any
+                if (!sentToolCalls.has(tc.toolCallId)) {
+                  sentToolCalls.add(tc.toolCallId)
+                  sendChunk({
+                    type: 'tool-call',
+                    toolCall: {
+                      id: tc.toolCallId,
+                      name: tc.toolName,
+                      args: tc.args as Record<string, unknown>,
+                    },
+                  })
+                }
+              }
             }
 
             // Send usage metrics at the end

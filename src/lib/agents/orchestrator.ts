@@ -297,15 +297,30 @@ export class TorbitOrchestrator {
   
   /**
    * Execute a task with a specific agent
+   * 
+   * @param onToolCall - Optional callback fired IMMEDIATELY when each tool call starts,
+   *                     enabling real-time file visibility in the UI before execution completes
    */
   async executeAgent(
     agentId: AgentId,
     prompt: string,
-    options?: { modelTier?: ModelTier; maxSteps?: number }
+    options?: { 
+      modelTier?: ModelTier
+      maxSteps?: number
+      /** Callback fired immediately when a tool call is received (before execution) */
+      onToolCall?: (toolCall: { id: string; name: string; args: Record<string, unknown> }) => void
+      /** Callback fired when a tool call completes execution */
+      onToolResult?: (toolResult: { id: string; name: string; result: unknown; duration: number }) => void
+    }
   ): Promise<AgentResult> {
     const start = Date.now()
     const toolCalls: AgentResult['toolCalls'] = []
     const toolExecutor = createToolExecutor(this.context)
+    
+    // Track which tool calls we've seen to avoid duplicates
+    const seenToolCalls = new Set<string>()
+    // Map tool call IDs to start times for duration tracking
+    const toolStartTimes = new Map<string, number>()
     
     // Check circuit breaker before execution
     const circuitCheck = checkCircuitBreaker(
@@ -339,13 +354,18 @@ export class TorbitOrchestrator {
         tools,
         stopWhen: stepCountIs(options?.maxSteps ?? 10),
         onStepFinish: async (step) => {
-          // Track and execute tool calls
+          // Execute tool calls and track results
+          // Note: Tool calls are already streamed via fullStream below,
+          // this handles the actual execution after the step completes
           if (step.toolCalls) {
             for (const tc of step.toolCalls) {
-              const toolStart = Date.now()
+              const toolCallId = (tc as { toolCallId?: string }).toolCallId ?? tc.toolName
+              const toolStart = toolStartTimes.get(toolCallId) ?? Date.now()
               // AI SDK v6: access input property - cast to any for compatibility
               const toolInput = (tc as { input?: unknown }).input ?? {}
               const toolResult = await toolExecutor(tc.toolName, toolInput as Record<string, unknown>)
+              
+              const duration = Date.now() - toolStart
               
               // Track fuel cost per tool call with model tier multiplier
               const baseFuelCost = 1 // Base cost per tool call
@@ -356,17 +376,47 @@ export class TorbitOrchestrator {
                 name: tc.toolName,
                 args: toolInput as Record<string, unknown>,
                 result: toolResult,
-                duration: Date.now() - toolStart,
+                duration,
+              })
+              
+              // Notify caller of tool completion
+              options?.onToolResult?.({
+                id: toolCallId,
+                name: tc.toolName,
+                result: toolResult,
+                duration,
               })
             }
           }
         },
       })
       
-      // Collect full response
+      // Use fullStream to get tool calls IMMEDIATELY as they happen
+      // This enables real-time file visibility before execution completes
       let output = ''
-      for await (const chunk of result.textStream) {
-        output += chunk
+      for await (const part of result.fullStream) {
+        if (part.type === 'text-delta') {
+          output += part.text
+        } else if (part.type === 'tool-call') {
+          // Stream tool call immediately when it starts (with complete args)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const tc = part as any
+          const toolCallId = tc.toolCallId ?? tc.toolName
+          
+          if (!seenToolCalls.has(toolCallId)) {
+            seenToolCalls.add(toolCallId)
+            toolStartTimes.set(toolCallId, Date.now())
+            
+            // Notify caller immediately - this is the key fix!
+            // Files will appear in sidebar as soon as the model decides to create them,
+            // not after the entire step completes
+            options?.onToolCall?.({
+              id: toolCallId,
+              name: tc.toolName,
+              args: tc.args as Record<string, unknown>,
+            })
+          }
+        }
       }
       
       return {
