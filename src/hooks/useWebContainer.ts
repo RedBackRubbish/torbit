@@ -303,9 +303,9 @@ function getPackageJson(template: 'nextjs' | 'react' | 'node') {
           start: 'next start',
         },
         dependencies: {
-          next: 'latest',
-          react: '^19',
-          'react-dom': '^19',
+          next: '14.2.28',
+          react: '^18.3.1',
+          'react-dom': '^18.3.1',
           'lucide-react': 'latest',
           'framer-motion': 'latest',
           clsx: 'latest',
@@ -313,7 +313,7 @@ function getPackageJson(template: 'nextjs' | 'react' | 'node') {
         },
         devDependencies: {
           typescript: '^5.6.0',
-          '@types/react': '^19',
+          '@types/react': '^18',
           '@types/node': '^22',
         },
       }

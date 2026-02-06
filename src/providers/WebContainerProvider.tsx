@@ -401,6 +401,21 @@ module.exports = nextConfig
             // Using --webpack forces webpack mode which works perfectly
             let needsUpdate = false
             
+            // CRITICAL: Force Next.js 14.2.28 - Next.js 15+/16+ crash in WebContainer
+            // with "Cannot access entryCSSFiles without a work store" error
+            if (deps.next && (deps.next === 'latest' || deps.next.startsWith('^15') || deps.next.startsWith('^16') || deps.next.startsWith('15') || deps.next.startsWith('16'))) {
+              deps.next = '14.2.28'
+              addLog('Pinned Next.js to 14.2.28 (WebContainer compatibility)', 'info')
+              needsUpdate = true
+            }
+            
+            // Ensure React 18 (React 19 requires Next.js 15+)
+            if (deps.react && (deps.react.startsWith('^19') || deps.react.startsWith('19'))) {
+              deps.react = '^18.3.1'
+              deps['react-dom'] = '^18.3.1'
+              needsUpdate = true
+            }
+            
             // Ensure dev script has --webpack (forces webpack, avoids Turbopack)
             if (pkg.scripts?.dev) {
               // Remove any --turbo or --turbopack flags
@@ -438,7 +453,7 @@ module.exports = nextConfig
               addLog('Added TypeScript dependency', 'info')
             }
             if (!devDeps['@types/react']) {
-              devDeps['@types/react'] = '^19'
+              devDeps['@types/react'] = '^18'
               needsUpdate = true
             }
             if (!devDeps['@types/node']) {
@@ -692,8 +707,8 @@ module.exports = nextConfig
       },
       dependencies: {
         next: '14.2.28',
-        react: '^19',
-        'react-dom': '^19',
+        react: '^18.3.1',
+        'react-dom': '^18.3.1',
         'lucide-react': 'latest',
         'framer-motion': 'latest',
         clsx: 'latest',

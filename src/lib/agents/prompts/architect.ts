@@ -107,24 +107,25 @@ REQUIRED package.json format:
     "dev": "next dev --webpack"
   },
   "dependencies": {
-    "next": "latest",
-    "react": "^19",
-    "react-dom": "^19"
+    "next": "14.2.28",
+    "react": "^18",
+    "react-dom": "^18"
   }
 }
 
-⚠️ NEXT.JS PATTERNS (App Router, Next.js 15+):
+⚠️ CRITICAL: Use Next.js 14.2.28 exactly. Next.js 15+/16+ crash in WebContainer.
 
-Dynamic routes - params are async Promises:
+⚠️ NEXT.JS PATTERNS (App Router, Next.js 14):
+
+Dynamic routes - params are sync objects (NOT Promises):
 
   // app/[id]/page.tsx
-  export default async function Page({ 
+  export default function Page({ 
     params 
   }: { 
-    params: Promise<{ id: string }> 
+    params: { id: string } 
   }) {
-    const { id } = await params
-    return <div>{id}</div>
+    return <div>{params.id}</div>
   }
 
 Static pages (no dynamic params):

@@ -128,9 +128,11 @@ export default function ChatPanel() {
               break
 
             case 'tool-call':
+              console.log('[DEBUG] Received tool-call chunk:', JSON.stringify(chunk.toolCall))
               if (chunk.toolCall) {
                 // Check if we already have this tool call
                 const existing = toolCalls.get(chunk.toolCall.id)
+                console.log('[DEBUG] isNewCall:', !existing, 'toolName:', chunk.toolCall.name)
                 
                 const tc: ToolCall = {
                   id: chunk.toolCall.id,
@@ -157,8 +159,10 @@ export default function ChatPanel() {
                 ))
                 
                 // Execute tool only for new calls (we now receive complete args from API)
-                if (isNewCall && ExecutorService.isToolAvailable(tc.name)) {
-                  console.log('[DEBUG] Executing tool:', tc.name, 'with args:', tc.args)
+                const isAvailable = ExecutorService.isToolAvailable(tc.name)
+                console.log('[DEBUG] Tool execution check:', { isNewCall, isAvailable, toolName: tc.name })
+                if (isNewCall && isAvailable) {
+                  console.log('[DEBUG] Executing tool:', tc.name, 'with args:', JSON.stringify(tc.args))
                   const executionPromise = ExecutorService.executeTool(tc.name, tc.args).then((result) => {
                     console.log('[DEBUG] Tool result:', tc.name, result.success, result.output?.slice(0, 100))
                     const existingTc = toolCalls.get(tc.id)
@@ -167,8 +171,17 @@ export default function ChatPanel() {
                       existingTc.result = { success: result.success, output: result.output, duration: result.duration }
                       toolCalls.set(existingTc.id, existingTc)
                       
-                      if (tc.name === 'createFile' && result.success && tc.args.path && tc.args.content) {
+                      const shouldAddFile = tc.name === 'createFile' && result.success && tc.args.path && tc.args.content
+                      console.log('[DEBUG] File add check:', { 
+                        shouldAddFile, 
+                        toolName: tc.name, 
+                        success: result.success, 
+                        hasPath: !!tc.args.path, 
+                        hasContent: !!tc.args.content 
+                      })
+                      if (shouldAddFile) {
                         const path = tc.args.path as string
+                        console.log('[DEBUG] Calling addFile with path:', path)
                         addFile({
                           path,
                           name: path.split('/').pop() || 'untitled',
@@ -242,8 +255,8 @@ export default function ChatPanel() {
               }
               break
           }
-        } catch {
-          // Ignore parse errors
+        } catch (parseError) {
+          console.error('[DEBUG] SSE parse error:', parseError, 'line:', line)
         }
       }
     }

@@ -130,24 +130,25 @@ REQUIRED package.json format:
     "dev": "next dev --webpack"
   },
   "dependencies": {
-    "next": "latest",
-    "react": "^19",
-    "react-dom": "^19"
+    "next": "14.2.28",
+    "react": "^18",
+    "react-dom": "^18"
   }
 }
 
-⚠️ NEXT.JS PATTERNS (App Router):
-- params and searchParams are async Promises (Next.js 15+)
+⚠️ CRITICAL: Use Next.js 14.2.28 exactly. Next.js 15+/16+ crash in WebContainer.
+
+⚠️ NEXT.JS PATTERNS (App Router, Next.js 14):
+- params and searchParams are sync objects (NOT Promises)
 - Pages with dynamic routes:
 
-  // ✅ CORRECT - Next.js 15+
-  export default async function Page({ 
+  // ✅ CORRECT - Next.js 14
+  export default function Page({ 
     params 
   }: { 
-    params: Promise<{ id: string }> 
+    params: { id: string } 
   }) {
-    const { id } = await params
-    return <div>{id}</div>
+    return <div>{params.id}</div>
   }
 
   // ✅ Layout with children
