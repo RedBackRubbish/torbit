@@ -33,7 +33,7 @@ export function createAgentTools(
     aiSdkTools[toolName] = tool({
       description: toolDef.description,
       inputSchema: toolDef.inputSchema,
-      execute: async (args) => {
+      execute: async (args: z.infer<typeof toolDef.inputSchema>) => {
         const result = await executeTool(
           toolName as Parameters<typeof executeTool>[0],
           args as Record<string, unknown>,

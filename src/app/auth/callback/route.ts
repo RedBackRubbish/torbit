@@ -9,11 +9,26 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// Whitelist of allowed redirect paths to prevent open redirect attacks
+const ALLOWED_REDIRECTS = ['/dashboard', '/builder', '/settings', '/']
+
+function getSafeRedirectPath(next: string | null): string {
+  if (!next) return '/dashboard'
+  // Only allow paths that start with / and are in the whitelist
+  // Also check for path prefixes to allow /dashboard/billing etc.
+  const isAllowed = ALLOWED_REDIRECTS.some(
+    allowed => next === allowed || next.startsWith(`${allowed}/`)
+  )
+  // Prevent protocol-relative URLs (//evil.com) and absolute URLs
+  const isSafe = next.startsWith('/') && !next.startsWith('//')
+  return isAllowed && isSafe ? next : '/dashboard'
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const origin = requestUrl.origin
-  const next = requestUrl.searchParams.get('next') ?? '/dashboard'
+  const next = getSafeRedirectPath(requestUrl.searchParams.get('next'))
 
   if (code) {
     const supabase = await createClient()

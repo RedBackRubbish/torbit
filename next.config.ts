@@ -14,11 +14,26 @@ const nextConfig: NextConfig = {
   // So we ONLY apply them to the /builder route where WebContainers run.
   // ============================================================================
   async headers() {
+    // Security headers applied to all routes
+    const securityHeaders = [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      { key: 'X-XSS-Protection', value: '1; mode=block' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+    ];
+
     return [
       {
-        // Apply COOP/COEP headers to /builder exactly
+        // Apply security headers to all routes
+        source: '/(.*)',
+        headers: securityHeaders,
+      },
+      {
+        // Apply COOP/COEP headers to /builder exactly (required for WebContainers)
         source: '/builder',
         headers: [
+          ...securityHeaders,
           { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
         ],
@@ -27,6 +42,7 @@ const nextConfig: NextConfig = {
         // Apply COOP/COEP headers to /builder sub-paths
         source: '/builder/:path*',
         headers: [
+          ...securityHeaders,
           { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
         ],

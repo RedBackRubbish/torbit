@@ -1,14 +1,29 @@
 import { streamText, stepCountIs } from 'ai'
+import { z } from 'zod'
 import { AGENT_TOOLS, AgentId } from '@/lib/tools/definitions'
 import { createAgentTools, createContextFromRequest } from '@/lib/tools/ai-sdk-tools'
-import { 
-  getModelForTask, 
-  analyzeTaskComplexity, 
-  calculateCost, 
+import {
+  getModelForTask,
+  analyzeTaskComplexity,
+  calculateCost,
   AGENT_MODEL_MAP,
   MODEL_CONFIGS,
 } from '@/lib/agents/models'
 import { chatRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
+import { createClient } from '@/lib/supabase/server'
+
+// Request validation schema
+const ChatRequestSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant', 'system']),
+    content: z.string(),
+  })).min(1),
+  agentId: z.string().optional(),
+  projectId: z.string().optional(),
+  userId: z.string().optional(), // Will be overwritten by auth
+  projectType: z.enum(['web', 'mobile']).optional(),
+  capabilities: z.record(z.string(), z.unknown()).nullable().optional(),
+})
 
 // Import rich agent prompts
 import { ARCHITECT_SYSTEM_PROMPT } from '@/lib/agents/prompts/architect'
@@ -192,23 +207,54 @@ export async function POST(req: Request) {
   // ========================================================================
   const clientIP = getClientIP(req)
   const rateLimitResult = chatRateLimiter.check(clientIP)
-  
+
   if (!rateLimitResult.success) {
     return rateLimitResponse(rateLimitResult)
   }
 
+  // ========================================================================
+  // AUTHENTICATION - Verify user is logged in
+  // ========================================================================
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized. Please log in to use the chat.' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
   try {
-    const { 
-      messages: rawMessages, 
-      agentId = 'architect', 
-      projectId = 'default', 
-      userId = 'anonymous',
+    // ========================================================================
+    // REQUEST VALIDATION - Validate and parse request body
+    // ========================================================================
+    const body = await req.json()
+    const parseResult = ChatRequestSchema.safeParse(body)
+
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid request',
+          details: parseResult.error.flatten().fieldErrors,
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const {
+      messages: rawMessages,
+      agentId = 'architect',
+      projectId = 'default',
       projectType = 'web',
       capabilities = null,
-    } = await req.json()
+    } = parseResult.data
+
+    // Use authenticated user ID, not the one from request
+    const userId = user.id
 
     // Filter out empty messages to prevent API errors
-    const messages = rawMessages.filter((m: { content?: string }) => 
+    const messages = rawMessages.filter((m) =>
       m.content && typeof m.content === 'string' && m.content.trim().length > 0
     )
 
@@ -226,7 +272,7 @@ export async function POST(req: Request) {
       // Use mobile-specific prompt with capabilities
       const mobileConfig: MobileProjectConfig = {
         ...DEFAULT_MOBILE_CONFIG,
-        capabilities: capabilities as MobileCapabilities || DEFAULT_MOBILE_CONFIG.capabilities,
+        capabilities: (capabilities as unknown as MobileCapabilities) || DEFAULT_MOBILE_CONFIG.capabilities,
       }
       systemPrompt = getMobileSystemPrompt(mobileConfig)
     } else {

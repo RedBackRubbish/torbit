@@ -1,8 +1,18 @@
 import { generateObject } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 60
+
+// Request validation schema
+const VerifyRequestSchema = z.object({
+  originalPrompt: z.string().min(1, 'Original prompt is required'),
+  filesCreated: z.array(z.string()).optional(),
+  componentNames: z.array(z.string()).optional(),
+  pageNames: z.array(z.string()).optional(),
+  fileCount: z.number().optional(),
+})
 
 // Structured response schema
 const SupervisorResponseSchema = z.object({
@@ -39,24 +49,50 @@ Built: Landing page with hero, features, footer
 Be strict about explicit requests. Be lenient about implied features.`
 
 export async function POST(req: Request) {
+  // ========================================================================
+  // AUTHENTICATION - Verify user is logged in
+  // ========================================================================
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return Response.json(
+      { error: 'Unauthorized. Please log in.' },
+      { status: 401 }
+    )
+  }
+
   try {
-    const { originalPrompt, filesCreated, componentNames, pageNames, fileCount } = await req.json()
-    
-    if (!originalPrompt) {
-      return Response.json({ error: 'Missing original prompt' }, { status: 400 })
+    // ========================================================================
+    // REQUEST VALIDATION - Validate and parse request body
+    // ========================================================================
+    const body = await req.json()
+    const parseResult = VerifyRequestSchema.safeParse(body)
+
+    if (!parseResult.success) {
+      return Response.json(
+        { error: 'Invalid request', details: parseResult.error.issues },
+        { status: 400 }
+      )
     }
 
+    const { originalPrompt, filesCreated, componentNames, pageNames, fileCount } = parseResult.data
+
     // Build context for the supervisor
+    const safePageNames = pageNames ?? []
+    const safeComponentNames = componentNames ?? []
+    const safeFilesCreated = filesCreated ?? []
+
     const buildSummary = `
 ## User Request:
 "${originalPrompt}"
 
 ## Build Output:
-- ${fileCount} files created
-- Pages: ${pageNames?.length > 0 ? pageNames.join(', ') : 'Home'}
-- Components: ${componentNames?.length > 0 ? componentNames.join(', ') : 'Core UI'}
-- Files: ${filesCreated?.slice(0, 10).join(', ') || 'various'}
-${filesCreated?.length > 10 ? `... and ${filesCreated.length - 10} more` : ''}
+- ${fileCount ?? 0} files created
+- Pages: ${safePageNames.length > 0 ? safePageNames.join(', ') : 'Home'}
+- Components: ${safeComponentNames.length > 0 ? safeComponentNames.join(', ') : 'Core UI'}
+- Files: ${safeFilesCreated.slice(0, 10).join(', ') || 'various'}
+${safeFilesCreated.length > 10 ? `... and ${safeFilesCreated.length - 10} more` : ''}
 `
 
     const { object } = await generateObject({
@@ -70,7 +106,7 @@ ${filesCreated?.length > 10 ? `... and ${filesCreated.length - 10} more` : ''}
     return Response.json({
       status: object.status,
       summary: object.summary,
-      fixes: object.fixes.map((fix, i) => ({
+      fixes: object.fixes.map((fix: { feature: string; description: string; severity: 'critical' | 'recommended' }, i: number) => ({
         id: `fix-${i + 1}`,
         feature: fix.feature,
         description: fix.description,

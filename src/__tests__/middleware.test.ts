@@ -26,8 +26,8 @@ describe('Middleware', () => {
       const requestWithoutCookies = new NextRequest('http://localhost:3000/')
       
       // Import and call middleware
-      const { middleware } = await import('../middleware')
-      await middleware(requestWithoutCookies)
+      const { proxy } = await import('../proxy')
+      await proxy(requestWithoutCookies)
       
       // Should NOT call updateSession when no auth cookies
       expect(updateSession).not.toHaveBeenCalled()
@@ -43,8 +43,8 @@ describe('Middleware', () => {
         },
       })
       
-      const { middleware } = await import('../middleware')
-      await middleware(requestWithCookies)
+      const { proxy } = await import('../proxy')
+      await proxy(requestWithCookies)
       
       // Should call updateSession when auth cookies present
       expect(updateSession).toHaveBeenCalled()
@@ -60,8 +60,8 @@ describe('Middleware', () => {
         },
       })
       
-      const { middleware } = await import('../middleware')
-      const response = await middleware(request)
+      const { proxy } = await import('../proxy')
+      const response = await proxy(request)
       
       // Should redirect to dashboard
       expect(response.status).toBe(307)
@@ -71,8 +71,8 @@ describe('Middleware', () => {
     it('should allow unauthenticated users to access /login', async () => {
       const request = new NextRequest('http://localhost:3000/login')
       
-      const { middleware } = await import('../middleware')
-      const response = await middleware(request)
+      const { proxy } = await import('../proxy')
+      const response = await proxy(request)
       
       // Should not redirect
       expect(response.status).not.toBe(307)
@@ -93,8 +93,8 @@ describe('Middleware', () => {
           headers: { cookie },
         })
         
-        const { middleware } = await import('../middleware')
-        const response = await middleware(request)
+        const { proxy } = await import('../proxy')
+        const response = await proxy(request)
         
         // Should redirect (cookie detected)
         expect(response.status).toBe(307)
@@ -115,8 +115,8 @@ describe('Middleware', () => {
           headers: { cookie },
         })
         
-        const { middleware } = await import('../middleware')
-        const response = await middleware(request)
+        const { proxy } = await import('../proxy')
+        const response = await proxy(request)
         
         // Should not redirect (no auth cookie)
         expect(response.status).not.toBe(307)

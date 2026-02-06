@@ -11,13 +11,13 @@ describe('God Prompt', () => {
     describe('Identity Section', () => {
       it('should establish TORBIT identity', () => {
         expect(GOD_PROMPT).toContain('TORBIT')
-        expect(GOD_PROMPT).toContain('expert AI coding assistant')
+        expect(GOD_PROMPT).toContain('world-class AI software architect')
       })
 
       it('should describe personality', () => {
-        expect(GOD_PROMPT).toContain('personality')
-        expect(GOD_PROMPT).toContain('senior developer')
-        expect(GOD_PROMPT).toContain('excited')
+        expect(GOD_PROMPT).toContain('YOUR IDENTITY')
+        expect(GOD_PROMPT).toContain('principal engineer')
+        expect(GOD_PROMPT).toContain('Get excited')
       })
     })
 
@@ -98,8 +98,8 @@ describe('God Prompt', () => {
       })
 
       it('should encourage celebration', () => {
-        expect(GOD_PROMPT).toContain('Done!')
-        expect(GOD_PROMPT).toContain('🚀')
+        expect(GOD_PROMPT).toContain('Done.')
+        expect(GOD_PROMPT).toContain('ship quality')
       })
     })
 
@@ -110,7 +110,7 @@ describe('God Prompt', () => {
       })
 
       it('should have proper sections', () => {
-        expect(GOD_PROMPT).toContain('## YOUR PERSONALITY')
+        expect(GOD_PROMPT).toContain('## YOUR IDENTITY')
         expect(GOD_PROMPT).toContain('## CRITICAL RULES')
         expect(GOD_PROMPT).toContain('## Tools')
         expect(GOD_PROMPT).toContain('## Tech Stack')
