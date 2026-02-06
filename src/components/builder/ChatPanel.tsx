@@ -9,7 +9,7 @@ import { MessageBubble } from './chat/MessageBubble'
 import { ChatInput } from './chat/ChatInput'
 import { InspectorView, type ActivityEntry } from './governance'
 import { TorbitLogo } from '@/components/ui/TorbitLogo'
-import { useWebContainerContext } from '@/providers/WebContainerProvider'
+import { useE2BContext } from '@/providers/E2BProvider'
 import { VerificationDetailDrawer, type VerificationData } from './governance/VerificationDetailDrawer'
 import { ActivityLedgerTimeline } from './governance/ActivityLedgerTimeline'
 import { useLedger, generateLedgerHash } from '@/store/ledger'
@@ -52,7 +52,7 @@ export default function ChatPanel() {
   const hasAutoFixedRef = useRef(false)
   const [isMounted, setIsMounted] = useState(false)
   
-  const { isBooting, isReady, serverUrl, error, verification } = useWebContainerContext()
+  const { isBooting, isReady, serverUrl, error, verification } = useE2BContext()
   
   // Sound effects
   const generationSound = useGenerationSound()
@@ -715,9 +715,9 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
   
   // Record verification passed when server is ready
   useEffect(() => {
-    if (serverUrl && verification.containerHash && verification.lockfileHash && getPhaseStatus('verify') === 'pending') {
+    if (serverUrl && verification.sandboxId && verification.lockfileHash && getPhaseStatus('verify') === 'pending') {
       recordVerificationPassed(
-        verification.containerHash,
+        verification.sandboxId,
         verification.lockfileHash
       )
     }
@@ -933,7 +933,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
         data={{
           environmentVerifiedAt: verification.environmentVerifiedAt,
           runtimeVersion: verification.runtimeVersion,
-          containerHash: verification.containerHash,
+          sandboxId: verification.sandboxId,
           dependenciesLockedAt: verification.dependenciesLockedAt,
           dependencyCount: verification.dependencyCount,
           lockfileHash: verification.lockfileHash,

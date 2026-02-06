@@ -255,11 +255,11 @@ export function useWebContainer(): UseWebContainerReturn {
   const startDevServer = useCallback(async () => {
     if (!container) throw new Error('Container not ready')
     
-    addLog('🚀 Starting development server (Webpack mode)...', 'info')
+    addLog('🚀 Starting development server...', 'info')
     
     // Start in background (don't await exit)
-    // --webpack forces webpack mode (Turbopack crashes in WebContainer WASM)
-    spawnProcess('npx', ['next', 'dev', '--webpack'])
+    // Next.js 14 uses webpack by default (no flags needed)
+    spawnProcess('npx', ['next', 'dev'])
   }, [container, spawnProcess, addLog])
 
   return {
@@ -298,7 +298,7 @@ function getPackageJson(template: 'nextjs' | 'react' | 'node') {
       return {
         ...base,
         scripts: {
-          dev: 'next dev --webpack',
+          dev: 'next dev',
           build: 'next build',
           start: 'next start',
         },

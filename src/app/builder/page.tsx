@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
-import { WebContainerProvider } from '@/providers/WebContainerProvider'
+import { E2BProvider } from '@/providers/E2BProvider'
 import { ErrorBoundary, ChatErrorFallback, PreviewErrorFallback } from '@/components/ErrorBoundary'
 import BuilderLayout from '@/components/builder/BuilderLayout'
 import Sidebar from '@/components/builder/Sidebar'
@@ -20,9 +20,9 @@ import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 export default function BuilderPage() {
   return (
-    <WebContainerProvider>
+    <E2BProvider>
       <BuilderPageContent />
-    </WebContainerProvider>
+    </E2BProvider>
   )
 }
 

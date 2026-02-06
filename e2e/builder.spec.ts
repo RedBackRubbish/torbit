@@ -70,8 +70,8 @@ test.describe('Builder with Initial Prompt', () => {
 // ============================================================================
 // REGRESSION TESTS: WebContainer + Next.js Compatibility
 // ============================================================================
-// These tests ensure the Turbopack/TypeScript fixes don't regress.
-// Context: Turbopack crashes in WebContainer WASM, so we must use --webpack.
+// These tests ensure the Next.js version and TypeScript fixes don't regress.
+// Context: Next.js 15+/16+ crash in WebContainer, so we must use 14.2.x.
 // TypeScript must be enforced structurally, not just in prompts.
 
 test.describe('WebContainer TypeScript Enforcement', () => {
@@ -111,12 +111,12 @@ test.describe('WebContainer TypeScript Enforcement', () => {
     // Assert: Has tsconfig.json
     expect(fileTree).toContain('tsconfig.json');
     
-    // Assert: Has package.json with --webpack
+    // Assert: Has package.json with Next.js 14.2.x
     // Click on package.json to view it
     await page.click('text=package.json');
     const codeEditor = page.locator('[data-testid="code-editor"]');
     const packageContent = await codeEditor.textContent();
-    expect(packageContent).toContain('--webpack');
+    expect(packageContent).toContain('14.2.');
     
     // Assert: Preview loads without rebuild loop
     await page.waitForSelector('iframe[src*="webcontainer"]', { timeout: 180000 });

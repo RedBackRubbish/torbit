@@ -23,7 +23,7 @@ export interface VerificationData {
   // Runtime
   environmentVerifiedAt: number | null
   runtimeVersion: string | null
-  containerHash: string | null
+  sandboxId: string | null
   
   // Dependencies
   dependenciesLockedAt: number | null
@@ -122,12 +122,12 @@ export function VerificationDetailDrawer({
                   />
                   <DataRow 
                     label="Runtime version" 
-                    value={data.runtimeVersion || 'WebContainer'}
+                    value={data.runtimeVersion || 'E2B Sandbox'}
                     mono
                   />
                   <DataRow 
-                    label="Container hash" 
-                    value={formatHash(data.containerHash)}
+                    label="Sandbox ID" 
+                    value={formatHash(data.sandboxId)}
                     mono
                   />
                 </div>

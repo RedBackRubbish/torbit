@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import { useBuilderStore } from '@/store/builder'
-import { useWebContainer } from '@/hooks/useWebContainer'
+import { useE2B } from '@/hooks/useE2B'
 import { useTerminalStore } from '@/store/terminal'
 import { NervousSystem } from '@/lib/nervous-system'
 import { IPhoneFrame, BrowserFrame } from './DeviceFrame'
@@ -103,12 +103,13 @@ const CodeEditor = dynamic(() => import('./CodeEditor'), {
 })
 
 /**
- * PreviewPanel - Clean, minimal preview with WebContainer
- * Includes Safari fallback for browsers without SharedArrayBuffer support
+ * PreviewPanel - Clean, minimal preview with E2B Cloud Sandbox
+ * Uses E2B for real Linux environment instead of WebContainer
  */
 export default function PreviewPanel() {
   const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, projectType, chatInput, isGenerating } = useBuilderStore()
-  const { isBooting, isReady, serverUrl, error, isSupported } = useWebContainer()
+  const { isBooting, isReady, serverUrl, error } = useE2B()
+  const isSupported = true // E2B is always supported (cloud-based)
   const terminalLines = useTerminalStore((s) => s.lines)
   const [showRuntimeLog, setShowRuntimeLog] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
