@@ -206,13 +206,18 @@ export function WebContainerProvider({ children }: WebContainerProviderProps) {
       isReady, 
       hasStartedBuild, 
       serverUrl,
+      isGenerating,
       fileCount: files.length,
       filePaths: files.map(f => f.path),
       hasPackageJson: files.some(f => f.path === 'package.json' || f.path === '/package.json')
     })
     
     // Need container ready and not already building
-    if (!container || !isReady || hasStartedBuild || serverUrl) {
+    // CRITICAL: Don't start build while AI is still generating files!
+    if (!container || !isReady || hasStartedBuild || serverUrl || isGenerating) {
+      if (isGenerating) {
+        console.log('⏳ Waiting for AI to finish generating files...')
+      }
       return
     }
     
@@ -429,7 +434,7 @@ module.exports = {
         let timedOut = false
         const timeout = new Promise<number>((resolve) => {
           setTimeout(() => {
-            console.log('⏱️ npm install timeout reached (45s), killing process...')
+            console.log('⏱️ npm install timeout reached (90s), killing process...')
             timedOut = true
             try {
               installProcess.kill()
@@ -437,7 +442,7 @@ module.exports = {
               // Process may already be done
             }
             resolve(-1) // Use -1 to indicate timeout
-          }, 45000)
+          }, 90000) // Increased from 45s to 90s for more reliable installs
         })
         
         // Pipe output with logging
@@ -465,8 +470,18 @@ module.exports = {
           }))
           addLog('Dependencies locked', 'success')
         } else if (exitCode === -1) {
+          // Timeout - still mark as locked so dev server can start
+          setVerification(prev => ({
+            ...prev,
+            dependenciesLockedAt: Date.now(),
+          }))
           addLog('Dependencies install timed out, starting dev anyway...', 'warning')
         } else {
+          // Failed but still mark as locked so we can try to run
+          setVerification(prev => ({
+            ...prev,
+            dependenciesLockedAt: Date.now(),
+          }))
           addLog('npm install had issues, continuing...', 'warning')
         }
         
@@ -511,7 +526,7 @@ module.exports = {
     }
     
     startBuild()
-  }, [container, isReady, files, hasStartedBuild, serverUrl, addLog])
+  }, [container, isReady, files, hasStartedBuild, serverUrl, isGenerating, addLog])
 
   // File operations
   const writeFile = async (path: string, content: string) => {
