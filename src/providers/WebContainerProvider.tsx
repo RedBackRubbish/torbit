@@ -13,6 +13,14 @@ import { NervousSystem } from '@/lib/nervous-system'
 // Provides a shared WebContainer instance across the entire app.
 // This prevents multiple boot attempts and allows any component to access
 // the container, file operations, and command execution.
+//
+// ⚠️ INVARIANT: WebContainer + Next.js MUST run with --no-turbopack
+// Turbopack uses native bindings that do not exist in WASM. This is structural,
+// not a bug that will be fixed. Any code that enables Turbopack will break.
+//
+// ⚠️ INVARIANT: All generated apps MUST use TypeScript (.tsx/.ts)
+// Without TypeScript deps and tsconfig.json, models drift to JavaScript output.
+// Enforce structurally (add deps, validate extensions), not just via prompts.
 // ============================================================================
 
 // Verification metadata for audit trail
@@ -405,19 +413,27 @@ module.exports = {
             const deps = pkg.dependencies || {}
             const devDeps = pkg.devDependencies || {}
             
-            // CRITICAL: Force Next.js 14.2.28 - newer versions use Turbopack which breaks WebContainer WASM
+            // CRITICAL: Ensure dev script uses --no-turbopack
+            // Turbopack crashes in WebContainer WASM with 'turbo.createProject is not supported'
+            // Using --no-turbopack forces webpack mode which works perfectly
             let needsUpdate = false
-            if (deps.next && deps.next !== '14.2.28') {
-              console.log(`⚠️ Overriding Next.js version from "${deps.next}" to "14.2.28" (Turbopack fix)`)
-              addLog(`Fixing Next.js version: ${deps.next} → 14.2.28`, 'warning')
-              deps.next = '14.2.28'
-              needsUpdate = true
-            }
             
-            // Ensure dev script doesn't have --turbo flag
-            if (pkg.scripts?.dev?.includes('--turbo')) {
-              pkg.scripts.dev = pkg.scripts.dev.replace('--turbo', '').trim()
-              addLog('Removed --turbo flag from dev script', 'warning')
+            // Ensure dev script has --no-turbopack (disables Turbopack, uses webpack)
+            if (pkg.scripts?.dev) {
+              // Remove any --turbo flag (old opt-in for Turbopack)
+              if (pkg.scripts.dev.includes('--turbo') && !pkg.scripts.dev.includes('--no-turbopack')) {
+                pkg.scripts.dev = pkg.scripts.dev.replace('--turbo', '').trim()
+              }
+              // Add --no-turbopack if not already present
+              if (!pkg.scripts.dev.includes('--no-turbopack')) {
+                pkg.scripts.dev = pkg.scripts.dev.replace('next dev', 'next dev --no-turbopack')
+                addLog('Added --no-turbopack flag (WebContainer WASM fix)', 'info')
+                needsUpdate = true
+              }
+            } else {
+              // No dev script - add one
+              if (!pkg.scripts) pkg.scripts = {}
+              pkg.scripts.dev = 'next dev --no-turbopack'
               needsUpdate = true
             }
             
@@ -435,6 +451,22 @@ module.exports = {
               needsUpdate = true
             }
             
+            // TYPESCRIPT ENFORCEMENT: Add TypeScript deps if missing
+            // Without these, the model drifts to JavaScript output
+            if (!devDeps.typescript) {
+              devDeps.typescript = '^5.6.0'
+              needsUpdate = true
+              addLog('Added TypeScript dependency', 'info')
+            }
+            if (!devDeps['@types/react']) {
+              devDeps['@types/react'] = '^19'
+              needsUpdate = true
+            }
+            if (!devDeps['@types/node']) {
+              devDeps['@types/node'] = '^22'
+              needsUpdate = true
+            }
+            
             if (needsUpdate) {
               pkg.dependencies = deps
               pkg.devDependencies = devDeps
@@ -444,6 +476,37 @@ module.exports = {
           }
         } catch (e) {
           console.error('❌ Error parsing package.json:', e)
+        }
+        
+        // 9. TYPESCRIPT ENFORCEMENT: Validate file extensions
+        // If any .js or .jsx files exist (excluding config files), log a warning
+        // This signals model drift and should trigger investigation
+        const jsFiles = files.filter(f => {
+          const path = f.path.toLowerCase()
+          // Exclude config files that are legitimately JS
+          const isConfigFile = path.includes('config') || 
+                              path.includes('postcss') || 
+                              path.includes('tailwind') ||
+                              path.endsWith('.config.js') ||
+                              path.endsWith('.config.mjs')
+          return (path.endsWith('.js') || path.endsWith('.jsx')) && !isConfigFile
+        })
+        
+        if (jsFiles.length > 0) {
+          console.warn('⚠️ TYPESCRIPT ENFORCEMENT: Found JavaScript files that should be TypeScript:', 
+            jsFiles.map(f => f.path).join(', '))
+          addLog(`Warning: ${jsFiles.length} JavaScript file(s) detected. Use .tsx/.ts for type safety.`, 'warning')
+          
+          // Log to ledger for governance tracking
+          NervousSystem.dispatchPain({
+            id: `typescript-drift-${Date.now()}`,
+            type: 'TYPESCRIPT_DRIFT',
+            severity: 'warning',
+            message: `Generated ${jsFiles.length} JavaScript files instead of TypeScript`,
+            context: jsFiles.map(f => f.path).join(', '),
+            suggestion: 'Regenerate with explicit TypeScript file extensions',
+            timestamp: Date.now()
+          })
         }
         
         // Run npm install with legacy-peer-deps to avoid ERESOLVE errors
@@ -517,10 +580,10 @@ module.exports = {
         }
         
         // Start dev server regardless - it will error if deps are missing
-        // Use npx next dev (no --turbo flag - Turbopack not supported in WebContainer WASM)
+        // --no-turbopack forces webpack mode (Turbopack crashes in WebContainer WASM)
         addLog('Starting development server (Webpack mode)', 'info')
         
-        const devProcess = await container.spawn('npx', ['next', 'dev'])
+        const devProcess = await container.spawn('npx', ['next', 'dev', '--no-turbopack'])
         devProcess.output.pipeTo(new WritableStream({
           write(data) {
             addLog(data, 'output')

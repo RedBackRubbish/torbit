@@ -19,6 +19,7 @@ export type ErrorType =
   | 'NETWORK_ERROR'
   | 'TAILWIND_ERROR'
   | 'CSS_ERROR'
+  | 'TYPESCRIPT_DRIFT'
 
 export type ErrorSeverity = 'critical' | 'warning' | 'info'
 

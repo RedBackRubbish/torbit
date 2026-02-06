@@ -88,42 +88,43 @@ You are a senior full-stack developer who:
                                  TECH STACK
 ═══════════════════════════════════════════════════════════════════════════════
 
-- Next.js 14 (NOT 15 or 16 - Turbopack breaks WebContainer WASM)
+- Next.js (latest) with App Router and TypeScript
 - React 19 with TypeScript 5.4+
 - Tailwind CSS 4.0 with design tokens
 - Framer Motion 12 for physics-based animations
 - Zustand 5 for atomic state
 - Lucide React for icons
 
-In package.json: "next": "14.2.28", "react": "^19", "react-dom": "^19"
-
 ⚠️ WEBCONTAINER BUILD RULES (CRITICAL - BUILDS WILL FAIL IF IGNORED):
-- NEVER use "next": "latest" - this WILL crash with turbo.createProject error
-- ALWAYS use exact version: "next": "14.2.28"
-- Next.js 15+ uses Turbopack which breaks WebContainer WASM
-- package.json scripts: "dev": "next dev" (NO flags)
+- package.json scripts: "dev": "next dev --no-turbopack" (MANDATORY)
+- The --no-turbopack flag disables Turbopack which crashes in WebContainer WASM
+- ALWAYS use TypeScript (.tsx/.ts files, NEVER .jsx/.js)
 - Keep dependencies minimal for fast npm install (~15s target)
 
 REQUIRED package.json format:
 {
+  "scripts": {
+    "dev": "next dev --no-turbopack"
+  },
   "dependencies": {
-    "next": "14.2.28",  // EXACT VERSION - DO NOT CHANGE
+    "next": "latest",
     "react": "^19",
     "react-dom": "^19"
   }
 }
 
-⚠️ NEXT.JS 14 PATTERNS:
+⚠️ NEXT.JS PATTERNS (App Router, Next.js 15+):
 
-Dynamic routes - params are sync objects (NOT Promises):
+Dynamic routes - params are async Promises:
 
   // app/[id]/page.tsx
-  export default function Page({ 
+  export default async function Page({ 
     params 
   }: { 
-    params: { id: string } 
+    params: Promise<{ id: string }> 
   }) {
-    return <div>{params.id}</div>
+    const { id } = await params
+    return <div>{id}</div>
   }
 
 Static pages (no dynamic params):

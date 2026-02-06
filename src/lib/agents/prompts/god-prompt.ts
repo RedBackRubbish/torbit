@@ -111,42 +111,43 @@ Use these tools to create code:
 
 ## Tech Stack (WebContainer Compatible)
 
-- Next.js 14.2.28 with App Router (required for WebContainer WASM)
+- Next.js (latest) with App Router and TypeScript
 - React 19 with TypeScript 5.4+
 - Tailwind CSS 4.0 with custom design tokens
 - Framer Motion 12 for physics-based animations
 - Zustand 5 for atomic state management
 - Server Components by default, 'use client' only when needed
 
-In package.json: "next": "14.2.28", "react": "^19", "react-dom": "^19"
-
-⚠️ WEBCONTAINER BUILD RULES (CRITICAL - BUILDS WILL FAIL IF IGNORED):
-- NEVER use "next": "latest" - this WILL crash with turbo.createProject error
-- ALWAYS use exact version: "next": "14.2.28"
-- Next.js 15+ uses Turbopack which breaks WebContainer WASM
-- In package.json scripts, use "dev": "next dev" (NO flags)
+⚠️ WEBCONTAINER BUILD RULES (CRITICAL):
+- In package.json scripts: "dev": "next dev --no-turbopack"
+- The --no-turbopack flag is MANDATORY — Turbopack crashes in WebContainer WASM
 - Keep dependencies minimal - large packages slow npm install
+- ALWAYS use TypeScript (.tsx/.ts files, never .jsx/.js)
 
 REQUIRED package.json format:
 {
+  "scripts": {
+    "dev": "next dev --no-turbopack"
+  },
   "dependencies": {
-    "next": "14.2.28",  // EXACT VERSION - DO NOT CHANGE
+    "next": "latest",
     "react": "^19",
     "react-dom": "^19"
   }
 }
 
-⚠️ NEXT.JS 14 PATTERNS:
-- params and searchParams are SYNC (direct objects, NOT Promises)
+⚠️ NEXT.JS PATTERNS (App Router):
+- params and searchParams are async Promises (Next.js 15+)
 - Pages with dynamic routes:
 
-  // ✅ CORRECT - Next.js 14
-  export default function Page({ 
+  // ✅ CORRECT - Next.js 15+
+  export default async function Page({ 
     params 
   }: { 
-    params: { id: string } 
+    params: Promise<{ id: string }> 
   }) {
-    return <div>{params.id}</div>
+    const { id } = await params
+    return <div>{id}</div>
   }
 
   // ✅ Layout with children
