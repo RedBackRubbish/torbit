@@ -32,6 +32,11 @@ export function useAuth() {
 
   useEffect(() => {
     const supabase = getSupabase()
+    if (!supabase) {
+      // Supabase not configured -- skip auth, just mark as loaded
+      setState(s => ({ ...s, loading: false }))
+      return
+    }
     let cancelled = false
 
     async function loadSession() {
@@ -134,12 +139,14 @@ export function useAuth() {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
   }, [])
 
   const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -152,6 +159,7 @@ export function useAuth() {
 
   const signInWithOAuth = useCallback(async (provider: 'google' | 'github') => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -163,6 +171,7 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase.auth.signOut()
     if (error) throw error
   }, [])
