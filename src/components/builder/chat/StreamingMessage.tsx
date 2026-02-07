@@ -98,7 +98,7 @@ function FileItem({ path, status, index }: { path: string; status: FileStatus; i
           animate={{ opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
         >
-          checking
+          reviewing
         </motion.span>
       )}
     </motion.div>
@@ -113,10 +113,10 @@ function PhaseBadge({ phase, totalFiles, filesComplete }: {
 }) {
   const config = {
     thinking: { label: 'Planning', color: 'text-violet-400', bg: 'bg-violet-500/10' },
-    creating: { label: 'Creating', color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    installing: { label: 'Installing', color: 'text-amber-400', bg: 'bg-amber-500/10' },
-    building: { label: 'Building', color: 'text-orange-400', bg: 'bg-orange-500/10' },
-    ready: { label: 'Created', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    creating: { label: 'Writing files', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    installing: { label: 'Setting up', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+    building: { label: 'Checking', color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    ready: { label: 'Ready', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
   }[phase]
 
   const progress = totalFiles > 0 ? (filesComplete / totalFiles) * 100 : 0
@@ -240,7 +240,7 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
             <div className="flex items-center gap-2 px-2 py-1 text-[10px] uppercase tracking-wider text-[#404040] font-medium">
               <FileCode2 className="w-3 h-3" />
               <span>Files</span>
-              <span className="ml-auto text-[#505050]">{createdCount}/{fileToolCalls.length} created</span>
+              <span className="ml-auto text-[#505050]">{createdCount}/{fileToolCalls.length} ready</span>
             </div>
             <div className="max-h-[180px] overflow-y-auto custom-scrollbar">
               {fileToolCalls.map((tc, i) => (
@@ -277,13 +277,7 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
         {!isLoading && createdCount > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-2 flex items-center gap-2 text-[11px] text-[#505050]">
             <ShieldCheck className="w-3 h-3 text-emerald-500/60" />
-            <span>{createdCount} files created</span>
-            {message.usage && (
-              <>
-                <span className="text-[#333]">•</span>
-                <span className="text-[#404040]">{(message.usage.inputTokens + message.usage.outputTokens).toLocaleString()} tokens</span>
-              </>
-            )}
+            <span>{createdCount} files ready</span>
           </motion.div>
         )}
       </div>

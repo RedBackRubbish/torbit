@@ -105,10 +105,10 @@ export function PageErrorFallback({
       <div className="max-w-md w-full text-center">
         <div className="text-6xl mb-6">💥</div>
         <h1 className="text-2xl font-bold text-white mb-4">
-          Oops! Something crashed
+          Something went wrong
         </h1>
         <p className="text-neutral-400 mb-6">
-          {error?.message || "We're not sure what happened, but we're on it."}
+          {error?.message || "We hit an unexpected issue. Please try again."}
         </p>
         <div className="flex gap-4 justify-center">
           {reset && (
@@ -146,7 +146,7 @@ export function ChatErrorFallback({ onRetry }: { onRetry?: () => void }) {
         Session interrupted
       </h2>
       <p className="text-[13px] text-[#737373] mb-6 max-w-sm leading-relaxed">
-        The build session encountered an error. Your conversation history is safe.
+        Something interrupted the build. Your chat history is safe.
       </p>
       {onRetry && (
         <button
@@ -176,7 +176,7 @@ export function PreviewErrorFallback({ onRetry }: { onRetry?: () => void }) {
         Preview failed to load
       </h2>
       <p className="text-[13px] text-[#737373] mb-6 max-w-sm leading-relaxed">
-        The preview panel encountered an error. This might be due to a code issue.
+        {"This can happen after a code change. Try again \u2014 if it keeps failing, we'll fix the error."}
       </p>
       {onRetry && (
         <button

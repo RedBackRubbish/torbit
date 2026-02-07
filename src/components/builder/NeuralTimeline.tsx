@@ -140,14 +140,7 @@ function TimelineNode({ step, index, isLast }: { step: TimelineStep; index: numb
           </p>
         )}
         
-        {step.fuelCost && step.status !== 'complete' && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-amber-500/80 mt-1">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            {step.fuelCost} tokens
-          </span>
-        )}
+
         
         {/* Thinking Output */}
         <AnimatePresence>
@@ -229,7 +222,7 @@ export default function NeuralTimeline() {
             <button
               onClick={clearTimeline}
               className="p-1 text-[#525252] hover:text-[#a1a1a1] transition-colors"
-              title="Clear"
+              title="Clear activity"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
@@ -248,8 +241,8 @@ export default function NeuralTimeline() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
               </svg>
             </div>
-            <p className="text-[13px] text-[#737373] mb-1">No activity yet</p>
-            <p className="text-[12px] text-[#525252]">Agent actions will appear here</p>
+            <p className="text-[13px] text-[#737373] mb-1">Nothing yet</p>
+            <p className="text-[12px] text-[#525252]">Updates will show up here as Torbit works.</p>
           </div>
         ) : (
           <div className="p-4">
