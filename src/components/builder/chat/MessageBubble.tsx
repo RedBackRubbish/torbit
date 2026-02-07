@@ -15,15 +15,15 @@ interface MessageBubbleProps {
  * MessageBubble - Routes to user or agent message style
  */
 export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps) {
-  // User message - Clean bordered box
+  // User message - Right-aligned minimal pill
   if (message.role === 'user') {
     return (
       <motion.div
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
-        className="py-3"
+        className="py-3 flex justify-end"
       >
-        <div className="p-3.5 rounded-xl bg-[#0f0f0f] border border-[#1f1f1f] hover:border-[#2a2a2a] transition-colors">
+        <div className="max-w-[85%] px-4 py-2.5 rounded-2xl bg-[#1a1a1a]">
           <p className="text-[14px] text-[#e5e5e5] leading-relaxed whitespace-pre-wrap">
             {message.content}
           </p>

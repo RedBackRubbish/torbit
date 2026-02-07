@@ -860,65 +860,6 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
         )}
       </AnimatePresence>
       
-      {/* Bottom Action Bar - Emergent style */}
-      <AnimatePresence mode="wait">
-        {!chatCollapsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="h-11 border-t border-[#151515] flex items-center justify-between px-3 bg-[#000000] shrink-0"
-          >
-            {/* Left: View activity (opt-in Inspector) */}
-            <button 
-              onClick={() => setShowInspector(true)}
-              className="h-7 px-2 flex items-center gap-1.5 text-[10px] text-[#404040] hover:text-[#606060] transition-all"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              View activity
-            </button>
-            
-            {/* Center: Actions */}
-            <div className="flex items-center gap-1">
-              <button className="h-7 px-2.5 flex items-center gap-1.5 text-[11px] text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded-lg transition-all">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3v11.25" />
-                </svg>
-                GitHub
-              </button>
-              
-              {/* Ultra toggle */}
-              <button className="h-7 px-2.5 flex items-center gap-1.5 text-[11px] text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded-lg transition-all">
-                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-[#808080] to-[#c0c0c0] opacity-50" />
-                Ultra
-              </button>
-            </div>
-            
-            {/* Right: Mic / Stop */}
-            <div className="flex items-center gap-1">
-              {isLoading ? (
-                <button 
-                  onClick={() => setIsLoading(false)}
-                  className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <rect x="6" y="6" width="12" height="12" rx="1" />
-                  </svg>
-                </button>
-              ) : (
-                <button className="w-7 h-7 flex items-center justify-center text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded-lg transition-all">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      
       {/* Inspector View - Opt-in timeline for advanced users */}
       <InspectorView 
         activities={activities}
