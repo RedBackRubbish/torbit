@@ -22,6 +22,7 @@ export function useProjects() {
     
     try {
       const supabase = getSupabase()
+      if (!supabase) { setLoading(false); return }
       const { data, error: fetchError } = await supabase
         .from('projects')
         .select('*')
@@ -43,6 +44,7 @@ export function useProjects() {
   // Create project
   const createProject = useCallback(async (project: Omit<NewProject, 'user_id'>) => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) throw new Error('Must be logged in to create a project')
@@ -61,6 +63,7 @@ export function useProjects() {
   // Update project
   const updateProject = useCallback(async (id: string, updates: UpdateProject) => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { data, error } = await supabase
       .from('projects')
       .update(updates)
@@ -76,6 +79,7 @@ export function useProjects() {
   // Delete project
   const deleteProject = useCallback(async (id: string) => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase
       .from('projects')
       .delete()
@@ -88,6 +92,7 @@ export function useProjects() {
   // Save files to project
   const saveFiles = useCallback(async (projectId: string, files: Json) => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase
       .from('projects')
       .update({ files, updated_at: new Date().toISOString() })
@@ -125,6 +130,7 @@ export function useProject(projectId: string | null) {
       setLoading(true)
       try {
         const supabase = getSupabase()
+        if (!supabase) { setLoading(false); return }
         const { data, error: fetchError } = await supabase
           .from('projects')
           .select('*')

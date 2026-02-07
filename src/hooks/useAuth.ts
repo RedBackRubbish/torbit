@@ -32,11 +32,17 @@ export function useAuth() {
 
   useEffect(() => {
     const supabase = getSupabase()
+    if (!supabase) {
+      // Supabase not configured -- skip auth, just mark as loaded
+      setState(s => ({ ...s, loading: false }))
+      return
+    }
+    const sb = supabase // non-null binding for closures
     let cancelled = false
 
     async function loadSession() {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
+        const { data: { session }, error } = await sb.auth.getSession()
         
         if (cancelled) return
         
@@ -61,7 +67,7 @@ export function useAuth() {
           }))
           
           // Fetch profile
-          const { data: profile } = await supabase
+          const { data: profile } = await sb
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
@@ -90,7 +96,7 @@ export function useAuth() {
     loadSession()
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = sb.auth.onAuthStateChange(
       async (event, session) => {
         if (cancelled) return
         
@@ -105,7 +111,7 @@ export function useAuth() {
           }))
           
           // Fetch profile
-          const { data: profile } = await supabase
+          const { data: profile } = await sb
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
@@ -134,12 +140,14 @@ export function useAuth() {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
   }, [])
 
   const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -152,6 +160,7 @@ export function useAuth() {
 
   const signInWithOAuth = useCallback(async (provider: 'google' | 'github') => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -163,6 +172,7 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     const supabase = getSupabase()
+    if (!supabase) throw new Error('Supabase not configured')
     const { error } = await supabase.auth.signOut()
     if (error) throw error
   }, [])
