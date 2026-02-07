@@ -333,23 +333,6 @@ function redactLedgerEntries(entries: LedgerEntry[]): LedgerEntry[] {
   }))
 }
 
-function redactMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
-  const sensitiveKeys = ['apiKey', 'secret', 'token', 'password', 'credential']
-  const redacted: Record<string, unknown> = {}
-  
-  for (const [key, value] of Object.entries(metadata)) {
-    if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
-      redacted[key] = '[REDACTED]'
-    } else if (typeof value === 'object' && value !== null) {
-      redacted[key] = redactMetadata(value as Record<string, unknown>)
-    } else {
-      redacted[key] = value
-    }
-  }
-  
-  return redacted
-}
-
 // ============================================
 // QUICK BUNDLE
 // ============================================

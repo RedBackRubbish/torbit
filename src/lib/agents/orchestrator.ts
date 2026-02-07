@@ -302,9 +302,11 @@ export class TorbitOrchestrator {
   async executeAgent(
     agentId: AgentId,
     prompt: string,
-    options?: { 
+    options?: {
       modelTier?: ModelTier
       maxSteps?: number
+      /** Maximum output tokens for the model response */
+      maxTokens?: number
       /** Optional full message history (preferred over raw prompt when available) */
       messages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
       /** Optional override for default agent system prompt */
@@ -363,6 +365,7 @@ export class TorbitOrchestrator {
         system: systemPrompt,
         ...requestBody,
         tools,
+        ...(options?.maxTokens ? { maxTokens: options.maxTokens } : {}),
         stopWhen: stepCountIs(options?.maxSteps ?? 10),
         onStepFinish: async (step) => {
           // Execute tool calls and track results

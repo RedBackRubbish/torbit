@@ -33,8 +33,8 @@ export default function ChatPanel() {
   const [isLoading, setIsLoading] = useState(false)
   const [currentTask, setCurrentTask] = useState<string | null>(null)
   const [showInspector, setShowInspector] = useState(false)
-  const [activities] = useState<ActivityEntry[]>([])
-  const [selectedAgent] = useState<AgentId>('architect')
+  const activities: ActivityEntry[] = []
+  const selectedAgent: AgentId = 'architect'
   const [showVerificationDrawer, setShowVerificationDrawer] = useState(false)
   
   // Supervisor slide panel state

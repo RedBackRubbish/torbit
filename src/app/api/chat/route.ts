@@ -41,6 +41,9 @@ import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 // Allow streaming responses up to 120 seconds for tool-heavy tasks
 export const maxDuration = 120
 
+// Maximum output tokens per request to prevent unbounded cost
+const MAX_OUTPUT_TOKENS = 16384
+
 // Combine God Prompt with agent-specific prompts
 const createAgentPrompt = (agentPrompt: string) => `${GOD_PROMPT}\n\n---\n\n## AGENT-SPECIFIC INSTRUCTIONS\n\n${agentPrompt}`
 
@@ -303,6 +306,15 @@ export async function POST(req: Request) {
     if (persistedInvariants) {
       systemPrompt = `${systemPrompt}\n\n${persistedInvariants}`
     }
+
+    // Wrap user messages with XML delimiters to defend against prompt injection
+    const lastUserContent = messages[messages.length - 1]?.content || ''
+    if (messages.length > 0 && messages[messages.length - 1]?.role === 'user') {
+      messages[messages.length - 1] = {
+        ...messages[messages.length - 1],
+        content: `<user_request>\n${lastUserContent}\n</user_request>`,
+      }
+    }
     // Create a TransformStream for custom streaming with tool execution
     const encoder = new TextEncoder()
     
@@ -347,6 +359,7 @@ export async function POST(req: Request) {
               messages[messages.length - 1]?.content || '',
               {
                 maxSteps: 15,
+                maxTokens: MAX_OUTPUT_TOKENS,
                 systemPrompt,
                 messages,
                 onTextDelta: (delta) => {

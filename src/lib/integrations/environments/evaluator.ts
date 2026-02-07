@@ -85,13 +85,14 @@ export function evaluateEnvironment(context: EnvironmentContext): EnvironmentEva
 /**
  * Check if an operation would be allowed in a specific environment
  */
-export function wouldBeAllowedIn(
+export async function wouldBeAllowedIn(
   env: EnvironmentName,
   context: EnvironmentContext
-): boolean {
-  // Temporarily evaluate against a different environment
-  const { getProfile } = require('./loader')
-  const profile = getProfile(env)
+): Promise<boolean> {
+  // Dynamically import to avoid circular dependency
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const loader = await import('./loader')
+  const profile = loader.getProfile(env)
   
   const violations = [
     ...evaluateIntegrationRules(profile, context),

@@ -18,7 +18,22 @@ const DeployRequestSchema = z.object({
   buildCommand: z.string().optional(),
   outputDirectory: z.string().optional(),
   region: z.string().optional(),
-  environmentVariables: z.record(z.string(), z.string()).optional(),
+  environmentVariables: z.record(z.string(), z.string())
+    .optional()
+    .transform(vars => {
+      if (!vars) return vars
+      // Filter out potentially dangerous env var keys
+      const BLOCKED_PREFIXES = ['AWS_', 'STRIPE_SECRET', 'SUPABASE_SERVICE', 'DATABASE_URL', 'REDIS_URL', 'GITHUB_TOKEN', 'VERCEL_TOKEN', 'NETLIFY_TOKEN']
+      const filtered: Record<string, string> = {}
+      for (const [key, value] of Object.entries(vars)) {
+        const upperKey = key.toUpperCase()
+        const isBlocked = BLOCKED_PREFIXES.some(prefix => upperKey.startsWith(prefix))
+        if (!isBlocked) {
+          filtered[key] = value
+        }
+      }
+      return filtered
+    }),
   files: z.array(ShipFileSchema).min(1),
 })
 

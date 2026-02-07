@@ -160,16 +160,16 @@ function BuilderPageContent() {
               </span>
             </div>
             
-            <div className="hidden md:block">
+            <div className="hidden sm:block">
               <ScreenshotButton />
             </div>
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <SoundToggle />
             </div>
-            <div className="hidden md:block">
+            <div className="block">
               <FuelGauge />
             </div>
-            <div className="hidden md:block">
+            <div className="block">
               <ShipMenu />
             </div>
             <PublishPanel />

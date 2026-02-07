@@ -233,10 +233,32 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   runCommand: async (args, _ctx) => {
     const { command, description } = args as { command: string; description?: string }
     const start = Date.now()
-    
+
+    // Validate command against dangerous patterns
+    const BLOCKED_COMMANDS = [
+      /\brm\s+-rf\s+\/(?!\w)/, // rm -rf /
+      /\bcurl\b.*\|\s*(?:sh|bash)/, // curl | sh
+      /\bwget\b.*\|\s*(?:sh|bash)/, // wget | sh
+      /\bchmod\s+777\b/, // chmod 777
+      /\b(?:nc|netcat)\b.*-[el]/, // netcat reverse shells
+      />\s*\/dev\/sd[a-z]/, // write to raw disk
+      /\bdd\s+if=.*of=\/dev/, // dd to device
+      /\bmkfs\b/, // format filesystem
+    ]
+
+    const blockedMatch = BLOCKED_COMMANDS.find(pattern => pattern.test(command))
+    if (blockedMatch) {
+      return {
+        success: false,
+        output: '',
+        error: 'Command blocked: potentially dangerous operation',
+        duration: Date.now() - start,
+      }
+    }
+
     // In sandbox mode, we simulate command execution
     // In real implementation, this would use a secure container/sandbox
-    
+
     return {
       success: true,
       output: `$ ${command}\n[Command executed successfully]${description ? `\n${description}` : ''}`,
@@ -969,10 +991,10 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   // ============================================
   
   inspectSchema: async (args, ctx) => {
-    const { table, includeIndexes, includeRelations } = args as { 
-      table?: string; 
-      includeIndexes: boolean; 
-      includeRelations: boolean 
+    const { table, includeIndexes, includeRelations: _includeRelations } = args as {
+      table?: string;
+      includeIndexes: boolean;
+      includeRelations: boolean
     }
     const start = Date.now()
     
@@ -1038,14 +1060,37 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   runSqlQuery: async (args, _ctx) => {
     const { query, limit } = args as { query: string; limit: number }
     const start = Date.now()
-    
-    // Validate read-only
-    const upperQuery = query.toUpperCase().trim()
+
+    // Validate read-only: strip comments and check for multi-statement attacks
+    const sanitized = query.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim()
+    const upperQuery = sanitized.toUpperCase()
+
+    // Block multiple statements (semicolon-separated)
+    if (sanitized.includes(';')) {
+      return {
+        success: false,
+        output: '',
+        error: 'Multiple SQL statements are not allowed',
+      }
+    }
+
+    // Only allow SELECT
     if (!upperQuery.startsWith('SELECT')) {
-      return { 
-        success: false, 
-        output: '', 
-        error: 'Only SELECT queries are allowed (read-only)' 
+      return {
+        success: false,
+        output: '',
+        error: 'Only SELECT queries are allowed (read-only)'
+      }
+    }
+
+    // Block write keywords even within SELECT subqueries
+    const WRITE_KEYWORDS = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'EXEC', 'EXECUTE', 'INTO']
+    const hasWriteKeyword = WRITE_KEYWORDS.some(kw => upperQuery.includes(kw))
+    if (hasWriteKeyword) {
+      return {
+        success: false,
+        output: '',
+        error: 'Write operations are not allowed in read-only queries',
       }
     }
     
@@ -1243,7 +1288,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   // ============================================
   
   connectMcpServer: async (args, ctx) => {
-    const { url, name, apiKey } = args as { url: string; name: string; apiKey?: string }
+    const { url, name, apiKey: _apiKey } = args as { url: string; name: string; apiKey?: string }
     const start = Date.now()
     
     try {
@@ -1656,7 +1701,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   // PHASE 2: PACKAGE VALIDATION (No More "Module Not Found")
   // ============================================
   
-  verifyPackage: async (args, ctx) => {
+  verifyPackage: async (args, _ctx) => {
     const { name, version } = args as { name: string; version?: string }
     const start = Date.now()
     
@@ -1714,7 +1759,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     }
   },
   
-  checkPeerDependencies: async (args, ctx) => {
+  checkPeerDependencies: async (args, _ctx) => {
     const { packages } = args as { packages: string[] }
     const start = Date.now()
     
@@ -2063,11 +2108,11 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
 
   // DOCS HUNTER (RAG on Demand)
   scrapeAndIndexDocs: async (args, ctx) => {
-    const { url, selector, maxDepth, indexName } = args as { 
-      url: string; 
-      selector?: string; 
-      maxDepth: number; 
-      indexName: string 
+    const { url, selector: _selector, maxDepth, indexName } = args as {
+      url: string;
+      selector?: string;
+      maxDepth: number;
+      indexName: string
     }
     const start = Date.now()
     
@@ -2621,7 +2666,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     }
   },
 
-  listTickets: async (args, ctx) => {
+  listTickets: async (args, _ctx) => {
     const { status, assignee, limit } = args as {
       status: 'backlog' | 'todo' | 'in-progress' | 'review' | 'done' | 'all'
       assignee?: string
@@ -2667,7 +2712,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   },
 
   // DEPENDENCY TIME-MACHINE (Conflict Prevention)
-  verifyDependencyGraph: async (args, ctx) => {
+  verifyDependencyGraph: async (args, _ctx) => {
     const { packages, checkPeers, simulateInstall, suggestFixes } = args as {
       packages: string[]
       checkPeers: boolean
@@ -2771,7 +2816,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     }
   },
 
-  resolveConflict: async (args, ctx) => {
+  resolveConflict: async (args, _ctx) => {
     const { packageName, strategy, targetVersion } = args as {
       packageName: string
       strategy: 'downgrade' | 'upgrade' | 'override' | 'skip'
@@ -2813,7 +2858,6 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
 // ============================================
 
 function generatePlaywrightTest(feature: string): string {
-  const featureName = feature.toLowerCase().replace(/\s+/g, '-')
   return `import { test, expect } from '@playwright/test';
 
 test.describe('${feature}', () => {
@@ -2847,7 +2891,6 @@ test.describe('${feature}', () => {
 }
 
 function generateVitestTest(feature: string): string {
-  const featureName = feature.toLowerCase().replace(/\s+/g, '-')
   return `import { describe, it, expect, vi } from 'vitest';
 
 describe('${feature}', () => {

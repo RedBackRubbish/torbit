@@ -78,7 +78,7 @@ export const adminOps = {
    */
   async grantBonus(userId: string, amount: number, reason: string) {
     const admin = getAdminClient()
-    
+
     // Record the bonus transaction
     const { error } = await admin.from('fuel_transactions').insert({
       user_id: userId,
@@ -89,20 +89,30 @@ export const adminOps = {
 
     if (error) throw error
 
-    // Update balance directly
-    const { data: profile } = await admin
-      .from('profiles')
-      .select('fuel_balance')
-      .eq('id', userId)
-      .single()
+    // Atomic increment to prevent race conditions on concurrent grants
+    const { error: rpcError } = await admin.rpc('add_fuel', {
+      p_user_id: userId,
+      p_amount: amount,
+      p_type: 'bonus',
+      p_description: `BONUS: ${reason}`,
+    })
 
-    if (profile) {
-      const { error: updateError } = await admin
+    // Fallback: direct update if RPC not available
+    if (rpcError) {
+      const { data: profile } = await admin
         .from('profiles')
-        .update({ fuel_balance: profile.fuel_balance + amount })
+        .select('fuel_balance')
         .eq('id', userId)
+        .single()
 
-      if (updateError) throw updateError
+      if (profile) {
+        const { error: updateError } = await admin
+          .from('profiles')
+          .update({ fuel_balance: profile.fuel_balance + amount })
+          .eq('id', userId)
+
+        if (updateError) throw updateError
+      }
     }
   },
 

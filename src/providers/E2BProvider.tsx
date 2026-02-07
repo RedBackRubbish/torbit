@@ -56,7 +56,7 @@ const E2BContext = createContext<E2BContextValue | null>(null)
 // Module-level flag to prevent duplicate boot logs in Strict Mode
 let hasLoggedBoot = false
 
-// Simple hash generator for verification (deterministic, not crypto)
+// Simple hash generator for verification (deterministic)
 function generateHash(input: string): string {
   let hash = 0
   for (let i = 0; i < input.length; i++) {
@@ -64,8 +64,7 @@ function generateHash(input: string): string {
     hash = ((hash << 5) - hash) + char
     hash = hash & hash
   }
-  const hexHash = Math.abs(hash).toString(16).padStart(8, '0')
-  return `${hexHash}${Math.random().toString(16).slice(2, 10)}`
+  return Math.abs(hash).toString(16).padStart(16, '0')
 }
 
 export function useE2BContext() {
@@ -122,7 +121,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
   })
   
   const { addLog, addCommand, setRunning, setExitCode } = useTerminalStore()
-  const { files, setPendingHealRequest, isGenerating } = useBuilderStore()
+  const { files, isGenerating } = useBuilderStore()
   
   // Track build state across renders
   const hasStartedBuildRef = useRef(false)
@@ -192,12 +191,23 @@ export function E2BProvider({ children }: E2BProviderProps) {
     
     return () => {
       mounted = false
-      // Cleanup sandbox on unmount
-      if (sandboxId) {
-        e2bApi('kill', { sandboxId }).catch(console.error)
-      }
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Separate cleanup effect that tracks sandboxId via ref
+  const sandboxIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    sandboxIdRef.current = sandboxId
+  }, [sandboxId])
+
+  useEffect(() => {
+    return () => {
+      // Use ref to capture current sandboxId at cleanup time
+      if (sandboxIdRef.current) {
+        e2bApi('kill', { sandboxId: sandboxIdRef.current }).catch(console.error)
+      }
+    }
+  }, [])
   
   // ==========================================================================
   // File Operations

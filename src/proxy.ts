@@ -53,12 +53,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Add COOP/COEP headers for /builder route (required for WebContainers)
-  if (pathname === '/builder' || pathname.startsWith('/builder/')) {
-    response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp')
-    response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
-  }
-
   return response
 }
 
