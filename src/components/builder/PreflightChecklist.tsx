@@ -13,11 +13,6 @@ import {
   ChevronRight,
   Wrench,
   Shield,
-  Image,
-  FileText,
-  Settings,
-  Smartphone,
-  Lock
 } from 'lucide-react'
 import type { ValidationResult, ValidationIssue, ValidationSeverity } from '@/lib/mobile/validation'
 
@@ -52,15 +47,6 @@ const SEVERITY_CONFIG: Record<ValidationSeverity, {
     bg: 'bg-blue-500/10',
     border: 'border-blue-500/20',
   },
-}
-
-const CATEGORY_ICONS: Record<string, typeof Image> = {
-  icon: Image,
-  splash: Smartphone,
-  config: Settings,
-  capabilities: Wrench,
-  content: FileText,
-  privacy: Lock,
 }
 
 export function PreflightChecklist({ 
@@ -201,7 +187,6 @@ function IssueGroup({ title, issues }: { title: string; issues: ValidationIssue[
 function IssueCard({ issue }: { issue: ValidationIssue }) {
   const config = SEVERITY_CONFIG[issue.severity]
   const Icon = config.icon
-  const CategoryIcon = CATEGORY_ICONS[issue.category] || FileText
   
   return (
     <div className={`p-3 rounded-lg border ${config.bg} ${config.border}`}>

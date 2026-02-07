@@ -1,6 +1,5 @@
 'use client'
 
-import { useCallback } from 'react'
 import { useE2BContext } from '@/providers/E2BProvider'
 
 // ============================================================================

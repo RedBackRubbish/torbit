@@ -107,7 +107,7 @@ const CodeEditor = dynamic(() => import('./CodeEditor'), {
  * Uses E2B for real Linux environment instead of WebContainer
  */
 export default function PreviewPanel() {
-  const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, projectType, chatInput, isGenerating } = useBuilderStore()
+  const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, chatInput, isGenerating } = useBuilderStore()
   const { isBooting, isReady, serverUrl, error } = useE2B()
   const isSupported = true // E2B is always supported (cloud-based)
   const terminalLines = useTerminalStore((s) => s.lines)
@@ -378,7 +378,6 @@ function PreviewContent({
         icon="error" 
         title="Verification failed" 
         subtitle="Check runtime log for details"
-        variant="error"
       />
     )
   }
@@ -389,7 +388,6 @@ function PreviewContent({
         icon="loading" 
         title="Verifying environment" 
         subtitle="Establishing secure runtime"
-        variant="blue"
       />
     )
   }
@@ -444,7 +442,6 @@ function PreviewContent({
         icon="loading" 
         title="Validating runtime" 
         subtitle={`${files.length} artifacts staged`}
-        variant="amber"
       />
     )
   }
@@ -456,7 +453,6 @@ function PreviewContent({
         icon="loading" 
         title="Preparing preview" 
         subtitle="Output will appear here"
-        variant="blue"
       />
     )
   }
@@ -598,13 +594,11 @@ function DesignModePreview({ files, isGenerating }: DesignModePreviewProps) {
 function StatusCard({ 
   icon, 
   title, 
-  subtitle, 
-  variant = 'default' 
+  subtitle,
 }: { 
   icon: 'loading' | 'error' | 'empty'
   title: string
   subtitle: string
-  variant?: 'default' | 'error' | 'blue' | 'amber'
 }) {
   return (
     <div className="text-center max-w-xs">

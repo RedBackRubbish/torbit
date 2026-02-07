@@ -42,6 +42,7 @@ export function IntegrationHistoryPanel({
 }: IntegrationHistoryPanelProps) {
   const [filter, setFilter] = useState<string | null>(null)
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set())
+  void onClose
   
   const integrations = useMemo(() => {
     if (!ledger) return []

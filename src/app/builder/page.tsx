@@ -16,7 +16,7 @@ import ShipMenu from '@/components/builder/ShipMenu'
 import { PublishPanel } from '@/components/builder/PublishPanel'
 import { ScreenshotButton } from '@/components/builder/ScreenshotButton'
 import { UserMenu } from '@/components/builder/UserMenu'
-import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
+import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 export default function BuilderPage() {
   return (

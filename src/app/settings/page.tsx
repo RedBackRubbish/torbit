@@ -22,7 +22,6 @@ import {
   Mail,
   ChevronRight,
   Check,
-  ExternalLink,
   Zap
 } from 'lucide-react'
 import { UserMenu } from '@/components/builder/UserMenu'

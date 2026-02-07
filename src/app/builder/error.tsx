@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect } from 'react'
-import { PageErrorFallback } from '@/components/ErrorBoundary'
 
 /**
  * Builder-specific Error Boundary

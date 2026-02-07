@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Camera } from 'lucide-react'
 import { useBuilderStore } from '@/store/builder'
 import { ScreenshotPanel } from './ScreenshotPanel'

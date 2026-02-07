@@ -48,6 +48,7 @@ export function FreezeBadge({
   onReview,
 }: FreezeBadgeProps) {
   const [isHovered, setIsHovered] = useState(false)
+  void projectId
   
   return (
     <div

@@ -40,9 +40,8 @@ export function ComplianceExportToggle({
     if (env === 'production' && !value) {
       onChange(true)
     }
-  }, [])
-  
-  const info = ENVIRONMENT_INFO[environment]
+  }, [onChange, value])
+
   const isProduction = environment === 'production'
   
   return (

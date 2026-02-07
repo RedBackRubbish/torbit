@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Zap, ArrowLeft, Loader2, Check, Shield } from 'lucide-react'
+import { Zap, ArrowLeft, Loader2, Shield } from 'lucide-react'
 
 // ============================================
 // FUEL PACKS

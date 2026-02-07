@@ -38,6 +38,7 @@ export function IntegrationHealthStatus({
   compact = false,
 }: IntegrationHealthStatusProps) {
   const [expanded, setExpanded] = useState(false)
+  void onDismiss
   
   // Invisible when healthy or no report
   if (!report || report.status === 'healthy') {

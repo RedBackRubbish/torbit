@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { ReactNode } from 'react'
-import { DEVICE_PRESETS, type DevicePreset } from '@/lib/mobile/types'
+import { DEVICE_PRESETS } from '@/lib/mobile/types'
 
 interface DeviceFrameProps {
   children: ReactNode
