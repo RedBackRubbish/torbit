@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Check, Loader2, ShieldCheck } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ActionLog } from './ActionLog'
+import { LiveFileTree } from './GenerationProgress'
 import type { Message, ToolCall } from './types'
 
 // ============================================================================
@@ -100,6 +101,16 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
   
   const createdCount = createdFiles.size
 
+  // Build file info for LiveFileTree from completed createFile calls
+  const liveFiles = useMemo(() => {
+    return fileToolCalls
+      .filter(tc => tc.status === 'complete' && tc.args)
+      .map(tc => ({
+        path: (tc.args as Record<string, string>).filePath || (tc.args as Record<string, string>).path || 'unknown',
+        content: (tc.args as Record<string, string>).content || '',
+      }))
+  }, [fileToolCalls])
+
   return (
     <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="py-3">
       {/* Subtle phase indicator - only while actively loading */}
@@ -116,6 +127,14 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
         <ActionLog
           toolCalls={toolCalls}
           isLoading={isLoading && isLast}
+        />
+      )}
+
+      {/* Live file tree with audit glow */}
+      {liveFiles.length > 0 && (
+        <LiveFileTree
+          files={liveFiles}
+          className="mt-3"
         />
       )}
       
