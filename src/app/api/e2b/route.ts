@@ -12,8 +12,47 @@ import { createClient } from '@/lib/supabase/server'
 
 // Store active sandboxes in memory (in production, use Redis)
 const activeSandboxes = new Map<string, Sandbox>()
+// Track sandbox owner (user_id) for access control
+const sandboxOwners = new Map<string, string>()
 // Track which sandboxes have Node.js installed
 const nodeInstalledSandboxes = new Set<string>()
+
+function getOwnedSandbox(sandboxId: unknown, userId: string): {
+  sandbox?: Sandbox
+  error?: NextResponse
+} {
+  if (!sandboxId || typeof sandboxId !== 'string') {
+    return {
+      error: NextResponse.json(
+        { error: 'sandboxId is required' },
+        { status: 400 }
+      ),
+    }
+  }
+
+  const sandbox = activeSandboxes.get(sandboxId)
+  const ownerId = sandboxOwners.get(sandboxId)
+
+  if (!sandbox || !ownerId) {
+    return {
+      error: NextResponse.json(
+        { error: 'Sandbox not found' },
+        { status: 404 }
+      ),
+    }
+  }
+
+  if (ownerId !== userId) {
+    return {
+      error: NextResponse.json(
+        { error: 'Forbidden: sandbox does not belong to current user' },
+        { status: 403 }
+      ),
+    }
+  }
+
+  return { sandbox }
+}
 
 export async function POST(request: NextRequest) {
   // ========================================================================
@@ -66,9 +105,10 @@ export async function POST(request: NextRequest) {
           console.error('❌ Failed to create sandbox:', err)
           throw err
         }
-        
+
         activeSandboxes.set(sandbox.sandboxId, sandbox)
-        
+        sandboxOwners.set(sandbox.sandboxId, user.id)
+
         return NextResponse.json({
           sandboxId: sandbox.sandboxId,
           success: true,
@@ -76,68 +116,52 @@ export async function POST(request: NextRequest) {
       }
 
       case 'writeFile': {
-        const sandbox = activeSandboxes.get(sandboxId)
-        if (!sandbox) {
-          return NextResponse.json(
-            { error: 'Sandbox not found' },
-            { status: 404 }
-          )
-        }
-        
+        const owned = getOwnedSandbox(sandboxId, user.id)
+        if (owned.error) return owned.error
+        const sandbox = owned.sandbox as Sandbox
+
         await sandbox.files.write(params.path, params.content)
         return NextResponse.json({ success: true })
       }
 
       case 'readFile': {
-        const sandbox = activeSandboxes.get(sandboxId)
-        if (!sandbox) {
-          return NextResponse.json(
-            { error: 'Sandbox not found' },
-            { status: 404 }
-          )
-        }
-        
+        const owned = getOwnedSandbox(sandboxId, user.id)
+        if (owned.error) return owned.error
+        const sandbox = owned.sandbox as Sandbox
+
         const content = await sandbox.files.read(params.path)
         return NextResponse.json({ content, success: true })
       }
 
       case 'makeDir': {
-        const sandbox = activeSandboxes.get(sandboxId)
-        if (!sandbox) {
-          return NextResponse.json(
-            { error: 'Sandbox not found' },
-            { status: 404 }
-          )
-        }
-        
+        const owned = getOwnedSandbox(sandboxId, user.id)
+        if (owned.error) return owned.error
+        const sandbox = owned.sandbox as Sandbox
+
         await sandbox.files.makeDir(params.path)
         return NextResponse.json({ success: true })
       }
 
       case 'runCommand': {
-        const sandbox = activeSandboxes.get(sandboxId)
-        if (!sandbox) {
-          return NextResponse.json(
-            { error: 'Sandbox not found' },
-            { status: 404 }
-          )
-        }
-        
+        const owned = getOwnedSandbox(sandboxId, user.id)
+        if (owned.error) return owned.error
+        const sandbox = owned.sandbox as Sandbox
+
         const command = params.command as string
-        
+
         // Install Node.js on-demand if running npm/node/npx commands
-        const needsNode = command.startsWith('npm ') || 
-                         command.startsWith('node ') || 
+        const needsNode = command.startsWith('npm ') ||
+                         command.startsWith('node ') ||
                          command.startsWith('npx ') ||
                          command.includes('vite')
-        
-        if (needsNode && !nodeInstalledSandboxes.has(sandboxId)) {
+
+        if (needsNode && !nodeInstalledSandboxes.has(sandbox.sandboxId)) {
           console.log('📦 Installing Node.js via prebuilt binary...')
           try {
             // Download Node.js prebuilt binary (more reliable than apt-get)
             const nodeVersion = '20.11.0'
             const downloadUrl = `https://nodejs.org/dist/v${nodeVersion}/node-v${nodeVersion}-linux-x64.tar.xz`
-            
+
             // Download and extract Node.js
             const downloadCmd = `cd /tmp && curl -fsSL ${downloadUrl} -o node.tar.xz && tar -xf node.tar.xz`
             console.log('⏳ Downloading Node.js...')
@@ -146,16 +170,16 @@ export async function POST(request: NextRequest) {
               console.error('Download failed:', dlResult.stderr)
               throw new Error(`Download failed: ${dlResult.stderr}`)
             }
-            
+
             // Move to /usr/local and add to PATH
             const installCmd = `cd /tmp/node-v${nodeVersion}-linux-x64 && cp -r bin/* /usr/local/bin/ && cp -r lib/* /usr/local/lib/ 2>/dev/null || true`
             console.log('⏳ Installing Node.js binaries...')
             await sandbox.commands.run(installCmd, { timeoutMs: 30000 })
-            
+
             // Verify installation
             const verifyResult = await sandbox.commands.run('/usr/local/bin/node --version', { timeoutMs: 5000 })
             if (verifyResult.exitCode === 0) {
-              nodeInstalledSandboxes.add(sandboxId)
+              nodeInstalledSandboxes.add(sandbox.sandboxId)
               console.log('✅ Node.js installed:', verifyResult.stdout.trim())
             } else {
               throw new Error('Node verification failed')
@@ -165,10 +189,10 @@ export async function POST(request: NextRequest) {
             // Don't throw - try to run the command anyway
           }
         }
-        
+
         // Use full path for npm/node commands if we installed Node
         let finalCommand = command
-        if (nodeInstalledSandboxes.has(sandboxId)) {
+        if (nodeInstalledSandboxes.has(sandbox.sandboxId)) {
           if (command.startsWith('npm ')) {
             finalCommand = `/usr/local/bin/npm ${command.slice(4)}`
           } else if (command.startsWith('npx ')) {
@@ -177,11 +201,11 @@ export async function POST(request: NextRequest) {
             finalCommand = `/usr/local/bin/node ${command.slice(5)}`
           }
         }
-        
+
         const result = await sandbox.commands.run(finalCommand, {
           timeoutMs: params.timeoutMs || 120000,
         })
-        
+
         return NextResponse.json({
           exitCode: result.exitCode,
           stdout: result.stdout,
@@ -191,24 +215,24 @@ export async function POST(request: NextRequest) {
       }
 
       case 'getHost': {
-        const sandbox = activeSandboxes.get(sandboxId)
-        if (!sandbox) {
-          return NextResponse.json(
-            { error: 'Sandbox not found' },
-            { status: 404 }
-          )
-        }
-        
+        const owned = getOwnedSandbox(sandboxId, user.id)
+        if (owned.error) return owned.error
+        const sandbox = owned.sandbox as Sandbox
+
         const host = sandbox.getHost(params.port || 5173)
         return NextResponse.json({ host: `https://${host}`, success: true })
       }
 
       case 'kill': {
-        const sandbox = activeSandboxes.get(sandboxId)
-        if (sandbox) {
-          await Sandbox.kill(sandboxId, { apiKey })
-          activeSandboxes.delete(sandboxId)
-        }
+        const owned = getOwnedSandbox(sandboxId, user.id)
+        if (owned.error) return owned.error
+        const sandbox = owned.sandbox as Sandbox
+
+        await Sandbox.kill(sandbox.sandboxId, { apiKey })
+        activeSandboxes.delete(sandbox.sandboxId)
+        sandboxOwners.delete(sandbox.sandboxId)
+        nodeInstalledSandboxes.delete(sandbox.sandboxId)
+
         return NextResponse.json({ success: true })
       }
 

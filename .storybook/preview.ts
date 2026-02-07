@@ -1,3 +1,4 @@
+import React from 'react';
 import type { Preview } from '@storybook/react';
 import '../src/app/globals.css';
 
@@ -19,11 +20,12 @@ const preview: Preview = {
     },
   },
   decorators: [
-    (Story) => (
-      <div className="font-sans" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-        <Story />
-      </div>
-    ),
+    (Story) =>
+      React.createElement(
+        'div',
+        { className: 'font-sans', style: { fontFamily: "'Space Grotesk', sans-serif" } },
+        React.createElement(Story),
+      ),
   ],
 };
 

@@ -1,8 +1,8 @@
 /**
  * TORBIT - Next.js Proxy (formerly Middleware)
- * 
+ *
  * Handles Supabase session refresh, route protection, and security headers.
- * 
+ *
  * RULES:
  * - Only refresh session when auth cookies are present
  * - Keep proxy lightweight (Edge runtime)
@@ -18,23 +18,38 @@ const protectedRoutes = ['/builder', '/dashboard']
 // Routes that should redirect to dashboard if already authenticated
 const authRoutes = ['/login', '/signup']
 
+function matchesRoute(pathname: string, routes: string[]): boolean {
+  return routes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  )
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  
+  const isProtectedRoute = matchesRoute(pathname, protectedRoutes)
+  const isAuthRoute = matchesRoute(pathname, authRoutes)
+
   // Check if user has any Supabase auth cookies
-  const hasAuthCookies = request.cookies.getAll().some(c => 
+  const hasAuthCookies = request.cookies.getAll().some((c) =>
     c.name.startsWith('sb-') && c.name.includes('-auth-token')
   )
 
+  // Enforce auth on protected routes
+  if (isProtectedRoute && !hasAuthCookies) {
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('next', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
   // Only refresh session if auth cookies exist (reduces auth traffic)
   let response = NextResponse.next({ request })
-  
+
   if (hasAuthCookies) {
     response = await updateSession(request)
   }
 
   // Redirect authenticated users away from auth pages
-  if (authRoutes.includes(pathname) && hasAuthCookies) {
+  if (isAuthRoute && hasAuthCookies) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

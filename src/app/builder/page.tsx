@@ -92,8 +92,9 @@ function BuilderPageContent() {
           <div className="flex items-center gap-4">
             <span className="text-[13px] font-medium text-[#fafafa]">App Preview</span>
             <div className="flex items-center bg-[#141414] rounded-lg p-0.5 border border-[#1f1f1f]">
-              <TabButton 
-                active={previewTab === 'preview'} 
+              <TabButton
+                label="Preview"
+                active={previewTab === 'preview'}
                 onClick={() => setPreviewTab('preview')}
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -101,8 +102,9 @@ function BuilderPageContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </TabButton>
-              <TabButton 
-                active={previewTab === 'code'} 
+              <TabButton
+                label="Code"
+                active={previewTab === 'code'}
                 onClick={() => setPreviewTab('code')}
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -201,18 +203,22 @@ function BuilderPageContent() {
   )
 }
 
-function TabButton({ 
-  children, 
-  active, 
-  onClick 
-}: { 
+function TabButton({
+  children,
+  label,
+  active,
+  onClick,
+}: {
   children: React.ReactNode
+  label: string
   active: boolean
   onClick: () => void
 }) {
   return (
     <button
       onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
       className={`flex items-center justify-center w-8 h-8 rounded-md transition-all ${
         active
           ? 'bg-[#1f1f1f] text-[#fafafa]'

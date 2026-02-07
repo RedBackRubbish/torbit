@@ -35,7 +35,13 @@ export function LoginForm() {
       } else {
         await signUp(email, password)
       }
-      router.push('/dashboard')
+      const nextPath = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('next')
+        : null
+      const safeRedirect = nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//')
+        ? nextPath
+        : '/dashboard'
+      router.push(safeRedirect)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
     } finally {

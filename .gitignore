@@ -50,3 +50,6 @@ next-env.d.ts
 
 # bundle analyzer
 /.analyze/
+
+# accidental Next build artifact folder with space
+/.next 2/

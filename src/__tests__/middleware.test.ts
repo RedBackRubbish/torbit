@@ -79,6 +79,32 @@ describe('Middleware', () => {
     })
   })
 
+  describe('Protected Route Redirects', () => {
+    it('should redirect unauthenticated users away from /builder', async () => {
+      const request = new NextRequest('http://localhost:3000/builder')
+
+      const { proxy } = await import('../proxy')
+      const response = await proxy(request)
+
+      expect(response.status).toBe(307)
+      expect(response.headers.get('location')).toContain('/login')
+      expect(response.headers.get('location')).toContain('next=%2Fbuilder')
+    })
+
+    it('should allow authenticated users to access /builder', async () => {
+      const request = new NextRequest('http://localhost:3000/builder', {
+        headers: {
+          cookie: 'sb-test-auth-token=test-value',
+        },
+      })
+
+      const { proxy } = await import('../proxy')
+      const response = await proxy(request)
+
+      expect(response.status).not.toBe(307)
+    })
+  })
+
   describe('Cookie Detection', () => {
     it('should detect sb-*-auth-token cookies', async () => {
       // This tests the cookie pattern matching logic

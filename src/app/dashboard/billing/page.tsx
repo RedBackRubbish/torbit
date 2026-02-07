@@ -245,7 +245,7 @@ function BillingContent() {
         <div className="flex items-center gap-2 mt-6 pt-6 border-t border-neutral-800">
           <Shield className="w-4 h-4 text-emerald-500" />
           <span className="text-sm text-neutral-400">
-            Auditor Guarantee: Rejected builds don't consume fuel
+            Auditor Guarantee: Rejected builds don&apos;t consume fuel
           </span>
         </div>
       </div>

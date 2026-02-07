@@ -236,7 +236,7 @@ export class Auditor {
   private resolveImport(fromPath: string, importPath: string): string {
     const fromDir = fromPath.split('/').slice(0, -1).join('/')
     const parts = importPath.split('/')
-    let result = fromDir.split('/')
+    const result = fromDir.split('/')
     
     for (const part of parts) {
       if (part === '.') continue

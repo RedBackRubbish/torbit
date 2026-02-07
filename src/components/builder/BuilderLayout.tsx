@@ -11,7 +11,11 @@ interface BuilderLayoutProps {
  */
 export default function BuilderLayout({ children }: BuilderLayoutProps) {
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#000000] flex">
+    <div
+      className="h-screen w-screen overflow-hidden bg-[#000000] flex"
+      role="main"
+      data-testid="builder-layout"
+    >
       {children}
     </div>
   )

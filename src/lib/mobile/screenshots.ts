@@ -93,7 +93,7 @@ export function detectRoutesFromFiles(files: { path: string; content: string }[]
     if (path.includes('[') && path.includes(']')) continue // Skip dynamic routes for now
     
     // Extract route name
-    let routePath = path
+    const routePath = path
       .replace(/.*app\//, '/')
       .replace(/\(.*?\)\//g, '') // Remove route groups
       .replace(/\.(tsx|jsx|ts|js)$/, '')

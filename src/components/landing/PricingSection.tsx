@@ -187,7 +187,7 @@ export default function PricingSection() {
             Fuel your builds
           </h2>
           <p className="text-neutral-400 text-lg max-w-2xl mx-auto mb-8">
-            Pay for what you use. If the Auditor rejects a build, you don't pay for it.
+            Pay for what you use. If the Auditor rejects a build, you don&apos;t pay for it.
           </p>
           
           {/* Auditor Guarantee Badge */}

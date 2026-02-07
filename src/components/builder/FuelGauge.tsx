@@ -73,7 +73,7 @@ export default function FuelGauge() {
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" data-testid="fuel-gauge">
         {/* Fuel Display */}
         <div
           className="relative"

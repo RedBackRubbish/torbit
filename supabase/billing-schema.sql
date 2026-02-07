@@ -380,3 +380,79 @@ Tier Configuration:
 - team: 25000 fuel/month (shared across 5 seats), all models, $99/mo
 - enterprise: Custom fuel, priority support, custom pricing
 ';
+
+-- ============================================
+-- RPC: Process Daily Refill (atomic check + refill)
+-- Prevents double-credit races on concurrent requests
+-- ============================================
+CREATE OR REPLACE FUNCTION public.process_daily_refill(
+  p_user_id UUID,
+  p_refill_amount INTEGER
+)
+RETURNS TABLE(refilled BOOLEAN, amount INTEGER, hours_until_refill INTEGER) AS $$
+DECLARE
+  user_tz TEXT;
+  user_last_refill TIMESTAMPTZ;
+  user_midnight TIMESTAMPTZ;
+  now_in_user_tz TIMESTAMPTZ;
+  next_midnight TIMESTAMPTZ;
+  new_balance INTEGER;
+BEGIN
+  -- Lock user fuel row so eligibility + credit is atomic
+  SELECT user_timezone, last_daily_refill_at
+  INTO user_tz, user_last_refill
+  FROM public.fuel_balances
+  WHERE user_id = p_user_id
+  FOR UPDATE;
+
+  IF user_tz IS NULL THEN
+    user_tz := 'UTC';
+  END IF;
+
+  IF user_tz = '' THEN
+    user_tz := 'UTC';
+  END IF;
+
+  -- Calculate user-local midnight boundary
+  now_in_user_tz := NOW() AT TIME ZONE user_tz;
+  user_midnight := DATE_TRUNC('day', now_in_user_tz) AT TIME ZONE user_tz;
+
+  -- Eligible if never refilled or last refill predates today's local midnight
+  IF user_last_refill IS NULL OR user_last_refill < user_midnight THEN
+    UPDATE public.fuel_balances
+    SET
+      current_fuel = current_fuel + p_refill_amount,
+      lifetime_fuel_purchased = lifetime_fuel_purchased + p_refill_amount,
+      last_daily_refill_at = NOW(),
+      updated_at = NOW()
+    WHERE user_id = p_user_id
+    RETURNING current_fuel INTO new_balance;
+
+    INSERT INTO public.billing_transactions (
+      user_id,
+      type,
+      amount,
+      balance_after,
+      description,
+      metadata
+    ) VALUES (
+      p_user_id,
+      'daily_refill',
+      p_refill_amount,
+      new_balance,
+      'Daily free tier fuel refill',
+      jsonb_build_object('tier', 'free')
+    );
+
+    RETURN QUERY SELECT TRUE, p_refill_amount, 0;
+    RETURN;
+  END IF;
+
+  next_midnight := user_midnight + INTERVAL '1 day';
+
+  RETURN QUERY SELECT
+    FALSE,
+    NULL::INTEGER,
+    GREATEST(0, (EXTRACT(EPOCH FROM (next_midnight - NOW()))::INTEGER / 3600));
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

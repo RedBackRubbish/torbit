@@ -162,7 +162,7 @@ export default function FuelPacksPage() {
       <div className="flex items-center justify-center gap-2 p-4 bg-neutral-900/50 border border-neutral-800 rounded-xl">
         <Shield className="w-4 h-4 text-emerald-500" />
         <span className="text-sm text-neutral-400">
-          Auditor Guarantee: Rejected builds don't consume fuel
+          Auditor Guarantee: Rejected builds don&apos;t consume fuel
         </span>
       </div>
 

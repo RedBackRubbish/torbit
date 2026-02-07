@@ -171,12 +171,36 @@ export async function checkAndProcessDailyRefill(userId: string): Promise<{
     return { refilled: false }
   }
 
-  // Check eligibility
-  const { data: eligibility, error } = await supabase.rpc('check_daily_refill', {
+  // Atomic refill path (preferred): check + refill in one DB function
+  const refillAmount = TIER_CONFIG.free.fuelAllowance
+  const { data: refillResult, error } = await supabase.rpc('process_daily_refill', {
+    p_user_id: userId,
+    p_refill_amount: refillAmount,
+  })
+
+  if (!error && refillResult?.[0]) {
+    const row = refillResult[0]
+
+    if (row.refilled) {
+      return { refilled: true, amount: row.amount ?? refillAmount }
+    }
+
+    return {
+      refilled: false,
+      hoursUntilRefill: row.hours_until_refill ?? undefined,
+    }
+  }
+
+  // Backward compatibility for environments that have not yet applied
+  // the process_daily_refill function.
+  const { data: eligibility, error: eligibilityError } = await supabase.rpc('check_daily_refill', {
     p_user_id: userId,
   })
 
-  if (error || !eligibility?.[0]) {
+  if (eligibilityError || !eligibility?.[0]) {
+    if (error) {
+      console.error('Daily refill check failed:', error)
+    }
     return { refilled: false }
   }
 
@@ -186,9 +210,6 @@ export async function checkAndProcessDailyRefill(userId: string): Promise<{
     return { refilled: false, hoursUntilRefill: hours_until_refill }
   }
 
-  // Process refill
-  const refillAmount = TIER_CONFIG.free.fuelAllowance
-  
   const { error: refillError } = await supabase.rpc('add_fuel', {
     p_user_id: userId,
     p_amount: refillAmount,

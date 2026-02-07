@@ -532,6 +532,18 @@ export interface Database {
         }
         Returns: Array<{ eligible: boolean; hours_until_refill: number }>
       }
+      // RPC function to process daily refill atomically
+      process_daily_refill: {
+        Args: {
+          p_user_id: string
+          p_refill_amount: number
+        }
+        Returns: Array<{
+          refilled: boolean
+          amount: number | null
+          hours_until_refill: number | null
+        }>
+      }
     }
     Enums: {
       tier: 'free' | 'pro' | 'enterprise'
