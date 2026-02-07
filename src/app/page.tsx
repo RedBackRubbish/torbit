@@ -1,11 +1,4 @@
-import dynamic from 'next/dynamic'
-import { PricingSection } from '@/components/landing'
-
-// Dynamic import PremiumHero to isolate auth-related crashes
-const PremiumHero = dynamic(
-  () => import('@/components/landing/PremiumHero'),
-  { ssr: false }
-)
+import { PremiumHero, PricingSection } from '@/components/landing'
 
 export default function Home() {
   return (
