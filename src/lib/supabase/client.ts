@@ -22,10 +22,15 @@ export function createClient() {
   if (!isSupabaseConfigured()) {
     return null
   }
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  try {
+    return createBrowserClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  } catch (e) {
+    console.warn('[Supabase] Failed to create client:', e)
+    return null
+  }
 }
 
 // Singleton for client-side usage
