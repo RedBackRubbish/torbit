@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback,
 import { useTerminalStore, type LogType } from '@/store/terminal'
 import { useBuilderStore } from '@/store/builder'
 import { NervousSystem } from '@/lib/nervous-system'
+import { getSupabase } from '@/lib/supabase/client'
 
 // ============================================================================
 // E2B Sandbox Context (Client-Side)
@@ -77,9 +78,18 @@ export function useE2BContext() {
 
 // API helper for E2B operations
 async function e2bApi(action: string, params: Record<string, unknown> = {}) {
+  const headers: HeadersInit = { 'Content-Type': 'application/json' }
+  const supabase = getSupabase()
+  if (supabase) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`
+    }
+  }
+
   const response = await fetch('/api/e2b', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ action, ...params }),
   })
   

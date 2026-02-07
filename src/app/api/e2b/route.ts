@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Sandbox } from 'e2b'
 import { strictRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/auth'
 
 // ============================================================================
 // E2B API Route - Server-side Sandbox Operations
@@ -68,10 +68,8 @@ export async function POST(request: NextRequest) {
   // ========================================================================
   // AUTHENTICATION - Verify user is logged in
   // ========================================================================
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  const user = await getAuthenticatedUser(request)
+  if (!user) {
     return NextResponse.json(
       { error: 'Unauthorized. Please log in.' },
       { status: 401 }

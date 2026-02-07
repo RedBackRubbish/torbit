@@ -1,7 +1,7 @@
 import { generateObject } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/auth'
 
 export const maxDuration = 60
 
@@ -70,10 +70,8 @@ export async function POST(req: Request) {
   // ========================================================================
   // AUTHENTICATION - Verify user is logged in
   // ========================================================================
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  const user = await getAuthenticatedUser(req)
+  if (!user) {
     return Response.json(
       { error: 'Unauthorized. Please log in.' },
       { status: 401 }

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { AGENT_TOOLS, type AgentId } from '@/lib/tools/definitions'
 import { createOrchestrator } from '@/lib/agents/orchestrator'
 import { chatRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/auth'
 
 // Request validation schema
 const ChatRequestSchema = z.object({
@@ -217,10 +217,8 @@ export async function POST(req: Request) {
   // ========================================================================
   // AUTHENTICATION - Verify user is logged in
   // ========================================================================
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  const user = await getAuthenticatedUser(req)
+  if (!user) {
     return new Response(
       JSON.stringify({ error: 'Unauthorized. Please log in to use the chat.' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }

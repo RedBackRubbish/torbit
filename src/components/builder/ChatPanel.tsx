@@ -16,6 +16,7 @@ import { useLedger, generateLedgerHash } from '@/store/ledger'
 import { useGenerationSound, useFileSound } from '@/lib/audio'
 import { SupervisorSlidePanel, type SupervisorReviewResult } from './chat/SupervisorSlidePanel'
 import { useGovernanceStore } from '@/store/governance'
+import { getSupabase } from '@/lib/supabase/client'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
@@ -407,10 +408,18 @@ export default function ChatPanel() {
     try {
       // Load persisted invariants to send as context
       const persistedInvariants = useGovernanceStore.getState().getInvariantsForPrompt()
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      const supabase = getSupabase()
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.access_token) {
+          headers.Authorization = `Bearer ${session.access_token}`
+        }
+      }
       
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           messages: [...messages, { role: 'user', content: messageContent }]
             .filter(m => m.content && m.content.trim().length > 0)
@@ -540,9 +549,18 @@ export default function ChatPanel() {
       // Call supervisor with the error context
       setTimeout(async () => {
         try {
+          const headers: HeadersInit = { 'Content-Type': 'application/json' }
+          const supabase = getSupabase()
+          if (supabase) {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (session?.access_token) {
+              headers.Authorization = `Bearer ${session.access_token}`
+            }
+          }
+
           const verifyResponse = await fetch('/api/verify', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
               originalPrompt: `FIX REQUIRED: ${pendingHealRequest.error}\n\nSuggestion: ${pendingHealRequest.suggestion}`,
               filesCreated: files.map(f => f.path),
@@ -694,9 +712,18 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     
     const runVerification = async () => {
       try {
+        const headers: HeadersInit = { 'Content-Type': 'application/json' }
+        const supabase = getSupabase()
+        if (supabase) {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.access_token) {
+            headers.Authorization = `Bearer ${session.access_token}`
+          }
+        }
+
         const verifyResponse = await fetch('/api/verify', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(pendingVerification),
         })
         
