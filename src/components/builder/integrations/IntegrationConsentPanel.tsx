@@ -14,9 +14,11 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Shield, Key, Globe, HardDrive, AlertTriangle } from "lucide-react";
+import { useRef } from "react";
 import type { IntegrationManifest } from "@/lib/integrations/types";
 import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 interface IntegrationConsentPanelProps {
   manifest: IntegrationManifest;
@@ -31,6 +33,7 @@ export function IntegrationConsentPanel({
   onConfirm,
   onCancel,
 }: IntegrationConsentPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const { name, category, permissions, secretPolicy, docs } = manifest;
 
   const hasSecrets = (permissions.secrets?.length ?? 0) > 0;
@@ -39,6 +42,7 @@ export function IntegrationConsentPanel({
 
   useEscapeToClose(isOpen, onCancel);
   useBodyScrollLock(isOpen);
+  useFocusTrap(panelRef, isOpen);
 
   return (
     <AnimatePresence>
@@ -60,6 +64,7 @@ export function IntegrationConsentPanel({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+            ref={panelRef}
             className="fixed right-0 top-0 h-full w-full max-w-md bg-neutral-900 border-l border-neutral-800 z-50 overflow-y-auto"
             role="dialog"
             aria-modal="true"

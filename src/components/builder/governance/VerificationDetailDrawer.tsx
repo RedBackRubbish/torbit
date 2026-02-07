@@ -2,8 +2,10 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatDistanceToNow } from 'date-fns'
+import { useRef } from 'react'
 import { useEscapeToClose } from '@/hooks/useEscapeToClose'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 // ============================================================================
 // VERIFICATION DETAIL DRAWER
@@ -67,8 +69,10 @@ export function VerificationDetailDrawer({
   onClose,
   data,
 }: VerificationDetailDrawerProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
   useEscapeToClose(isOpen, onClose)
   useBodyScrollLock(isOpen)
+  useFocusTrap(panelRef, isOpen)
 
   return (
     <AnimatePresence>
@@ -90,6 +94,7 @@ export function VerificationDetailDrawer({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+            ref={panelRef}
             className="fixed right-0 top-0 h-full w-[380px] bg-[#0a0a0a] border-l border-[#1a1a1a] z-50 flex flex-col"
             role="dialog"
             aria-modal="true"

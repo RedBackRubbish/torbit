@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSoundSettings } from '@/store/soundSettings'
 import { useSoundEffects } from '@/lib/audio'
 import { useEscapeToClose } from '@/hooks/useEscapeToClose'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 /**
  * SoundSettingsPanel - Controls for all audio settings
@@ -35,9 +36,11 @@ export default function SoundSettingsPanel({
 
   const { play, init } = useSoundEffects()
   const [isMounted, setIsMounted] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   useEscapeToClose(open, () => onOpenChange(false))
   useBodyScrollLock(open)
+  useFocusTrap(dialogRef, open)
 
   useEffect(() => {
     setIsMounted(true)
@@ -79,6 +82,7 @@ export default function SoundSettingsPanel({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            ref={dialogRef}
             className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
             onClick={handleInteraction}
             role="dialog"

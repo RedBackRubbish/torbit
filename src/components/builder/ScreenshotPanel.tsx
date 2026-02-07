@@ -6,19 +6,14 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import NextImage from 'next/image'
 import {
   Camera,
-  Image,
   Download,
   CheckCircle2,
   AlertTriangle,
   X,
-  Plus,
-  Trash2,
-  GripVertical,
   Smartphone,
-  Monitor,
-  ChevronRight,
   RefreshCw,
   Eye
 } from 'lucide-react'
@@ -26,6 +21,7 @@ import { useBuilderStore } from '@/store/builder'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 import { useEscapeToClose } from '@/hooks/useEscapeToClose'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import {
   SCREENSHOT_DEVICES,
   DEFAULT_SCREENSHOT_DEVICE,
@@ -36,7 +32,6 @@ import {
   detectRoutesFromFiles,
   type ScreenshotDevice,
   type Screenshot,
-  type ScreenshotSet,
   type DetectedRoute,
 } from '@/lib/mobile/screenshots'
 
@@ -56,6 +51,7 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
   const [screenshots, setScreenshots] = useState<Screenshot[]>([])
   const [currentCapture, setCurrentCapture] = useState<number>(0)
   const [error, setError] = useState<string | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   
   const { files, projectName } = useBuilderStore()
   
@@ -201,6 +197,7 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
 
   useEscapeToClose(isOpen, handleClose)
   useBodyScrollLock(isOpen)
+  useFocusTrap(dialogRef, isOpen)
   
   // Validation
   const validation = validateScreenshots(screenshots)
@@ -215,7 +212,10 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
       aria-modal="true"
       aria-labelledby="screenshot-dialog-title"
     >
-      <div className="w-full max-w-2xl mx-4 bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        className="w-full max-w-2xl mx-4 bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+      >
         
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-neutral-800 flex-shrink-0">
@@ -379,7 +379,7 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
               
               {/* Progress */}
               <div className="space-y-2">
-                {screenshots.map((screenshot, index) => (
+                {screenshots.map((screenshot) => (
                   <div 
                     key={screenshot.id}
                     className={`flex items-center gap-3 p-3 rounded-lg border ${
@@ -452,10 +452,13 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
                     key={screenshot.id}
                     className="relative aspect-[9/19.5] bg-neutral-900 rounded-lg overflow-hidden border border-neutral-800"
                   >
-                    <img 
-                      src={screenshot.dataUrl!} 
+                    <NextImage
+                      src={screenshot.dataUrl!}
                       alt={screenshot.name}
-                      className="w-full h-full object-cover"
+                      fill
+                      unoptimized
+                      className="object-cover"
+                      sizes="(max-width: 1024px) 33vw, 220px"
                     />
                     <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2">
                       <p className="text-white text-xs font-medium truncate">

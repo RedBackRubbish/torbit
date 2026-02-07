@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useFuelStore } from '@/store/fuel'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 import { useEscapeToClose } from '@/hooks/useEscapeToClose'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 /**
  * RefuelModal - The "Refueling Station"
@@ -81,6 +82,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
   const [showSuccess, setShowSuccess] = useState(false)
   const [purchasedAmount, setPurchasedAmount] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   const status = getFuelStatus()
   const isCritical = status === 'critical'
@@ -90,6 +92,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
 
   useEscapeToClose(open, closeModal)
   useBodyScrollLock(open)
+  useFocusTrap(modalRef, open)
 
   const handlePurchase = async (pack: FuelPack) => {
     setSelectedPack(pack.id)
@@ -160,6 +163,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          ref={modalRef}
           className="relative bg-neutral-900/95 border border-neutral-700/50 rounded-2xl p-6 max-w-3xl w-full mx-4 shadow-2xl"
           onClick={(e) => e.stopPropagation()}
           role="dialog"

@@ -412,8 +412,7 @@ export class TorbitOrchestrator {
         } else if (part.type === 'tool-call') {
           // Stream tool call immediately when it starts (with complete args)
           // AI SDK v6 uses 'input' not 'args' for tool parameters
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const tc = part as any
+          const tc = part as { toolCallId?: string; toolName: string; input?: unknown; args?: unknown }
           const toolCallId = tc.toolCallId ?? tc.toolName
           
           if (!seenToolCalls.has(toolCallId)) {
@@ -478,7 +477,6 @@ export class TorbitOrchestrator {
     type VisualResult = { passed: boolean; violations?: Array<{ element: string; issue: string }> }
     type E2EResult = { passed: boolean; healedCount?: number }
     type LogsResult = { logs: Array<{ message: string; level: string }> }
-    type SecurityResult = { passed: boolean; vulnerabilities?: Array<{ type: string; severity: string; message: string; file?: string }> }
     
     // Gate 1: Visual Inspection
     const screenshotResult = await executeTool('captureScreenshot', { route: '/' }, this.context)

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useFuelStore } from '@/store/fuel'
 import RefuelModal from './RefuelModal'
 import { useEscapeToClose } from '@/hooks/useEscapeToClose'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 /**
  * TierBadge - Shows current subscription tier
@@ -48,9 +49,11 @@ export default function FuelGauge() {
   const [showDetails, setShowDetails] = useState(false)
   const [showRefuelModal, setShowRefuelModal] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const authorizeDialogRef = useRef<HTMLDivElement>(null)
 
   useEscapeToClose(showAuthorizeBurn, cancelBurn)
   useBodyScrollLock(showAuthorizeBurn)
+  useFocusTrap(authorizeDialogRef, showAuthorizeBurn)
 
   // Prevent hydration mismatch - only render dynamic values after mount
   useEffect(() => {
@@ -262,6 +265,7 @@ export default function FuelGauge() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
+              ref={authorizeDialogRef}
               className="bg-[#050505] border border-[#1a1a1a] rounded-2xl p-6 max-w-md mx-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
               role="dialog"

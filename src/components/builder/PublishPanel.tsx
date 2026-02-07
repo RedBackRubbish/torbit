@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { 
   Rocket, 
   Apple, 
@@ -29,6 +29,7 @@ import type { ValidationResult } from '@/lib/mobile/validation'
 import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 import { useEscapeToClose } from '@/hooks/useEscapeToClose'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { PreflightChecklist } from './PreflightChecklist'
 import { GovernanceResolved } from './governance'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
@@ -51,6 +52,7 @@ export function PublishPanel() {
   const [result, setResult] = useState<ExportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isFirstExport, setIsFirstExport] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
   
   const { files, projectType, capabilities, projectName } = useBuilderStore()
   
@@ -175,6 +177,7 @@ export function PublishPanel() {
 
   useEscapeToClose(isOpen, closePanel)
   useBodyScrollLock(isOpen)
+  useFocusTrap(dialogRef, isOpen)
 
   if (!isMobile) return null
   
@@ -206,7 +209,10 @@ export function PublishPanel() {
           aria-modal="true"
           aria-labelledby="publish-dialog-title"
         >
-          <div className="w-full max-w-lg mx-4 bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden">
+          <div
+            ref={dialogRef}
+            className="w-full max-w-lg mx-4 bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
+          >
             
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-neutral-800">

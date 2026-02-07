@@ -2,8 +2,10 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldCheck, AlertCircle, CheckCircle2, X, Loader2, Zap } from 'lucide-react'
+import { useRef } from 'react'
 import { useEscapeToClose } from '@/hooks/useEscapeToClose'
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 // ============================================================================
 // SUPERVISOR SLIDE PANEL
@@ -47,6 +49,7 @@ export function SupervisorSlidePanel({
   result,
   onDismiss,
 }: SupervisorSlidePanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
   const criticalCount = result?.fixes.filter(f => f.severity === 'critical').length || 0
   const recommendedCount = result?.fixes.filter(f => f.severity === 'recommended').length || 0
   const completedCount = result?.fixes.filter(f => f.status === 'complete').length || 0
@@ -55,6 +58,7 @@ export function SupervisorSlidePanel({
 
   useEscapeToClose(isOpen, onDismiss)
   useBodyScrollLock(isOpen)
+  useFocusTrap(panelRef, isOpen)
 
   return (
     <AnimatePresence>
@@ -76,6 +80,7 @@ export function SupervisorSlidePanel({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            ref={panelRef}
             className="fixed right-0 top-0 h-full w-[360px] bg-[#0d0d0d] border-l border-[#1a1a1a] z-50 flex flex-col shadow-2xl"
             role="dialog"
             aria-modal="true"

@@ -133,7 +133,7 @@ export function CapabilitiesPanel() {
               key={cap.key}
               onClick={() => setCapability(cap.key, !isEnabled)}
               aria-label={`${cap.name}: ${cap.description}. ${isEnabled ? 'Enabled' : 'Disabled'}. Click to ${isEnabled ? 'disable' : 'enable'}`}
-              aria-pressed={isEnabled}
+              aria-checked={isEnabled}
               role="switch"
               className={`
                 flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all
