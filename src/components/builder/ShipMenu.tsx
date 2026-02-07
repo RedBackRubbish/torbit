@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
-import { INTEGRATION_CAPABILITIES, getEstimatedCostTier } from '@/lib/integrations/capabilities'
+import { getEstimatedCostTier } from '@/lib/integrations/capabilities'
 import { recordMetric } from '@/lib/metrics/success'
 
 /**
@@ -32,7 +32,7 @@ export default function ShipMenu() {
   
   // Get selected capabilities from session storage
   const selectedCapabilities = useMemo(() => {
-    if (typeof window === 'undefined') return []
+    if (!isOpen || typeof window === 'undefined') return []
     try {
       const stored = sessionStorage.getItem('torbit_capabilities')
       return stored ? JSON.parse(stored) as string[] : []

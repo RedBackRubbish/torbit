@@ -176,30 +176,31 @@ function AuditOrb({ status, issueCount }: { status?: AuditStatus; issueCount?: n
 function FileTreeItem({ node, depth }: FileTreeItemProps) {
   const [expanded, setExpanded] = useState(true)
   const { activeFileId, setActiveFile, setFileAuditStatus, files } = useBuilderStore()
+  const file = node.file
   const isSelected = node.file?.id === activeFileId
   const auditStatus = node.file?.auditStatus
   const issueCount = node.file?.auditIssues?.length || 0
 
   // Trigger audit when file is new
   useEffect(() => {
-    if (node.file && node.file.auditStatus === 'new') {
+    if (file && file.auditStatus === 'new') {
       // Start auditing
-      setFileAuditStatus(node.file.id, 'auditing')
+      setFileAuditStatus(file.id, 'auditing')
       
       // Convert files to FileContext format
       const fileContexts = files.map(f => ({ path: f.path, content: f.content }))
-      const currentFile = { path: node.file.path, content: node.file.content }
+      const currentFile = { path: file.path, content: file.content }
       
       // Queue the audit
-      Auditor.getInstance().queueAudit(node.file.id, currentFile, fileContexts)
+      Auditor.getInstance().queueAudit(file.id, currentFile, fileContexts)
     }
-  }, [node.file?.auditStatus, node.file?.id, node.file?.path, node.file?.content])
+  }, [file, files, setFileAuditStatus])
 
   // Subscribe to audit results
   useEffect(() => {
-    if (!node.file) return
+    if (!file) return
 
-    const fileId = node.file.id
+    const fileId = file.id
     const unsubscribe = Auditor.getInstance().subscribe((id, result) => {
       if (id === fileId) {
         setFileAuditStatus(fileId, result.status, result.issues)
@@ -207,7 +208,7 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
     })
 
     return unsubscribe
-  }, [node.file?.id])
+  }, [file, setFileAuditStatus])
 
   const handleClick = () => {
     if (node.type === 'folder') {

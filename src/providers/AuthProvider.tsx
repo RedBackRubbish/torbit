@@ -6,7 +6,7 @@
  * Provides auth context throughout the app.
  */
 
-import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import type { User, Session, SupabaseClient } from '@supabase/supabase-js'
 import type { Profile, Database } from '@/lib/supabase/types'
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabaseRef = useRef<SupabaseClient<Database> | null>(null)
 
   // Get or create supabase client (returns null if not configured)
-  const getClient = () => {
+  const getClient = useCallback(() => {
     if (!isSupabaseConfigured()) return null
     if (!supabaseRef.current) {
       try {
@@ -49,9 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     return supabaseRef.current
-  }
+  }, [])
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string) => {
     try {
       const supabase = getClient()
       if (!supabase) return null
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('[AuthProvider] fetchProfile error:', err)
       return null
     }
-  }
+  }, [getClient])
 
   const refreshProfile = async () => {
     if (user) {
@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false
       subscription.unsubscribe()
     }
-  }, [mounted])
+  }, [mounted, fetchProfile, getClient])
 
   const signIn = async (email: string, password: string) => {
     const supabase = getClient()

@@ -71,19 +71,24 @@ function PhaseLabel({ phase, filesComplete, totalFiles }: {
 }
 
 export function StreamingMessage({ message, isLast, isLoading }: StreamingMessageProps) {
-  const toolCalls = message.toolCalls || []
+  const toolCalls = useMemo(() => message.toolCalls ?? [], [message.toolCalls])
   
   // Track files that are in "auditing" phase
   const [createdFiles, setCreatedFiles] = useState<Set<string>>(new Set())
   const prevCompletedRef = useRef<Set<string>>(new Set())
   
   const phase = getPhaseFromTools(toolCalls, isLoading && isLast)
-  const fileToolCalls = toolCalls.filter(tc => tc.name === 'createFile')
-  const completedFileIds = new Set(fileToolCalls.filter(tc => tc.status === 'complete').map(tc => tc.id))
+  const fileToolCalls = useMemo(
+    () => toolCalls.filter(tc => tc.name === 'createFile'),
+    [toolCalls]
+  )
   const displayContent = useMemo(() => stripCodeBlocks(message.content || ''), [message.content])
   
   // When a file completes, stagger audit before marking as created
   useEffect(() => {
+    const completedFileIds = new Set(
+      fileToolCalls.filter(tc => tc.status === 'complete').map(tc => tc.id)
+    )
     const newlyCompleted = [...completedFileIds].filter(id => !prevCompletedRef.current.has(id))
     
     if (newlyCompleted.length > 0) {
@@ -96,7 +101,7 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
       
       prevCompletedRef.current = new Set(completedFileIds)
     }
-  }, [completedFileIds])
+  }, [fileToolCalls])
   
   const createdCount = createdFiles.size
   const proofLines: ProofLine[] = message.proofLines || []

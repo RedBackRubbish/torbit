@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Brain, 
@@ -11,11 +11,9 @@ import {
   Sparkles,
   FileCode2,
   Shield,
-  AlertTriangle,
-  XCircle
 } from 'lucide-react'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
-import { Auditor, type AuditStatus, type AuditResult } from '@/lib/auditor'
+import { Auditor, type AuditStatus } from '@/lib/auditor'
 
 // ============================================================================
 // GENERATION PROGRESS - Real-time phase indicator
@@ -446,27 +444,30 @@ export function LiveFileTree({ files, className }: LiveFileTreeProps) {
   // Queue files for audit when they arrive
   useEffect(() => {
     const auditor = Auditor.getInstance()
-    
-    for (const file of files) {
-      // Only queue if we haven't seen this file or it's still new
-      const currentStatus = auditStatuses.get(file.path)
-      if (!currentStatus || currentStatus === 'new') {
-        // Mark as auditing immediately
-        setAuditStatuses(prev => {
-          const next = new Map(prev)
+    const fileContexts = files.map(f => ({ path: f.path, content: f.content }))
+    const filesToAudit: LiveFileInfo[] = []
+
+    setAuditStatuses(prev => {
+      const next = new Map(prev)
+
+      for (const file of files) {
+        const currentStatus = next.get(file.path)
+        if (!currentStatus || currentStatus === 'new') {
           next.set(file.path, 'auditing')
-          return next
-        })
-        
-        // Queue the audit with minimal delay for responsiveness
-        const fileContexts = files.map(f => ({ path: f.path, content: f.content }))
-        auditor.queueAudit(
-          file.path, // Use path as ID for simplicity
-          { path: file.path, content: file.content },
-          fileContexts,
-          100 // Short delay for immediate feedback
-        )
+          filesToAudit.push(file)
+        }
       }
+
+      return next
+    })
+
+    for (const file of filesToAudit) {
+      auditor.queueAudit(
+        file.path,
+        { path: file.path, content: file.content },
+        fileContexts,
+        100
+      )
     }
   }, [files])
   

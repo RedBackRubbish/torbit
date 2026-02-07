@@ -4,17 +4,17 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
 import { ExecutorService } from '@/services/executor'
-import { NervousSystem, type PainSignal } from '@/lib/nervous-system'
+import type { PainSignal } from '@/lib/nervous-system'
 import { MessageBubble } from './chat/MessageBubble'
 import { ChatInput } from './chat/ChatInput'
 import { InspectorView, type ActivityEntry } from './governance'
 import { TorbitLogo } from '@/components/ui/TorbitLogo'
 import { useE2BContext } from '@/providers/E2BProvider'
-import { VerificationDetailDrawer, type VerificationData } from './governance/VerificationDetailDrawer'
+import { VerificationDetailDrawer } from './governance/VerificationDetailDrawer'
 import { ActivityLedgerTimeline } from './governance/ActivityLedgerTimeline'
 import { useLedger, generateLedgerHash } from '@/store/ledger'
-import { useGenerationSound, useFileSound, useNotificationSound } from '@/lib/audio'
-import { SupervisorSlidePanel, type SupervisorReviewResult, type SupervisorFix } from './chat/SupervisorSlidePanel'
+import { useGenerationSound, useFileSound } from '@/lib/audio'
+import { SupervisorSlidePanel, type SupervisorReviewResult } from './chat/SupervisorSlidePanel'
 import { useGovernanceStore } from '@/store/governance'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
@@ -32,7 +32,7 @@ export default function ChatPanel() {
   const [isLoading, setIsLoading] = useState(false)
   const [currentTask, setCurrentTask] = useState<string | null>(null)
   const [showInspector, setShowInspector] = useState(false)
-  const [activities, setActivities] = useState<ActivityEntry[]>([])
+  const [activities] = useState<ActivityEntry[]>([])
   const [selectedAgent] = useState<AgentId>('architect')
   const [showVerificationDrawer, setShowVerificationDrawer] = useState(false)
   
@@ -49,8 +49,6 @@ export default function ChatPanel() {
     fileCount: number
   } | null>(null)
   
-  // Track auto-fix to prevent loops
-  const hasAutoFixedRef = useRef(false)
   const [isMounted, setIsMounted] = useState(false)
   
   const { isBooting, isReady, serverUrl, error, verification } = useE2BContext()
@@ -58,7 +56,6 @@ export default function ChatPanel() {
   // Sound effects
   const generationSound = useGenerationSound()
   const fileSound = useFileSound()
-  const notificationSound = useNotificationSound()
   
   // Prevent hydration mismatch by only showing client-dependent UI after mount
   useEffect(() => {
@@ -346,7 +343,7 @@ export default function ChatPanel() {
 
     setCurrentTask(null)
     return { content: fullContent, toolCalls: Array.from(toolCalls.values()) }
-  }, [setAgentStatus, addFile])
+  }, [setAgentStatus, addFile, fileSound])
 
   // Generate initial acknowledgment - AI will stream the full response with plan
   const generateGreeting = useCallback((prompt: string): string => {
@@ -404,6 +401,8 @@ export default function ChatPanel() {
       agentId,
       toolCalls: [],
     }])
+
+    let requestFailed = false
 
     try {
       // Load persisted invariants to send as context
@@ -472,6 +471,7 @@ export default function ChatPanel() {
         })
       }
     } catch (error) {
+      requestFailed = true
       setAgentStatus(agentId, 'error', 'Failed')
       // 🔊 Error sound
       generationSound.onError()
@@ -485,9 +485,9 @@ export default function ChatPanel() {
       setIsGenerating(false)
       setCurrentTask(null)
       // 🔊 Complete sound (if not error)
-      if (!error) generationSound.onComplete()
+      if (!requestFailed) generationSound.onComplete()
     }
-  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectType, capabilities, files, generationSound])
+  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectType, capabilities, files, generationSound, generateGreeting, prompt])
 
   // Auto-submit initial prompt
   useEffect(() => {
@@ -644,7 +644,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     setMessages(prev => [...prev, {
       id: `supervisor-request-${Date.now()}`,
       role: 'user',
-      content: `**Supervisor Request:**\n\n${criticalFixes.map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`).join('\n')}${recommendedFixes.length > 0 ? `\n\n**Also recommended:**\n${recommendedFixes.map((f, i) => `• ${f.feature}: ${f.description}`).join('\n')}` : ''}`,
+      content: `**Supervisor Request:**\n\n${criticalFixes.map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`).join('\n')}${recommendedFixes.length > 0 ? `\n\n**Also recommended:**\n${recommendedFixes.map((f) => `• ${f.feature}: ${f.description}`).join('\n')}` : ''}`,
       agentId: selectedAgent,
     }])
     
@@ -1077,7 +1077,6 @@ interface ExecutionStatusRailProps {
   isBuilding: boolean
   currentTask: string | null
   hasFiles: boolean
-  isVerified?: boolean
   onOpenVerification?: () => void
 }
 
@@ -1089,7 +1088,6 @@ function ExecutionStatusRail({
   isBuilding,
   currentTask,
   hasFiles,
-  isVerified = false,
   onOpenVerification,
 }: ExecutionStatusRailProps) {
   // Derive status steps with error awareness
