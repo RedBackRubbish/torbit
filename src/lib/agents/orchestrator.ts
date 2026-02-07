@@ -18,6 +18,7 @@ import { TOOL_DEFINITIONS, AGENT_TOOLS, type ToolName, type AgentId } from '../t
 import { executeTool, createExecutionContext, type ToolExecutionContext, type ToolResult } from '../tools/executor'
 import { KimiRouter, type RoutingDecision, isKimiConfigured } from './router'
 import { checkCircuitBreaker, calculateFuelCost, useFuelStore, type ModelTier as FuelModelTier } from '@/store/fuel'
+import { parseGovernanceOutput, formatGovernanceForAgent, type GovernanceObject } from './governance'
 
 // Agent prompts
 import { AUDITOR_SYSTEM_PROMPT } from './prompts/auditor'
@@ -609,6 +610,7 @@ export class TorbitOrchestrator {
     originalRequest: string
   ): Promise<{
     verdict: 'APPROVED' | 'AMENDMENTS' | 'REJECTED'
+    governance: GovernanceObject | null
     issues?: string[]
     amendments?: string[]
   }> {
@@ -641,34 +643,50 @@ Evaluate the proposed structure. Answer these questions:
    - Are component boundaries logical?
    - Is state scoped appropriately?
 
-OUTPUT your verdict in the exact format from your system prompt.
+OUTPUT your verdict as a JSON GovernanceObject per your system prompt.
+Include protected_invariants for anything in the existing codebase that
+MUST NOT be broken by this build.
 `
 
     const result = await this.executeAgent('strategist', checkPrompt, { modelTier: 'sonnet' })
     
-    // Parse Strategist's response for verdict
-    const output = result.output.toUpperCase()
+    // Parse structured GovernanceObject from Strategist output
+    const parseResult = parseGovernanceOutput(result.output)
+    const gov = parseResult.governance
     
-    if (output.includes('REJECTED')) {
-      const reasonMatch = result.output.match(/REASON:\s*(.+?)(?:\n|$)/i)
+    if (!gov) {
+      // Parser failed -- treat as approved with a warning
+      console.warn('[Orchestrator] Failed to parse Strategist governance output:', parseResult.parseError)
+      return { verdict: 'APPROVED', governance: null }
+    }
+    
+    if (gov.verdict === 'rejected') {
       return {
         verdict: 'REJECTED',
-        issues: reasonMatch ? [reasonMatch[1].trim()] : ['Structure rejected by Strategist'],
+        governance: gov,
+        issues: [gov.rejection_reason || 'Structure rejected by Strategist'],
       }
     }
     
-    if (output.includes('AMENDMENTS')) {
-      const amendmentsMatch = result.output.match(/AMENDMENTS?:\s*([\s\S]+?)(?:RATIONALE|$)/i)
-      const amendments = amendmentsMatch 
-        ? amendmentsMatch[1].split('\n').filter(l => l.trim().match(/^\d+\./)).map(l => l.trim())
-        : []
+    if (gov.verdict === 'approved_with_amendments') {
       return {
         verdict: 'AMENDMENTS',
-        amendments: amendments.length > 0 ? amendments : ['Review suggested amendments'],
+        governance: gov,
+        amendments: gov.amendments && gov.amendments.length > 0 
+          ? gov.amendments 
+          : ['Review suggested amendments'],
       }
     }
     
-    return { verdict: 'APPROVED' }
+    if (gov.verdict === 'escalate') {
+      return {
+        verdict: 'REJECTED',
+        governance: gov,
+        issues: [gov.escalation_reason || 'Requires human approval'],
+      }
+    }
+    
+    return { verdict: 'APPROVED', governance: gov }
   }
   
   /**
@@ -681,6 +699,7 @@ OUTPUT your verdict in the exact format from your system prompt.
     audit: AuditResult
     routing?: RoutingDecision
     preflight?: PreflightResult
+    governance?: GovernanceObject
   }> {
     // 0. Pre-flight check: validate request before spending fuel
     const preflightResult = this.preflight(userPrompt)
@@ -729,9 +748,14 @@ OUTPUT your verdict in the exact format from your system prompt.
     `, { modelTier: planModelTier })
     
     // 3.5 ARCHITECT INTEGRITY CHECK - Strategist validates structure before Backend builds
-    // This catches structural issues early, with a different brain (GPT-5.2)
-    if (plan.success) {
+    // GATED: Only runs for moderate+ complexity to avoid latency on trivial tasks
+    const routedComplexity = routing?.complexity ?? preflightResult.estimatedComplexity
+    const needsGovernance = ['moderate', 'complex', 'architectural'].includes(routedComplexity)
+    let governance: GovernanceObject | null = null
+    
+    if (plan.success && needsGovernance) {
       const integrityCheck = await this.runArchitectIntegrityCheck(plan.output, userPrompt)
+      governance = integrityCheck.governance
       
       if (integrityCheck.verdict === 'REJECTED') {
         // Structure rejected - return early with clear feedback
@@ -753,6 +777,7 @@ OUTPUT your verdict in the exact format from your system prompt.
           },
           routing: routing ?? undefined,
           preflight: preflightResult,
+          governance: governance ?? undefined,
         }
       }
       
@@ -813,18 +838,24 @@ OUTPUT your verdict in the exact format from your system prompt.
     const audit = await this.runAuditPipeline()
     
     // 6. If audit failed and we have fixes, apply them
+    //    Pass governance contract so Auditor can enforce invariants
     if (!audit.passed && this.config.enableAudit) {
+      const governanceContext = governance 
+        ? `\n\n${formatGovernanceForAgent(governance)}` 
+        : ''
+      
       await this.executeAgent('auditor', `
         The following issues were detected:
         Visual: ${audit.gates.visual.issues.join(', ') || 'None'}
         Functional: ${audit.gates.functional.issues.join(', ') || 'None'}
         Hygiene: ${audit.gates.hygiene.issues.join(', ') || 'None'}
         
-        Fix these issues.
+        Review these issues. For each protected invariant, check if it was
+        violated and attempt repair before failing.${governanceContext}
       `)
     }
     
-    return { plan, execution, audit, routing: routing ?? undefined, preflight: preflightResult }
+    return { plan, execution, audit, routing: routing ?? undefined, preflight: preflightResult, governance: governance ?? undefined }
   }
   
   /**
