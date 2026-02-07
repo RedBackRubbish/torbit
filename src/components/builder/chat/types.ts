@@ -65,7 +65,7 @@ export interface Message {
 
 // Stream chunk types from API
 export interface StreamChunk {
-  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry' | 'proof'
+  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry' | 'proof' | 'governance'
   content?: string
   toolCall?: {
     id: string
@@ -90,6 +90,11 @@ export interface StreamChunk {
     retryAfterMs: number
   }
   proof?: ProofLine[]
+  governance?: {
+    verdict: string
+    intent: string
+    invariants: Array<{ description: string; scope: string[]; severity: 'hard' | 'soft' }>
+  }
 }
 
 export type { AgentId }

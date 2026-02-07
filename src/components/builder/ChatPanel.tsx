@@ -15,6 +15,7 @@ import { ActivityLedgerTimeline } from './governance/ActivityLedgerTimeline'
 import { useLedger, generateLedgerHash } from '@/store/ledger'
 import { useGenerationSound, useFileSound, useNotificationSound } from '@/lib/audio'
 import { SupervisorSlidePanel, type SupervisorReviewResult, type SupervisorFix } from './chat/SupervisorSlidePanel'
+import { useGovernanceStore } from '@/store/governance'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
@@ -245,6 +246,25 @@ export default function ChatPanel() {
               }
               break
 
+            case 'governance':
+              // Persist governance from server into the store
+              if (chunk.governance) {
+                useGovernanceStore.getState().addGovernance({
+                  verdict: chunk.governance.verdict as 'approved' | 'approved_with_amendments' | 'rejected' | 'escalate',
+                  confidence: 'medium',
+                  scope: {
+                    intent: chunk.governance.intent,
+                    affected_areas: [],
+                  },
+                  protected_invariants: chunk.governance.invariants.map(inv => ({
+                    description: inv.description,
+                    scope: inv.scope,
+                    severity: inv.severity,
+                  })),
+                })
+              }
+              break
+
             case 'proof':
               if (chunk.proof) {
                 setMessages(prev => prev.map(m => 
@@ -280,7 +300,8 @@ export default function ChatPanel() {
     }
 
     // Compute proof lines from tool results (client-side derivation)
-    // Later, server-sent governance proofs via 'proof' chunks will override these
+    // Server-sent governance proofs via 'proof' chunks will override these.
+    // Also persist any governance data received during this build.
     const allToolCalls = Array.from(toolCalls.values())
     const createFileCalls = allToolCalls.filter(tc => tc.name === 'createFile')
     const editFileCalls = allToolCalls.filter(tc => tc.name === 'editFile')
@@ -385,6 +406,9 @@ export default function ChatPanel() {
     }])
 
     try {
+      // Load persisted invariants to send as context
+      const persistedInvariants = useGovernanceStore.getState().getInvariantsForPrompt()
+      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -395,6 +419,7 @@ export default function ChatPanel() {
           agentId,
           projectType,
           capabilities,
+          persistedInvariants,
         }),
       })
 

@@ -607,7 +607,8 @@ export class TorbitOrchestrator {
    */
   async runArchitectIntegrityCheck(
     architectOutput: string,
-    originalRequest: string
+    originalRequest: string,
+    persistedInvariants?: string | null
   ): Promise<{
     verdict: 'APPROVED' | 'AMENDMENTS' | 'REJECTED'
     governance: GovernanceObject | null
@@ -646,6 +647,7 @@ Evaluate the proposed structure. Answer these questions:
 OUTPUT your verdict as a JSON GovernanceObject per your system prompt.
 Include protected_invariants for anything in the existing codebase that
 MUST NOT be broken by this build.
+${persistedInvariants ? `\n═══ PREVIOUSLY ESTABLISHED INVARIANTS ═══\nThese invariants were established in prior builds and MUST be carried forward\nunless the user explicitly asks to change them.\n\n${persistedInvariants}\n` : ''}
 `
 
     const result = await this.executeAgent('strategist', checkPrompt, { modelTier: 'sonnet' })
@@ -693,7 +695,7 @@ MUST NOT be broken by this build.
    * Full orchestration: Plan → Execute → Audit
    * Now powered by Kimi K2.5 intelligent routing!
    */
-  async orchestrate(userPrompt: string, context?: { hasImages?: boolean }): Promise<{
+  async orchestrate(userPrompt: string, context?: { hasImages?: boolean; persistedInvariants?: string | null }): Promise<{
     plan: AgentResult
     execution: AgentResult[]
     audit: AuditResult
@@ -755,7 +757,7 @@ MUST NOT be broken by this build.
     let governance: GovernanceObject | null = null
     
     if (plan.success && needsGovernance) {
-      const integrityCheck = await this.runArchitectIntegrityCheck(plan.output, userPrompt)
+      const integrityCheck = await this.runArchitectIntegrityCheck(plan.output, userPrompt, context?.persistedInvariants)
       governance = integrityCheck.governance
       
       if (integrityCheck.verdict === 'REJECTED') {

@@ -23,6 +23,7 @@ const ChatRequestSchema = z.object({
   userId: z.string().optional(), // Will be overwritten by auth
   projectType: z.enum(['web', 'mobile']).optional(),
   capabilities: z.record(z.string(), z.unknown()).nullable().optional(),
+  persistedInvariants: z.string().nullable().optional(),
 })
 
 // Import rich agent prompts
@@ -249,6 +250,7 @@ export async function POST(req: Request) {
       projectId = 'default',
       projectType = 'web',
       capabilities = null,
+      persistedInvariants = null,
     } = parseResult.data
 
     // Use authenticated user ID, not the one from request
@@ -287,6 +289,11 @@ export async function POST(req: Request) {
 
       // Combine base prompt with DaisyUI theme guidance + design system
       systemPrompt = `${basePrompt}\n\n${daisyGuidance}\n\n${designGuidance}`
+    }
+    
+    // Inject persisted invariants from previous builds
+    if (persistedInvariants) {
+      systemPrompt = `${systemPrompt}\n\n${persistedInvariants}`
     }
     const complexity = analyzeTaskComplexity(messages)
     const model = getModelForTask(agentId as AgentId, complexity)
