@@ -37,11 +37,12 @@ export function useAuth() {
       setState(s => ({ ...s, loading: false }))
       return
     }
+    const sb = supabase // non-null binding for closures
     let cancelled = false
 
     async function loadSession() {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
+        const { data: { session }, error } = await sb.auth.getSession()
         
         if (cancelled) return
         
@@ -95,7 +96,7 @@ export function useAuth() {
     loadSession()
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = sb.auth.onAuthStateChange(
       async (event, session) => {
         if (cancelled) return
         
