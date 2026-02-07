@@ -2,6 +2,8 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldCheck, AlertCircle, CheckCircle2, X, Loader2, Zap } from 'lucide-react'
+import { useEscapeToClose } from '@/hooks/useEscapeToClose'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 // ============================================================================
 // SUPERVISOR SLIDE PANEL
@@ -51,6 +53,9 @@ export function SupervisorSlidePanel({
   const isFixing = result?.fixes.some(f => f.status === 'fixing')
   const allComplete = result?.fixes.every(f => f.status === 'complete')
 
+  useEscapeToClose(isOpen, onDismiss)
+  useBodyScrollLock(isOpen)
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -72,6 +77,9 @@ export function SupervisorSlidePanel({
             exit={{ x: '100%', opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="fixed right-0 top-0 h-full w-[360px] bg-[#0d0d0d] border-l border-[#1a1a1a] z-50 flex flex-col shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="supervisor-slide-title"
           >
             {/* Header */}
             <div className="px-4 py-3 border-b border-[#1a1a1a] flex items-center justify-between">
@@ -79,10 +87,11 @@ export function SupervisorSlidePanel({
                 <div className="w-5 h-5 rounded bg-amber-500/10 flex items-center justify-center">
                   <ShieldCheck className="w-3 h-3 text-amber-400" />
                 </div>
-                <span className="text-[13px] font-medium text-[#e5e5e5]">Supervisor</span>
+                <span id="supervisor-slide-title" className="text-[13px] font-medium text-[#e5e5e5]">Supervisor</span>
               </div>
               <button
                 onClick={onDismiss}
+                aria-label="Close supervisor panel"
                 className="w-6 h-6 flex items-center justify-center text-[#505050] hover:text-[#888] rounded transition-colors"
               >
                 <X className="w-4 h-4" />

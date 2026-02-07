@@ -27,6 +27,8 @@ import { generateExportBundle, createExportZip, downloadBlob } from '@/lib/mobil
 import { validateProject, generatePodfile, generateEntitlements } from '@/lib/mobile/validation'
 import type { ValidationResult } from '@/lib/mobile/validation'
 import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
+import { useEscapeToClose } from '@/hooks/useEscapeToClose'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import { PreflightChecklist } from './PreflightChecklist'
 import { GovernanceResolved } from './governance'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
@@ -166,6 +168,14 @@ export function PublishPanel() {
     setError(null)
   }
 
+  const closePanel = () => {
+    setIsOpen(false)
+    resetExport()
+  }
+
+  useEscapeToClose(isOpen, closePanel)
+  useBodyScrollLock(isOpen)
+
   if (!isMobile) return null
   
   return (
@@ -218,10 +228,7 @@ export function PublishPanel() {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  setIsOpen(false)
-                  resetExport()
-                }}
+                onClick={closePanel}
                 aria-label="Close publish dialog"
                 className="p-2 hover:bg-neutral-800 rounded-lg transition-colors"
               >
@@ -336,10 +343,7 @@ export function PublishPanel() {
                 <PreflightChecklist
                   result={validationResult}
                   onProceed={handleProceedExport}
-                  onCancel={() => {
-                    setIsOpen(false)
-                    resetExport()
-                  }}
+                  onCancel={closePanel}
                   isExporting={false}
                 />
               )}
@@ -473,10 +477,7 @@ export function PublishPanel() {
                   {/* Actions */}
                   <div className="flex gap-3">
                     <button
-                      onClick={() => {
-                        setIsOpen(false)
-                        resetExport()
-                      }}
+                      onClick={closePanel}
                       className="flex-1 py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-medium rounded-xl transition-colors"
                     >
                       Done

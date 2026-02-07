@@ -1,14 +1,6 @@
-import { streamText, stepCountIs } from 'ai'
 import { z } from 'zod'
-import { AGENT_TOOLS, AgentId } from '@/lib/tools/definitions'
-import { createAgentTools, createContextFromRequest } from '@/lib/tools/ai-sdk-tools'
-import {
-  getModelForTask,
-  analyzeTaskComplexity,
-  calculateCost,
-  AGENT_MODEL_MAP,
-  MODEL_CONFIGS,
-} from '@/lib/agents/models'
+import { AGENT_TOOLS, type AgentId } from '@/lib/tools/definitions'
+import { createOrchestrator } from '@/lib/agents/orchestrator'
 import { chatRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 import { createClient } from '@/lib/supabase/server'
 
@@ -26,6 +18,12 @@ const ChatRequestSchema = z.object({
   persistedInvariants: z.string().nullable().optional(),
 })
 
+const VALID_AGENT_IDS = Object.keys(AGENT_TOOLS) as AgentId[]
+
+function isValidAgentId(value: string): value is AgentId {
+  return VALID_AGENT_IDS.includes(value as AgentId)
+}
+
 // Import rich agent prompts
 import { ARCHITECT_SYSTEM_PROMPT } from '@/lib/agents/prompts/architect'
 import { FRONTEND_SYSTEM_PROMPT } from '@/lib/agents/prompts/frontend'
@@ -33,6 +31,7 @@ import { DEVOPS_SYSTEM_PROMPT } from '@/lib/agents/prompts/devops'
 import { QA_SYSTEM_PROMPT } from '@/lib/agents/prompts/qa'
 import { AUDITOR_SYSTEM_PROMPT } from '@/lib/agents/prompts/auditor'
 import { PLANNER_SYSTEM_PROMPT } from '@/lib/agents/prompts/planner'
+import { STRATEGIST_SYSTEM_PROMPT } from '@/lib/agents/prompts/strategist'
 import { GOD_PROMPT } from '@/lib/agents/prompts/god-prompt'
 import { getMobileSystemPrompt } from '@/lib/mobile/prompts'
 import { getDesignGuidance, getDaisyUIGuidance } from '@/lib/design/system'
@@ -64,11 +63,11 @@ When given a task:
 6. Use 'searchCode' to find related code
 
 ## CODE STANDARDS
-- SvelteKit server routes (+server.ts files) and form actions (+page.server.ts)
+- Next.js App Router route handlers (app/api/**/route.ts) and server actions where needed
 - TypeScript with strict types
 - Zod for request/response validation
-- Proper error handling with SvelteKit error() and json() helpers
-- Use SvelteKit load functions for data fetching
+- Proper error handling with explicit status codes and structured JSON responses
+- Use server components/actions for secure data access patterns
 
 Always show your work through tool calls.`),
 
@@ -95,6 +94,7 @@ Never hallucinate columns - use inspectSchema first.`),
   devops: createAgentPrompt(DEVOPS_SYSTEM_PROMPT),
   qa: createAgentPrompt(QA_SYSTEM_PROMPT),
   planner: createAgentPrompt(PLANNER_SYSTEM_PROMPT),
+  strategist: createAgentPrompt(STRATEGIST_SYSTEM_PROMPT),
   auditor: createAgentPrompt(AUDITOR_SYSTEM_PROMPT),
 }
 
@@ -246,7 +246,7 @@ export async function POST(req: Request) {
 
     const {
       messages: rawMessages,
-      agentId = 'architect',
+      agentId: requestedAgentId,
       projectId = 'default',
       projectType = 'web',
       capabilities = null,
@@ -268,6 +268,16 @@ export async function POST(req: Request) {
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
+
+    const normalizedAgentId = requestedAgentId ?? 'architect'
+    if (!isValidAgentId(normalizedAgentId)) {
+      return new Response(
+        JSON.stringify({ error: `Unknown agent: ${normalizedAgentId}` }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const agentId: AgentId = normalizedAgentId
 
     // Select prompt based on project type
     let systemPrompt: string
@@ -295,16 +305,6 @@ export async function POST(req: Request) {
     if (persistedInvariants) {
       systemPrompt = `${systemPrompt}\n\n${persistedInvariants}`
     }
-    const complexity = analyzeTaskComplexity(messages)
-    const model = getModelForTask(agentId as AgentId, complexity)
-    const modelProvider = AGENT_MODEL_MAP[agentId as AgentId] || 'claude-sonnet'
-    
-    // Create execution context for tools - persists across this request
-    const executionContext = createContextFromRequest(projectId, userId)
-    
-    // Create AI SDK tools with execute functions for multi-step calling
-    const agentTools = createAgentTools(agentId as AgentId, executionContext)
-
     // Create a TransformStream for custom streaming with tool execution
     const encoder = new TextEncoder()
     
@@ -335,78 +335,50 @@ export async function POST(req: Request) {
 
         // Retry wrapper for transient errors
         const executeWithRetry = async (attempt = 1): Promise<void> => {
-          // Track tool calls we've already sent to avoid duplicates
           const sentToolCalls = new Set<string>()
+          const orchestrator = createOrchestrator({
+            projectId,
+            userId,
+            enableKimiRouter: true,
+            fastRouting: true,
+          })
 
           try {
-            const result = await streamText({
-              model,
-              system: systemPrompt,
-              messages,
-              tools: agentTools,
-              stopWhen: stepCountIs(15), // Allow more steps for complex builds
-              // Stream tool calls AS THEY HAPPEN for real-time file visibility
-              onStepFinish: async (step) => {
-                // Send tool results after execution completes
-                if (step.toolResults) {
-                  for (const tr of step.toolResults) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const toolResult = (tr as any).result ?? (tr as any).output ?? ''
-                    const resultStr = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult)
-                    sendChunk({
-                      type: 'tool-result',
-                      toolResult: {
-                        id: tr.toolCallId,
-                        success: !resultStr.startsWith('Error:'),
-                        output: resultStr,
-                        duration: 0, // AI SDK handles timing internally
-                      },
-                    })
-                  }
-                }
-              },
-            })
+            const result = await orchestrator.executeAgent(
+              agentId,
+              messages[messages.length - 1]?.content || '',
+              {
+                maxSteps: 15,
+                systemPrompt,
+                messages,
+                onTextDelta: (delta) => {
+                  sendChunk({ type: 'text', content: delta })
+                },
+                onToolCall: (toolCall) => {
+                  if (sentToolCalls.has(toolCall.id)) return
+                  sentToolCalls.add(toolCall.id)
+                  sendChunk({ type: 'tool-call', toolCall })
+                },
+                onToolResult: (toolResult) => {
+                  const resultText = typeof toolResult.result === 'string'
+                    ? toolResult.result
+                    : JSON.stringify(toolResult.result)
 
-            // Use fullStream to get tool calls IMMEDIATELY as they happen
-            // This enables real-time file visibility in the sidebar
-            for await (const part of result.fullStream) {
-              if (part.type === 'text-delta') {
-                sendChunk({ type: 'text', content: part.text })
-              } else if (part.type === 'tool-call') {
-                // Stream tool call immediately when it starts (with complete args)
-                // AI SDK v6 uses 'input' not 'args' for tool parameters
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const tc = part as any
-                if (!sentToolCalls.has(tc.toolCallId)) {
-                  sentToolCalls.add(tc.toolCallId)
                   sendChunk({
-                    type: 'tool-call',
-                    toolCall: {
-                      id: tc.toolCallId,
-                      name: tc.toolName,
-                      args: (tc.input ?? tc.args) as Record<string, unknown>,
+                    type: 'tool-result',
+                    toolResult: {
+                      id: toolResult.id,
+                      success: !resultText.startsWith('Error:'),
+                      output: resultText,
+                      duration: toolResult.duration,
                     },
                   })
-                }
-              }
-            }
-
-            // Send usage metrics at the end
-            const usage = await result.usage
-            if (usage) {
-              const inputTokens = (usage as { promptTokens?: number }).promptTokens || 0
-              const outputTokens = (usage as { completionTokens?: number }).completionTokens || 0
-              const estimatedCost = calculateCost(modelProvider, inputTokens, outputTokens)
-              
-              sendChunk({
-                type: 'usage',
-                usage: {
-                  inputTokens,
-                  outputTokens,
-                  estimatedCost,
-                  provider: modelProvider,
                 },
-              })
+              }
+            )
+
+            if (!result.success) {
+              throw new Error(result.output || 'Agent execution failed')
             }
 
             safeClose()

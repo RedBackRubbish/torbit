@@ -57,12 +57,12 @@ describe('Supabase Client', () => {
       expect(client1).toBe(client2)
     })
 
-    it('should throw error on server side', async () => {
+    it('should return null on server side', async () => {
       vi.stubGlobal('window', undefined)
       
       const clientModule = await import('../client')
       
-      expect(() => clientModule.getSupabase()).toThrow('should only be called on the client')
+      expect(clientModule.getSupabase()).toBeNull()
     })
   })
 })

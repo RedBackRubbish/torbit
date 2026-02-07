@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSoundSettings } from '@/store/soundSettings'
 import { useSoundEffects } from '@/lib/audio'
+import { useEscapeToClose } from '@/hooks/useEscapeToClose'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 /**
  * SoundSettingsPanel - Controls for all audio settings
@@ -33,6 +35,9 @@ export default function SoundSettingsPanel({
 
   const { play, init } = useSoundEffects()
   const [isMounted, setIsMounted] = useState(false)
+
+  useEscapeToClose(open, () => onOpenChange(false))
+  useBodyScrollLock(open)
 
   useEffect(() => {
     setIsMounted(true)
@@ -76,6 +81,9 @@ export default function SoundSettingsPanel({
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
             onClick={handleInteraction}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sound-settings-title"
           >
             <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-2xl shadow-2xl overflow-hidden">
               {/* Header */}
@@ -87,12 +95,13 @@ export default function SoundSettingsPanel({
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-[15px] font-semibold text-[#e0e0e0]">Sound Settings</h2>
+                    <h2 id="sound-settings-title" className="text-[15px] font-semibold text-[#e0e0e0]">Sound Settings</h2>
                     <p className="text-[11px] text-[#606060]">Audio feedback & ambiance</p>
                   </div>
                 </div>
                 <button
                   onClick={() => onOpenChange(false)}
+                  aria-label="Close sound settings"
                   className="w-8 h-8 rounded-lg bg-[#0f0f0f] border border-[#1a1a1a] flex items-center justify-center text-[#606060] hover:text-[#c0c0c0] hover:border-[#333] transition-all"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

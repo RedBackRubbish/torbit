@@ -14,10 +14,13 @@
 import { streamText, stepCountIs } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { google } from '@ai-sdk/google'
-import { TOOL_DEFINITIONS, AGENT_TOOLS, type ToolName, type AgentId } from '../tools/definitions'
-import { executeTool, createExecutionContext, type ToolExecutionContext, type ToolResult } from '../tools/executor'
+import { openai } from '@ai-sdk/openai'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
+import { AGENT_TOOLS, type ToolName, type AgentId } from '../tools/definitions'
+import { executeTool, createExecutionContext, type ToolExecutionContext } from '../tools/executor'
 import { KimiRouter, type RoutingDecision, isKimiConfigured } from './router'
-import { checkCircuitBreaker, calculateFuelCost, useFuelStore, type ModelTier as FuelModelTier } from '@/store/fuel'
+import { checkCircuitBreaker, calculateFuelCost, type ModelTier as FuelModelTier } from '@/store/fuel'
 import { parseGovernanceOutput, formatGovernanceForAgent, formatInvariantsForQA, type GovernanceObject } from './governance'
 
 // Agent prompts
@@ -28,7 +31,7 @@ import { PLANNER_SYSTEM_PROMPT } from './prompts/planner'
 import { STRATEGIST_SYSTEM_PROMPT } from './prompts/strategist'
 import { FRONTEND_SYSTEM_PROMPT } from './prompts/frontend'
 import { DEVOPS_SYSTEM_PROMPT } from './prompts/devops'
-import { QA_SYSTEM_PROMPT, QA_TOOLS } from './prompts/qa'
+import { QA_SYSTEM_PROMPT } from './prompts/qa'
 
 // ============================================
 // TYPES
@@ -98,11 +101,21 @@ export interface ParallelResult {
 // MODEL SELECTION (Kimi K2.5 Primary + Claude Governance)
 // ============================================
 
-const MODELS = {
-  opus: anthropic('claude-opus-4-6'), // Governance only - different brain
-  sonnet: anthropic('claude-sonnet-4-5-20250929'), // Fallback/governance
-  flash: google('gemini-2.0-flash'),            // Quick queries
-} as const
+const USE_CODEX_PRIMARY = process.env.TORBIT_USE_CODEX_PRIMARY === 'true'
+const CODEX_PRIMARY_MODEL = process.env.TORBIT_CODEX_MODEL || process.env.OPENAI_CODEX_MODEL || 'gpt-5.3-codex'
+const CODEX_FAST_MODEL = process.env.TORBIT_CODEX_FAST_MODEL || 'gpt-5-mini'
+
+const MODELS = USE_CODEX_PRIMARY
+  ? {
+      opus: openai(CODEX_PRIMARY_MODEL),
+      sonnet: openai(CODEX_PRIMARY_MODEL),
+      flash: openai(CODEX_FAST_MODEL),
+    }
+  : {
+      opus: anthropic('claude-opus-4-6'), // Governance only - different brain
+      sonnet: anthropic('claude-sonnet-4-5-20250929'), // Fallback/governance
+      flash: google('gemini-2.0-flash'), // Quick queries
+    } as const
 
 /**
  * Select model based on task complexity (legacy fallback)
@@ -116,22 +129,6 @@ function selectModel(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: 
     case 'high': return MODELS.opus
     case 'medium': return MODELS.sonnet
     case 'low': return MODELS.flash
-  }
-}
-
-/**
- * Map complexity from Kimi router to legacy format
- */
-function mapComplexityToLegacy(complexity: RoutingDecision['complexity']): 'high' | 'medium' | 'low' {
-  switch (complexity) {
-    case 'architectural':
-    case 'complex':
-      return 'high'
-    case 'moderate':
-      return 'medium'
-    case 'simple':
-    case 'trivial':
-      return 'low'
   }
 }
 
@@ -308,6 +305,12 @@ export class TorbitOrchestrator {
     options?: { 
       modelTier?: ModelTier
       maxSteps?: number
+      /** Optional full message history (preferred over raw prompt when available) */
+      messages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+      /** Optional override for default agent system prompt */
+      systemPrompt?: string
+      /** Callback fired on every text delta */
+      onTextDelta?: (delta: string) => void
       /** Callback fired immediately when a tool call is received (before execution) */
       onToolCall?: (toolCall: { id: string; name: string; args: Record<string, unknown> }) => void
       /** Callback fired when a tool call completes execution */
@@ -341,17 +344,24 @@ export class TorbitOrchestrator {
     
     const model = selectModel('medium', options?.modelTier)
     const tools = getToolsForAgent(agentId)
-    const systemPrompt = AGENT_PROMPTS[agentId]
+    const systemPrompt = options?.systemPrompt ?? AGENT_PROMPTS[agentId]
+    const sanitizedMessages = options?.messages
+      ?.filter((msg) => msg.content && msg.content.trim().length > 0)
+      .map((msg) => ({ role: msg.role, content: msg.content }))
     
     // Map model tier to fuel model tier for cost calculation
     const fuelModelTier: FuelModelTier = options?.modelTier === 'opus' ? 'opus' :
                                           options?.modelTier === 'sonnet' ? 'sonnet' : 'flash'
     
     try {
+      const requestBody = sanitizedMessages && sanitizedMessages.length > 0
+        ? { messages: sanitizedMessages }
+        : { prompt }
+
       const result = await streamText({
         model,
         system: systemPrompt,
-        prompt,
+        ...requestBody,
         tools,
         stopWhen: stepCountIs(options?.maxSteps ?? 10),
         onStepFinish: async (step) => {
@@ -398,6 +408,7 @@ export class TorbitOrchestrator {
       for await (const part of result.fullStream) {
         if (part.type === 'text-delta') {
           output += part.text
+          options?.onTextDelta?.(part.text)
         } else if (part.type === 'tool-call') {
           // Stream tool call immediately when it starts (with complete args)
           // AI SDK v6 uses 'input' not 'args' for tool parameters
@@ -532,60 +543,120 @@ export class TorbitOrchestrator {
    * Run security scan (Gate 4)
    * Detects: hardcoded secrets, SQL injection, npm vulnerabilities, CORS issues
    */
+  private async collectSecurityScanFiles(): Promise<Array<{ filePath: string; content: string }>> {
+    const collected = new Map<string, string>()
+
+    // Include files already touched in this orchestration context first.
+    for (const [filePath, content] of this.context.files) {
+      if (/\.(ts|tsx|js|jsx|mjs|cjs)$/i.test(filePath)) {
+        collected.set(filePath, content)
+      }
+    }
+
+    // Also scan the on-disk project tree to avoid false-clean scans when context is sparse.
+    const roots = ['src', 'app', 'lib', 'components', 'pages', 'api']
+    const ignoredDirs = new Set(['node_modules', '.next', '.git', 'coverage', 'dist', 'build'])
+    const maxDepth = 8
+    const maxBytes = 500_000
+
+    const walk = async (absoluteDir: string, relativeDir: string, depth: number): Promise<void> => {
+      if (depth > maxDepth) return
+
+      let entries: Array<import('node:fs').Dirent>
+      try {
+        entries = await fs.readdir(absoluteDir, { withFileTypes: true })
+      } catch {
+        return
+      }
+
+      for (const entry of entries) {
+        const relPath = relativeDir ? path.join(relativeDir, entry.name) : entry.name
+        const absPath = path.join(absoluteDir, entry.name)
+
+        if (entry.isDirectory()) {
+          if (ignoredDirs.has(entry.name)) continue
+          await walk(absPath, relPath, depth + 1)
+          continue
+        }
+
+        if (!entry.isFile()) continue
+        if (!/\.(ts|tsx|js|jsx|mjs|cjs)$/i.test(relPath)) continue
+        if (collected.has(relPath)) continue
+
+        try {
+          const stats = await fs.stat(absPath)
+          if (stats.size > maxBytes) continue
+          const content = await fs.readFile(absPath, 'utf8')
+          collected.set(relPath, content)
+        } catch {
+          // Skip unreadable files and continue scanning.
+        }
+      }
+    }
+
+    const cwd = process.cwd()
+    for (const root of roots) {
+      await walk(path.join(cwd, root), root, 0)
+    }
+
+    return Array.from(collected.entries()).map(([filePath, content]) => ({ filePath, content }))
+  }
+
   private async runSecurityScan(): Promise<{
     passed: boolean
     vulnerabilities?: Array<{ type: string; severity: string; message: string; file?: string }>
   }> {
-    const vulnerabilities: Array<{ type: string; severity: string; message: string; file?: string }> = []
-    
+    const vulnerabilityMap = new Map<string, { type: string; severity: string; message: string; file?: string }>()
+
     // Pattern-based secret detection
     const secretPatterns = [
-      { pattern: /['"`]sk[-_]live[-_][a-zA-Z0-9]{20,}['"`]/g, type: 'hardcoded_secret', message: 'Stripe live key detected' },
-      { pattern: /['"`]AKIA[0-9A-Z]{16}['"`]/g, type: 'hardcoded_secret', message: 'AWS access key detected' },
-      { pattern: /password\s*[:=]\s*['"`][^'"`]+['"`]/gi, type: 'hardcoded_secret', message: 'Hardcoded password detected' },
-      { pattern: /api[-_]?key\s*[:=]\s*['"`][a-zA-Z0-9]{20,}['"`]/gi, type: 'hardcoded_secret', message: 'Hardcoded API key detected' },
-      { pattern: /private[-_]?key\s*[:=]\s*['"`]-----BEGIN/gi, type: 'hardcoded_secret', message: 'Private key in source code' },
+      { pattern: /['"`]sk[-_]live[-_][a-zA-Z0-9]{20,}['"`]/i, type: 'hardcoded_secret', message: 'Stripe live key detected' },
+      { pattern: /['"`]AKIA[0-9A-Z]{16}['"`]/i, type: 'hardcoded_secret', message: 'AWS access key detected' },
+      { pattern: /password\s*[:=]\s*['"`][^'"`]+['"`]/i, type: 'hardcoded_secret', message: 'Hardcoded password detected' },
+      { pattern: /api[-_]?key\s*[:=]\s*['"`][a-zA-Z0-9]{20,}['"`]/i, type: 'hardcoded_secret', message: 'Hardcoded API key detected' },
+      { pattern: /private[-_]?key\s*[:=]\s*['"`]-----BEGIN/i, type: 'hardcoded_secret', message: 'Private key in source code' },
     ]
-    
+
     // SQL injection patterns
     const sqlInjectionPatterns = [
-      { pattern: /\$\{.*\}.*(?:SELECT|INSERT|UPDATE|DELETE|DROP)/gi, type: 'sql_injection', message: 'Potential SQL injection via template literal' },
-      { pattern: /query\s*\(\s*['"`].*\+/gi, type: 'sql_injection', message: 'String concatenation in SQL query' },
+      { pattern: /\$\{[^}]+\}[\s\S]*(SELECT|INSERT|UPDATE|DELETE|DROP)/i, type: 'sql_injection', message: 'Potential SQL injection via template literal' },
+      { pattern: /query\s*\(\s*['"`][^'"`]*\+/i, type: 'sql_injection', message: 'String concatenation in SQL query' },
     ]
-    
+
     // CORS issues
     const corsPatterns = [
-      { pattern: /Access-Control-Allow-Origin['":\s]+\*/g, type: 'cors_misconfiguration', message: 'Wildcard CORS origin detected' },
-      { pattern: /credentials:\s*['"]include['"].*origin:\s*\*/g, type: 'cors_misconfiguration', message: 'Credentials with wildcard origin' },
+      { pattern: /Access-Control-Allow-Origin['":\s]+\*/i, type: 'cors_misconfiguration', message: 'Wildcard CORS origin detected' },
+      { pattern: /credentials:\s*['"]include['"][\s\S]*origin:\s*\*/i, type: 'cors_misconfiguration', message: 'Credentials with wildcard origin' },
     ]
-    
-    // Scan all files in context
-    for (const [filePath, content] of this.context.files) {
-      // Skip non-source files
-      if (!filePath.match(/\.(ts|tsx|js|jsx|mjs|cjs)$/)) continue
-      
-      // Check secret patterns
-      for (const { pattern, type, message } of secretPatterns) {
-        if (pattern.test(content)) {
-          vulnerabilities.push({ type, severity: 'critical', message, file: filePath })
-        }
-      }
-      
-      // Check SQL injection patterns
-      for (const { pattern, type, message } of sqlInjectionPatterns) {
-        if (pattern.test(content)) {
-          vulnerabilities.push({ type, severity: 'high', message, file: filePath })
-        }
-      }
-      
-      // Check CORS patterns
-      for (const { pattern, type, message } of corsPatterns) {
-        if (pattern.test(content)) {
-          vulnerabilities.push({ type, severity: 'medium', message, file: filePath })
+
+    const filesToScan = await this.collectSecurityScanFiles()
+    if (filesToScan.length === 0) {
+      vulnerabilityMap.set('scan_incomplete', {
+        type: 'scan_incomplete',
+        severity: 'medium',
+        message: 'Security scan had no source files to inspect',
+      })
+    }
+
+    for (const { filePath, content } of filesToScan) {
+      const checks = [
+        ...secretPatterns.map((entry) => ({ ...entry, severity: 'critical' as const })),
+        ...sqlInjectionPatterns.map((entry) => ({ ...entry, severity: 'high' as const })),
+        ...corsPatterns.map((entry) => ({ ...entry, severity: 'medium' as const })),
+      ]
+
+      for (const { pattern, type, severity, message } of checks) {
+        if (!pattern.test(content)) continue
+
+        const key = `${type}:${filePath}:${message}`
+        if (!vulnerabilityMap.has(key)) {
+          vulnerabilityMap.set(key, { type, severity, message, file: filePath })
         }
       }
     }
-    
+
+    const vulnerabilities = Array.from(vulnerabilityMap.values())
+
     return {
       passed: vulnerabilities.length === 0,
       vulnerabilities: vulnerabilities.length > 0 ? vulnerabilities : undefined,
@@ -837,12 +908,23 @@ ${persistedInvariants ? `\n═══ PREVIOUSLY ESTABLISHED INVARIANTS ═══
       }
     }
     
-    // 5. Run audit pipeline
-    const audit = await this.runAuditPipeline()
+    // 5. Run audit pipeline (unless explicitly disabled)
+    const shouldRunAudit = this.config.enableAudit ?? true
+    const audit = shouldRunAudit
+      ? await this.runAuditPipeline()
+      : {
+          passed: true,
+          gates: {
+            visual: { passed: true, issues: [] as string[] },
+            functional: { passed: true, issues: [] as string[] },
+            hygiene: { passed: true, issues: [] as string[] },
+            security: { passed: true, issues: [] as string[] },
+          },
+        }
     
     // 6. If audit failed and we have fixes, apply them
     //    Pass governance contract so Auditor can enforce invariants
-    if (!audit.passed && this.config.enableAudit) {
+    if (shouldRunAudit && !audit.passed) {
       const governanceContext = governance 
         ? `\n\n${formatGovernanceForAgent(governance)}` 
         : ''
@@ -964,11 +1046,21 @@ ${persistedInvariants ? `\n═══ PREVIOUSLY ESTABLISHED INVARIANTS ═══
     
     // 2. Execute all agents in parallel
     const parallelStart = Date.now()
-    const results = await Promise.all(
+    const settled = await Promise.allSettled(
       tasks.map(({ agent, prompt, modelTier }) =>
         this.executeAgent(agent, prompt, { modelTier: modelTier ?? 'sonnet' })
       )
     )
+    const results = settled.map((entry, index) => {
+      if (entry.status === 'fulfilled') return entry.value
+      return {
+        agentId: tasks[index]?.agent ?? 'architect',
+        success: false,
+        output: `Parallel execution failed: ${entry.reason instanceof Error ? entry.reason.message : 'Unknown error'}`,
+        toolCalls: [],
+        duration: 0,
+      } satisfies AgentResult
+    })
     const parallelDuration = Date.now() - parallelStart
     
     // Calculate theoretical sequential time (sum of all durations)
@@ -1058,19 +1150,39 @@ Rules:
     
     // 2. Parse tasks from planner output
     let tasks: ParallelTask[] = []
+    const validAgents: AgentId[] = ['architect', 'frontend', 'backend', 'database', 'devops', 'qa', 'planner', 'auditor']
+    const validModelTiers: ModelTier[] = ['opus', 'sonnet', 'flash']
+    const maxParallelAgents = Math.max(1, options?.maxParallelAgents ?? 4)
     try {
       const jsonMatch = plan.output.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0])
-        tasks = parsed.map((t: { agent: string; prompt: string; modelTier?: string }) => ({
-          agent: t.agent as AgentId,
-          prompt: t.prompt,
-          modelTier: (t.modelTier as ModelTier) ?? 'sonnet',
-        }))
+        if (Array.isArray(parsed)) {
+          const normalizedTasks: ParallelTask[] = []
+          for (const item of parsed) {
+            const t = item as { agent?: string; prompt?: string; modelTier?: string }
+            if (!t.agent || !validAgents.includes(t.agent as AgentId)) continue
+            if (!t.prompt || typeof t.prompt !== 'string' || !t.prompt.trim()) continue
+
+            const tier = t.modelTier && validModelTiers.includes(t.modelTier as ModelTier)
+              ? (t.modelTier as ModelTier)
+              : 'sonnet'
+
+            normalizedTasks.push({
+              agent: t.agent as AgentId,
+              prompt: t.prompt.trim(),
+              modelTier: tier,
+            })
+          }
+          tasks = normalizedTasks.slice(0, maxParallelAgents)
+        }
       }
     } catch {
       // Fallback: single agent execution if parsing fails
       console.warn('[Orchestrator] Failed to parse parallel tasks, falling back to single agent')
+    }
+
+    if (tasks.length === 0) {
       tasks = [{ agent: 'architect', prompt: userPrompt, modelTier: 'sonnet' }]
     }
     

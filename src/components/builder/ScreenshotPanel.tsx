@@ -24,6 +24,8 @@ import {
 } from 'lucide-react'
 import { useBuilderStore } from '@/store/builder'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
+import { useEscapeToClose } from '@/hooks/useEscapeToClose'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 import {
   SCREENSHOT_DEVICES,
   DEFAULT_SCREENSHOT_DEVICE,
@@ -196,6 +198,9 @@ export function ScreenshotPanel({ isOpen, onClose, previewRef }: ScreenshotPanel
     setDetectedRoutes([])
     onClose()
   }, [onClose])
+
+  useEscapeToClose(isOpen, handleClose)
+  useBodyScrollLock(isOpen)
   
   // Validation
   const validation = validateScreenshots(screenshots)

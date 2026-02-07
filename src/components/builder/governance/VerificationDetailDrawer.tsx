@@ -2,6 +2,8 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatDistanceToNow } from 'date-fns'
+import { useEscapeToClose } from '@/hooks/useEscapeToClose'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 // ============================================================================
 // VERIFICATION DETAIL DRAWER
@@ -65,6 +67,9 @@ export function VerificationDetailDrawer({
   onClose,
   data,
 }: VerificationDetailDrawerProps) {
+  useEscapeToClose(isOpen, onClose)
+  useBodyScrollLock(isOpen)
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -86,6 +91,9 @@ export function VerificationDetailDrawer({
             exit={{ x: '100%', opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             className="fixed right-0 top-0 h-full w-[380px] bg-[#0a0a0a] border-l border-[#1a1a1a] z-50 flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="verification-detail-title"
           >
             {/* Header */}
             <div className="px-5 py-4 border-b border-[#1a1a1a]">
@@ -96,10 +104,11 @@ export function VerificationDetailDrawer({
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <h2 className="text-[13px] font-medium text-[#888]">Verification Details</h2>
+                  <h2 id="verification-detail-title" className="text-[13px] font-medium text-[#888]">Verification Details</h2>
                 </div>
                 <button
                   onClick={onClose}
+                  aria-label="Close verification details"
                   className="w-6 h-6 flex items-center justify-center text-[#505050] hover:text-[#888] rounded transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

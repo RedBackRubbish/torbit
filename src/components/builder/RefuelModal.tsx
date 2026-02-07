@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useFuelStore } from '@/store/fuel'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
+import { useEscapeToClose } from '@/hooks/useEscapeToClose'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 /**
  * RefuelModal - The "Refueling Station"
@@ -82,6 +84,12 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
 
   const status = getFuelStatus()
   const isCritical = status === 'critical'
+  const closeModal = () => {
+    if (!isProcessing) onOpenChange(false)
+  }
+
+  useEscapeToClose(open, closeModal)
+  useBodyScrollLock(open)
 
   const handlePurchase = async (pack: FuelPack) => {
     setSelectedPack(pack.id)
@@ -146,7 +154,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-        onClick={() => !isProcessing && onOpenChange(false)}
+        onClick={closeModal}
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -154,6 +162,9 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
           className="relative bg-neutral-900/95 border border-neutral-700/50 rounded-2xl p-6 max-w-3xl w-full mx-4 shadow-2xl"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="refuel-modal-title"
         >
           {/* Success Overlay */}
           <AnimatePresence>
@@ -210,7 +221,10 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
                 </motion.div>
               )}
               <div>
-                <h2 className={`text-xl font-bold ${isCritical ? 'text-red-400' : 'text-neutral-100'}`}>
+                <h2
+                  id="refuel-modal-title"
+                  className={`text-xl font-bold ${isCritical ? 'text-red-400' : 'text-neutral-100'}`}
+                >
                   {isCritical ? 'EMERGENCY REFUEL REQUIRED' : 'REFUELING STATION'}
                 </h2>
                 <p className="text-sm text-neutral-500">
@@ -223,6 +237,7 @@ export default function RefuelModal({ open, onOpenChange }: RefuelModalProps) {
             <button
               onClick={() => onOpenChange(false)}
               disabled={isProcessing}
+              aria-label="Close refuel dialog"
               className="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-neutral-300 transition-colors rounded-lg hover:bg-neutral-800 disabled:opacity-50"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

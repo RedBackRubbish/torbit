@@ -21,7 +21,7 @@ const openrouter = createOpenRouter({
 // MODEL TYPES
 // ============================================
 
-export type ModelProvider = 'claude-opus' | 'claude-sonnet' | 'gpt-5.2' | 'gpt-5-mini' | 'gemini-pro' | 'gemini-flash' | 'kimi'
+export type ModelProvider = 'claude-opus' | 'claude-sonnet' | 'gpt-5.2' | 'gpt-5-mini' | 'gemini-pro' | 'gemini-flash' | 'kimi' | 'codex'
 export type TaskComplexity = 'high' | 'medium' | 'low'
 
 export interface ModelConfig {
@@ -94,6 +94,14 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
     inputCostPer1k: 0.00045,
     outputCostPer1k: 0.0025,
   },
+  'codex': {
+    provider: 'codex',
+    model: 'gpt-5.3-codex',
+    description: 'Codex-grade GPT model optimized for coding workflows.',
+    costTier: 'standard',
+    inputCostPer1k: 0.0015,
+    outputCostPer1k: 0.012,
+  },
 }
 
 // ============================================
@@ -150,7 +158,7 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * COST RULE: GPT-5.2 + Opus combined < 10% of total tokens
  * ═══════════════════════════════════════════════════════════════
  */
-export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
+const DEFAULT_AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
   // BUILDER LAYER - Claude Sonnet 4 for complex multi-step tool calling
   // Kimi K2.5 via OpenRouter has issues with AI SDK streaming/tool calls
   planner: 'claude-sonnet',      // Orchestration, task decomposition
@@ -165,6 +173,23 @@ export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
   strategist: 'gemini-pro',      // Plan VALIDATION - different perspective
   auditor: 'claude-opus',        // Quality gate JUDGE - never grades own work
 }
+
+const CODEX_AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
+  planner: 'codex',
+  architect: 'codex',
+  backend: 'codex',
+  database: 'codex',
+  frontend: 'codex',
+  devops: 'gemini-flash',
+  qa: 'gemini-flash',
+  strategist: 'gemini-pro',
+  auditor: 'claude-opus',
+}
+
+export const AGENT_MODEL_MAP: Record<AgentId, ModelProvider> =
+  process.env.TORBIT_USE_CODEX_PRIMARY === 'true'
+    ? CODEX_AGENT_MODEL_MAP
+    : DEFAULT_AGENT_MODEL_MAP
 
 // ============================================
 // MODEL FACTORY
@@ -188,6 +213,10 @@ export function getModel(provider: ModelProvider): LanguageModel {
       return google(config.model)
     case 'kimi':
       return openrouter(config.model)
+    case 'codex': {
+      const codexModel = process.env.TORBIT_CODEX_MODEL || process.env.OPENAI_CODEX_MODEL || config.model
+      return openai(codexModel)
+    }
     default:
       return anthropic('claude-sonnet-4-5-20250929')
   }

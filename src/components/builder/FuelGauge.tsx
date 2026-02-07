@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useFuelStore } from '@/store/fuel'
 import RefuelModal from './RefuelModal'
+import { useEscapeToClose } from '@/hooks/useEscapeToClose'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 /**
  * TierBadge - Shows current subscription tier
@@ -46,6 +48,9 @@ export default function FuelGauge() {
   const [showDetails, setShowDetails] = useState(false)
   const [showRefuelModal, setShowRefuelModal] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+
+  useEscapeToClose(showAuthorizeBurn, cancelBurn)
+  useBodyScrollLock(showAuthorizeBurn)
 
   // Prevent hydration mismatch - only render dynamic values after mount
   useEffect(() => {
@@ -259,6 +264,9 @@ export default function FuelGauge() {
               exit={{ scale: 0.95, opacity: 0 }}
               className="bg-[#050505] border border-[#1a1a1a] rounded-2xl p-6 max-w-md mx-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="authorize-usage-title"
             >
               {/* Header */}
               <div className="flex items-center gap-3 mb-4">
@@ -268,7 +276,7 @@ export default function FuelGauge() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-[15px] font-medium text-[#ffffff]">Authorize Usage</h3>
+                  <h3 id="authorize-usage-title" className="text-[15px] font-medium text-[#ffffff]">Authorize Usage</h3>
                   <p className="text-[12px] text-[#505050]">Review estimated cost</p>
                 </div>
               </div>

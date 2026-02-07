@@ -2,6 +2,8 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
+import { useEscapeToClose } from '@/hooks/useEscapeToClose'
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock'
 
 // ============================================================================
 // SUPERVISOR REVIEW PANEL
@@ -50,6 +52,8 @@ export function SupervisorReviewPanel({
   onViewDetails,
 }: SupervisorReviewPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  useEscapeToClose(isOpen, onDismiss)
+  useBodyScrollLock(isOpen)
   
   const getVerdictLabel = (status: VerdictStatus): string => {
     switch (status) {
@@ -92,13 +96,17 @@ export function SupervisorReviewPanel({
             exit={{ x: '100%', opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             className="fixed right-0 top-0 h-full w-[400px] bg-[#0a0a0a] border-l border-[#1a1a1a] z-50 flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="supervisor-review-title"
           >
             {/* Header - Clinical, muted */}
             <div className="px-5 py-4 border-b border-[#1a1a1a]">
               <div className="flex items-center justify-between mb-1">
-                <h2 className="text-[13px] font-medium text-[#888]">Supervisor Review</h2>
+                <h2 id="supervisor-review-title" className="text-[13px] font-medium text-[#888]">Supervisor Review</h2>
                 <button
                   onClick={onDismiss}
+                  aria-label="Close supervisor review"
                   className="w-6 h-6 flex items-center justify-center text-[#505050] hover:text-[#888] rounded transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -15,6 +15,8 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Shield, Key, Globe, HardDrive, AlertTriangle } from "lucide-react";
 import type { IntegrationManifest } from "@/lib/integrations/types";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 interface IntegrationConsentPanelProps {
   manifest: IntegrationManifest;
@@ -34,6 +36,9 @@ export function IntegrationConsentPanel({
   const hasSecrets = (permissions.secrets?.length ?? 0) > 0;
   const hasNetwork = (permissions.network?.length ?? 0) > 0;
   const hasStorage = permissions.storage === true;
+
+  useEscapeToClose(isOpen, onCancel);
+  useBodyScrollLock(isOpen);
 
   return (
     <AnimatePresence>
@@ -56,6 +61,9 @@ export function IntegrationConsentPanel({
             exit={{ x: "100%" }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             className="fixed right-0 top-0 h-full w-full max-w-md bg-neutral-900 border-l border-neutral-800 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="integration-consent-title"
           >
             {/* Header */}
             <div className="sticky top-0 bg-neutral-900 border-b border-neutral-800 p-4 flex items-center justify-between">
@@ -64,12 +72,13 @@ export function IntegrationConsentPanel({
                   <Shield className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Add Integration</h2>
+                  <h2 id="integration-consent-title" className="text-lg font-semibold text-white">Add Integration</h2>
                   <p className="text-sm text-neutral-400">{name}</p>
                 </div>
               </div>
               <button
                 onClick={onCancel}
+                aria-label="Close integration consent"
                 className="p-2 rounded-lg hover:bg-neutral-800 transition-colors"
               >
                 <X className="w-5 h-5 text-neutral-400" />
