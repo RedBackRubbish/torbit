@@ -67,7 +67,7 @@ export function useAuth() {
           }))
           
           // Fetch profile
-          const { data: profile } = await supabase
+          const { data: profile } = await sb
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
@@ -111,7 +111,7 @@ export function useAuth() {
           }))
           
           // Fetch profile
-          const { data: profile } = await supabase
+          const { data: profile } = await sb
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
