@@ -210,6 +210,38 @@ export function formatGovernanceForAgent(gov: GovernanceObject): string {
 }
 
 /**
+ * Format hard invariants as a QA prompt injection.
+ * QA uses this to generate verification tests -- one per hard invariant.
+ * Returns null if there are no hard invariants (QA should skip).
+ */
+export function formatInvariantsForQA(gov: GovernanceObject): string | null {
+  const hardInvariants = gov.protected_invariants.filter(inv => inv.severity === 'hard')
+  if (hardInvariants.length === 0) return null
+
+  const lines: string[] = [
+    '=== GOVERNANCE CONTRACT: INVARIANTS TO VERIFY ===',
+    `Build intent: ${gov.scope.intent}`,
+    '',
+    `You MUST generate exactly ${hardInvariants.length} verification test(s).`,
+    'Each test proves one invariant held. Follow the mapping patterns in your system prompt.',
+    '',
+    'HARD INVARIANTS:',
+  ]
+
+  for (let i = 0; i < hardInvariants.length; i++) {
+    const inv = hardInvariants[i]
+    lines.push(`  [${i}] "${inv.description}"`)
+    if (inv.scope.length > 0) {
+      lines.push(`      Files: ${inv.scope.join(', ')}`)
+    }
+    lines.push(`      Output: invariant.${i}.spec.ts`)
+  }
+
+  lines.push('', '=== END GOVERNANCE CONTRACT ===')
+  return lines.join('\n')
+}
+
+/**
  * Generate a user-friendly summary of what the governance object means.
  * This is what the UI can show to the user.
  */

@@ -18,7 +18,7 @@ import { TOOL_DEFINITIONS, AGENT_TOOLS, type ToolName, type AgentId } from '../t
 import { executeTool, createExecutionContext, type ToolExecutionContext, type ToolResult } from '../tools/executor'
 import { KimiRouter, type RoutingDecision, isKimiConfigured } from './router'
 import { checkCircuitBreaker, calculateFuelCost, useFuelStore, type ModelTier as FuelModelTier } from '@/store/fuel'
-import { parseGovernanceOutput, formatGovernanceForAgent, type GovernanceObject } from './governance'
+import { parseGovernanceOutput, formatGovernanceForAgent, formatInvariantsForQA, type GovernanceObject } from './governance'
 
 // Agent prompts
 import { AUDITOR_SYSTEM_PROMPT } from './prompts/auditor'
@@ -700,6 +700,7 @@ MUST NOT be broken by this build.
     routing?: RoutingDecision
     preflight?: PreflightResult
     governance?: GovernanceObject
+    invariantResults?: { passed: boolean; tested: number; failed: string[] }
   }> {
     // 0. Pre-flight check: validate request before spending fuel
     const preflightResult = this.preflight(userPrompt)
@@ -855,7 +856,57 @@ MUST NOT be broken by this build.
       `)
     }
     
-    return { plan, execution, audit, routing: routing ?? undefined, preflight: preflightResult, governance: governance ?? undefined }
+    // 7. QA INVARIANT VERIFICATION - Prove invariants with assertions
+    //    Only runs when governance has hard invariants. This is the proof layer.
+    let invariantResults: { passed: boolean; tested: number; failed: string[] } | undefined
+    
+    if (governance) {
+      const qaPrompt = formatInvariantsForQA(governance)
+      
+      if (qaPrompt) {
+        const qaResult = await this.executeAgent('qa', `
+          You are running INVARIANT VERIFICATION -- not product tests.
+          
+          Generate and execute one Playwright test per hard invariant listed below.
+          Follow the invariant-to-assertion mapping in your system prompt.
+          
+          ${qaPrompt}
+          
+          After generating each test file, run it immediately.
+          Report which invariants HELD and which VIOLATED.
+        `, { modelTier: 'sonnet' })
+        
+        // Parse QA results for invariant pass/fail
+        const hardCount = governance.protected_invariants.filter(i => i.severity === 'hard').length
+        const failedInvariants: string[] = []
+        
+        for (let i = 0; i < hardCount; i++) {
+          const inv = governance.protected_invariants.filter(i => i.severity === 'hard')[i]
+          // Check QA output for failure indicators on this invariant
+          const outputUpper = qaResult.output.toUpperCase()
+          if (outputUpper.includes(`INVARIANT.${i}`) && outputUpper.includes('FAIL')) {
+            failedInvariants.push(inv.description)
+          }
+        }
+        
+        invariantResults = {
+          passed: failedInvariants.length === 0,
+          tested: hardCount,
+          failed: failedInvariants,
+        }
+        
+        // If invariant tests failed, mark audit as failed
+        if (!invariantResults.passed) {
+          audit.passed = false
+          audit.gates.functional.passed = false
+          audit.gates.functional.issues.push(
+            ...failedInvariants.map(desc => `INVARIANT VIOLATED: ${desc}`)
+          )
+        }
+      }
+    }
+    
+    return { plan, execution, audit, routing: routing ?? undefined, preflight: preflightResult, governance: governance ?? undefined, invariantResults }
   }
   
   /**
