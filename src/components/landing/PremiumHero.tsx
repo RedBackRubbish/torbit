@@ -51,6 +51,7 @@ export default function PremiumHero() {
   const moreRef = useRef<HTMLDivElement>(null)
   
   const isLoggedIn = !authLoading && !!user
+  const builderEntryPath = isLoggedIn ? '/builder' : '/login?next=/builder'
 
   // Close "More" dropdown when clicking outside
   useEffect(() => {
@@ -118,7 +119,7 @@ export default function PremiumHero() {
         sessionStorage.setItem('torbit_platform', platform)
         sessionStorage.setItem('torbit_capabilities', JSON.stringify(selectedCapabilities))
         sessionStorage.setItem('torbit_capability_context', getCapabilityContext(selectedCapabilities))
-        router.push('/builder')
+        router.push(builderEntryPath)
       }
     }
   }
@@ -130,7 +131,7 @@ export default function PremiumHero() {
       sessionStorage.setItem('torbit_platform', platform)
       sessionStorage.setItem('torbit_capabilities', JSON.stringify(selectedCapabilities))
       sessionStorage.setItem('torbit_capability_context', getCapabilityContext(selectedCapabilities))
-      router.push('/builder')
+      router.push(builderEntryPath)
     }
   }
 

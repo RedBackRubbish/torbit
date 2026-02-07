@@ -4,11 +4,11 @@
  * TORBIT - Login Form Component
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuthContext } from '@/providers/AuthProvider'
 import { Mail, Lock, Github, Chrome, ArrowRight } from 'lucide-react'
 import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
 
@@ -16,13 +16,26 @@ type AuthMode = 'login' | 'signup'
 
 export function LoginForm() {
   const router = useRouter()
-  const { signIn, signUp, signInWithOAuth, loading } = useAuth()
+  const { signIn, signUp, signInWithOAuth, loading, user } = useAuthContext()
   
   const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (loading || !user) return
+
+    const nextPath = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('next')
+      : null
+    const safeRedirect = nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//')
+      ? nextPath
+      : '/dashboard'
+
+    router.replace(safeRedirect)
+  }, [loading, user, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,13 +48,6 @@ export function LoginForm() {
       } else {
         await signUp(email, password)
       }
-      const nextPath = typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('next')
-        : null
-      const safeRedirect = nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//')
-        ? nextPath
-        : '/dashboard'
-      router.push(safeRedirect)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
     } finally {

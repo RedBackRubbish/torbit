@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useBuilderStore } from '@/store/builder'
 import { E2BProvider } from '@/providers/E2BProvider'
+import { useAuthContext } from '@/providers/AuthProvider'
 import { ErrorBoundary, ChatErrorFallback, PreviewErrorFallback } from '@/components/ErrorBoundary'
 import BuilderLayout from '@/components/builder/BuilderLayout'
 import Sidebar from '@/components/builder/Sidebar'
@@ -20,6 +22,23 @@ import { UserMenu } from '@/components/builder/UserMenu'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 export default function BuilderPage() {
+  const router = useRouter()
+  const { user, loading: authLoading } = useAuthContext()
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login?next=/builder')
+    }
+  }, [authLoading, user, router])
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+        <TorbitSpinner size="lg" />
+      </div>
+    )
+  }
+
   return (
     <E2BProvider>
       <BuilderPageContent />
