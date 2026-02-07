@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "TORBIT | Build Software with AI",
-  description: "The future of software creation. Describe your vision, we handle the rest. Powered by multi-agent AI.",
+  description: "The future of software creation. Describe your vision, we handle the rest. Powered by Torbit's AI team.",
   keywords: ["AI", "software", "development", "agents", "enterprise", "automation"],
   authors: [{ name: "TORBIT" }],
   openGraph: {

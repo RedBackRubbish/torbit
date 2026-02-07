@@ -37,6 +37,14 @@ export interface UsageMetrics {
   estimatedCost: number
 }
 
+/** A verified proof line shown after build completion */
+export interface ProofLine {
+  /** Human-friendly description, e.g. "Blue sidebar theme preserved" */
+  label: string
+  /** Whether this invariant held or was violated */
+  status: 'verified' | 'warning' | 'failed'
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -44,6 +52,8 @@ export interface Message {
   agentId?: string
   toolCalls?: ToolCall[]
   usage?: UsageMetrics
+  /** Verified invariant proof lines shown in completion state */
+  proofLines?: ProofLine[]
   error?: {
     type: string
     message: string
@@ -55,7 +65,7 @@ export interface Message {
 
 // Stream chunk types from API
 export interface StreamChunk {
-  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry'
+  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry' | 'proof' | 'governance'
   content?: string
   toolCall?: {
     id: string
@@ -78,6 +88,12 @@ export interface StreamChunk {
     attempt: number
     maxAttempts: number
     retryAfterMs: number
+  }
+  proof?: ProofLine[]
+  governance?: {
+    verdict: string
+    intent: string
+    invariants: Array<{ description: string; scope: string[]; severity: 'hard' | 'soft' }>
   }
 }
 

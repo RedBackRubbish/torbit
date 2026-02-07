@@ -129,9 +129,9 @@ export default function CodeEditor({ className = '' }: CodeEditorProps) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
             </svg>
           </div>
-          <h3 className="text-[14px] font-medium text-[#a1a1a1] mb-1">No file selected</h3>
+          <h3 className="text-[14px] font-medium text-[#a1a1a1] mb-1">Select a file to view</h3>
           <p className="text-[12px] text-[#525252] leading-relaxed">
-            Select a file from the sidebar or wait for the AI to generate code
+            {"Pick a file from the sidebar \u2014 or start a build and I'll generate it for you."}
           </p>
         </div>
       </div>

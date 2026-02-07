@@ -98,6 +98,104 @@ TEST TYPES
 - Auth middleware
 
 ═══════════════════════════════════════════════════════════════════════════════
+INVARIANT VERIFICATION (Governance-Aware)
+═══════════════════════════════════════════════════════════════════════════════
+
+When a GOVERNANCE CONTRACT is present in your context with protected_invariants,
+you MUST generate a verification test for each HARD invariant.
+
+These tests are NOT product tests. They are PROOF that the system kept its
+promises. One test per invariant. No more, no less.
+
+## Rules
+
+1. ONLY generate tests for HARD invariants. SOFT invariants are informational.
+2. NEVER generate speculative tests, product tests, or "nice-to-have" coverage.
+3. Each test MUST fail if and only if the invariant is violated.
+4. Tests MUST be deterministic -- no flaky selectors, no timing-dependent assertions.
+5. Tests MUST be named: \`invariant.<index>.spec.ts\` (e.g., \`invariant.0.spec.ts\`)
+
+## Invariant-to-Assertion Mapping
+
+Follow these patterns based on invariant type:
+
+### Visual / Theme invariants
+Invariant: "Blue theme on sidebar must remain"
+\`\`\`typescript
+// invariant.0.spec.ts
+import { test, expect } from '@playwright/test'
+
+test('INVARIANT: Blue theme on sidebar must remain', async ({ page }) => {
+  await page.goto('/')
+  const sidebar = page.locator('[data-testid="sidebar"], nav.sidebar, aside').first()
+  await expect(sidebar).toBeVisible()
+  const bg = await sidebar.evaluate(el => getComputedStyle(el).backgroundColor)
+  // Assert the color is in the blue family (rgb blue channel dominant)
+  const [r, g, b] = bg.match(/\\d+/g)!.map(Number)
+  expect(b).toBeGreaterThan(r)
+  expect(b).toBeGreaterThan(g)
+})
+\`\`\`
+
+### DOM Structure invariants
+Invariant: "Navigation links must exist in sidebar"
+\`\`\`typescript
+test('INVARIANT: Navigation links must exist in sidebar', async ({ page }) => {
+  await page.goto('/')
+  const navLinks = page.locator('nav a, aside a')
+  await expect(navLinks).not.toHaveCount(0)
+})
+\`\`\`
+
+### Route invariants
+Invariant: "Login page must continue to exist"
+\`\`\`typescript
+test('INVARIANT: Login page must continue to exist', async ({ page }) => {
+  const response = await page.goto('/login')
+  expect(response?.status()).toBe(200)
+})
+\`\`\`
+
+### Auth / Logic invariants
+Invariant: "Dashboard must require authentication"
+\`\`\`typescript
+test('INVARIANT: Dashboard must require authentication', async ({ page }) => {
+  await page.goto('/dashboard')
+  // Should redirect to login, not show dashboard content
+  await expect(page).toHaveURL(/\\/login/)
+})
+\`\`\`
+
+### CSS Token invariants
+Invariant: "Primary color must remain #0066cc"
+\`\`\`typescript
+test('INVARIANT: Primary color must remain #0066cc', async ({ page }) => {
+  await page.goto('/')
+  const root = page.locator(':root')
+  const primary = await root.evaluate(el =>
+    getComputedStyle(el).getPropertyValue('--color-primary').trim()
+  )
+  expect(primary).toBe('#0066cc')
+})
+\`\`\`
+
+### File Existence invariants
+Invariant: "API route /api/users must exist"
+\`\`\`typescript
+test('INVARIANT: API route /api/users must exist', async ({ request }) => {
+  const response = await request.get('/api/users')
+  expect(response.status()).not.toBe(404)
+})
+\`\`\`
+
+## Failure Semantics
+
+If an invariant test fails:
+- The Auditor repair loop already ran, so this is a CONFIRMED regression
+- Report: which invariant failed, which assertion failed, the actual vs expected value
+- This causes a DETERMINISTIC build failure -- not LLM judgment, proof
+
+═══════════════════════════════════════════════════════════════════════════════
 SELF-HEALING STRATEGIES
 ═══════════════════════════════════════════════════════════════════════════════
 

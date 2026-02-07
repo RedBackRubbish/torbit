@@ -15,6 +15,7 @@ import { ActivityLedgerTimeline } from './governance/ActivityLedgerTimeline'
 import { useLedger, generateLedgerHash } from '@/store/ledger'
 import { useGenerationSound, useFileSound, useNotificationSound } from '@/lib/audio'
 import { SupervisorSlidePanel, type SupervisorReviewResult, type SupervisorFix } from './chat/SupervisorSlidePanel'
+import { useGovernanceStore } from '@/store/governance'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 
 /**
@@ -245,6 +246,35 @@ export default function ChatPanel() {
               }
               break
 
+            case 'governance':
+              // Persist governance from server into the store
+              if (chunk.governance) {
+                useGovernanceStore.getState().addGovernance({
+                  verdict: chunk.governance.verdict as 'approved' | 'approved_with_amendments' | 'rejected' | 'escalate',
+                  confidence: 'medium',
+                  scope: {
+                    intent: chunk.governance.intent,
+                    affected_areas: [],
+                  },
+                  protected_invariants: chunk.governance.invariants.map(inv => ({
+                    description: inv.description,
+                    scope: inv.scope,
+                    severity: inv.severity,
+                  })),
+                })
+              }
+              break
+
+            case 'proof':
+              if (chunk.proof) {
+                setMessages(prev => prev.map(m => 
+                  m.id === assistantId 
+                    ? { ...m, proofLines: chunk.proof }
+                    : m
+                ))
+              }
+              break
+
             case 'error':
               if (chunk.error) {
                 setMessages(prev => prev.map(m => 
@@ -267,6 +297,51 @@ export default function ChatPanel() {
       console.log('[DEBUG] Waiting for', toolExecutionPromises.length, 'tool executions to complete')
       await Promise.all(toolExecutionPromises)
       console.log('[DEBUG] All tool executions completed')
+    }
+
+    // Compute proof lines from tool results (client-side derivation)
+    // Server-sent governance proofs via 'proof' chunks will override these.
+    // Also persist any governance data received during this build.
+    const allToolCalls = Array.from(toolCalls.values())
+    const createFileCalls = allToolCalls.filter(tc => tc.name === 'createFile')
+    const editFileCalls = allToolCalls.filter(tc => tc.name === 'editFile')
+    const testCalls = allToolCalls.filter(tc => tc.name === 'runTests' || tc.name === 'runE2eCycle')
+    
+    if (createFileCalls.length > 0 || editFileCalls.length > 0) {
+      const proofLines: Array<{ label: string; status: 'verified' | 'warning' | 'failed' }> = []
+      
+      const successFiles = createFileCalls.filter(tc => tc.status === 'complete')
+      const failedFiles = createFileCalls.filter(tc => tc.status === 'error')
+      
+      if (successFiles.length > 0 && failedFiles.length === 0) {
+        proofLines.push({ label: `${successFiles.length} files created successfully`, status: 'verified' })
+      } else if (failedFiles.length > 0) {
+        proofLines.push({ label: `${failedFiles.length} file(s) failed to create`, status: 'failed' })
+      }
+      
+      if (editFileCalls.length > 0) {
+        const successEdits = editFileCalls.filter(tc => tc.status === 'complete')
+        if (successEdits.length === editFileCalls.length) {
+          proofLines.push({ label: `${successEdits.length} files updated`, status: 'verified' })
+        }
+      }
+      
+      if (testCalls.length > 0) {
+        const passedTests = testCalls.filter(tc => tc.status === 'complete')
+        if (passedTests.length === testCalls.length) {
+          proofLines.push({ label: 'All tests passed', status: 'verified' })
+        } else {
+          proofLines.push({ label: 'Some tests failed', status: 'warning' })
+        }
+      }
+      
+      if (proofLines.length > 0) {
+        setMessages(prev => prev.map(m => 
+          m.id === assistantId 
+            ? { ...m, proofLines }
+            : m
+        ))
+      }
     }
 
     setCurrentTask(null)
@@ -331,6 +406,9 @@ export default function ChatPanel() {
     }])
 
     try {
+      // Load persisted invariants to send as context
+      const persistedInvariants = useGovernanceStore.getState().getInvariantsForPrompt()
+      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -341,6 +419,7 @@ export default function ChatPanel() {
           agentId,
           projectType,
           capabilities,
+          persistedInvariants,
         }),
       })
 
@@ -857,65 +936,6 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
             onInputChange={setChatInput}
             onSubmit={handleSubmit}
           />
-        )}
-      </AnimatePresence>
-      
-      {/* Bottom Action Bar - Emergent style */}
-      <AnimatePresence mode="wait">
-        {!chatCollapsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="h-11 border-t border-[#151515] flex items-center justify-between px-3 bg-[#000000] shrink-0"
-          >
-            {/* Left: View activity (opt-in Inspector) */}
-            <button 
-              onClick={() => setShowInspector(true)}
-              className="h-7 px-2 flex items-center gap-1.5 text-[10px] text-[#404040] hover:text-[#606060] transition-all"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              View activity
-            </button>
-            
-            {/* Center: Actions */}
-            <div className="flex items-center gap-1">
-              <button className="h-7 px-2.5 flex items-center gap-1.5 text-[11px] text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded-lg transition-all">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3v11.25" />
-                </svg>
-                GitHub
-              </button>
-              
-              {/* Ultra toggle */}
-              <button className="h-7 px-2.5 flex items-center gap-1.5 text-[11px] text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded-lg transition-all">
-                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-[#808080] to-[#c0c0c0] opacity-50" />
-                Ultra
-              </button>
-            </div>
-            
-            {/* Right: Mic / Stop */}
-            <div className="flex items-center gap-1">
-              {isLoading ? (
-                <button 
-                  onClick={() => setIsLoading(false)}
-                  className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <rect x="6" y="6" width="12" height="12" rx="1" />
-                  </svg>
-                </button>
-              ) : (
-                <button className="w-7 h-7 flex items-center justify-center text-[#505050] hover:text-[#a8a8a8] hover:bg-[#0a0a0a] rounded-lg transition-all">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </motion.div>
         )}
       </AnimatePresence>
       

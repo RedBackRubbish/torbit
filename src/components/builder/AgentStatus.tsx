@@ -17,7 +17,7 @@ export default function AgentStatus() {
     return (
       <div className="flex items-center gap-2 text-xs text-white/40">
         <div className="w-1.5 h-1.5 rounded-full bg-[#808080]" />
-        <span>Idle</span>
+        <span>Ready</span>
       </div>
     )
   }

@@ -246,11 +246,11 @@ export const useTimeline = create<TimelineState & TimelineActions>()(
 // ============================================================================
 export function getAgentDisplayInfo(agent: AgentType) {
   const info = {
-    Planner: { icon: 'Brain', color: 'cyan', label: 'Planning' },
-    Architect: { icon: 'Compass', color: 'blue', label: 'Architecting' },
-    Builder: { icon: 'Hammer', color: 'yellow', label: 'Building' },
-    Auditor: { icon: 'ShieldCheck', color: 'purple', label: 'Auditing' },
-    DevOps: { icon: 'Rocket', color: 'silver', label: 'Deploying' },
+    Planner: { icon: 'Brain', color: 'cyan', label: 'Plan' },
+    Architect: { icon: 'Compass', color: 'blue', label: 'Design' },
+    Builder: { icon: 'Hammer', color: 'yellow', label: 'Build' },
+    Auditor: { icon: 'ShieldCheck', color: 'purple', label: 'Review' },
+    DevOps: { icon: 'Rocket', color: 'silver', label: 'Ship' },
   }
   return info[agent] || info.Builder
 }
