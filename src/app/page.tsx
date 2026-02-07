@@ -3,10 +3,8 @@ import { PremiumHero, PricingSection } from '@/components/landing'
 export default function Home() {
   return (
     <div className="min-h-screen bg-black">
-      {/* Gradient background */}
       <div className="fixed inset-0 bg-gradient-to-b from-black via-neutral-950 to-black pointer-events-none" />
 
-      {/* Noise texture */}
       <div
         className="fixed inset-0 pointer-events-none opacity-[0.015]"
         style={{
@@ -14,7 +12,6 @@ export default function Home() {
         }}
       />
 
-      {/* Content */}
       <main className="relative z-10">
         <PremiumHero />
         <PricingSection />
