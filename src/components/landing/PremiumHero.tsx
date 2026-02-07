@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { TorbitLogo } from '@/components/ui/TorbitLogo'
@@ -113,7 +114,6 @@ export default function PremiumHero() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (prompt.trim()) {
-        console.log('[v0] KeyDown submit triggered, prompt:', prompt)
         sessionStorage.setItem('torbit_prompt', prompt)
         sessionStorage.setItem('torbit_platform', platform)
         sessionStorage.setItem('torbit_capabilities', JSON.stringify(selectedCapabilities))
@@ -125,7 +125,6 @@ export default function PremiumHero() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('[v0] Form submit triggered, prompt:', prompt)
     if (prompt.trim()) {
       sessionStorage.setItem('torbit_prompt', prompt)
       sessionStorage.setItem('torbit_platform', platform)
@@ -159,7 +158,7 @@ export default function PremiumHero() {
             <a href="#guarantee" className="text-white/40 text-sm hover:text-white/70 transition-colors hidden sm:block">
               Guarantee
             </a>
-            <a href="#" className="text-white/40 text-sm hover:text-white/70 transition-colors hidden sm:block">
+            <a href="#pricing" className="text-white/40 text-sm hover:text-white/70 transition-colors hidden sm:block">
               Governance Docs
             </a>
             <div className="w-px h-4 bg-white/10 hidden sm:block" />
@@ -189,7 +188,7 @@ export default function PremiumHero() {
 
       {/* Hero Section */}
       <div className="flex-1 flex flex-col justify-center px-6 md:px-8 pt-24 pb-8">
-        <div className="max-w-4xl mx-auto w-full">
+        <div className="max-w-3xl mx-auto w-full">
           
           {/* Main Headline */}
           <AnimatePresence>
@@ -200,13 +199,13 @@ export default function PremiumHero() {
                 transition={{ duration: 0.8, ease: [0.25, 0.4, 0.25, 1] }}
                 className="text-center mb-8 md:mb-12"
               >
-                <h1 className="text-[3.5rem] sm:text-[5rem] md:text-[6.5rem] font-extralight tracking-[-0.02em] leading-[0.95] mb-4">
+                <h1 className="text-[3rem] sm:text-[4.5rem] md:text-[5.5rem] font-extralight tracking-[-0.02em] leading-[0.95] mb-4">
                   <span className="bg-gradient-to-b from-white via-white to-white/50 bg-clip-text text-transparent">
                     TORBIT
                   </span>
                 </h1>
                 
-                <p className="text-white/60 text-xl md:text-2xl font-light tracking-wide mb-3">
+                <p className="text-white/60 text-lg md:text-2xl font-light tracking-wide mb-3">
                   Production software, with proof.
                 </p>
                 
@@ -423,7 +422,7 @@ export default function PremiumHero() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.5, delay: 0.5 }}
-                  className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mt-5 text-white/30 text-xs md:text-sm"
+                  className="flex flex-wrap items-center justify-center gap-3 md:gap-5 mt-4 text-white/35 text-xs md:text-sm"
                 >
                   <span className="flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5 text-emerald-400/70" fill="currentColor" viewBox="0 0 20 20">
@@ -456,9 +455,9 @@ export default function PremiumHero() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
-                className="mt-16 md:mt-20"
+                className="mt-12 md:mt-16"
               >
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                   {[
                     { step: '01', title: 'Describe', desc: 'Plain English intent. No config.' },
                     { step: '02', title: 'Build', desc: 'AI executes with pinned dependencies.' },
@@ -700,9 +699,9 @@ export default function PremiumHero() {
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <span className="text-white/20 text-xs">© 2026 TORBIT. All rights reserved.</span>
           <div className="flex items-center gap-6 text-white/20 text-xs">
-            <a href="#" className="hover:text-white/50 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-white/50 transition-colors">Terms</a>
-            <a href="#" className="hover:text-white/50 transition-colors">Governance Docs</a>
+            <Link href="/privacy" className="hover:text-white/50 transition-colors">Privacy</Link>
+            <Link href="/terms" className="hover:text-white/50 transition-colors">Terms</Link>
+            <Link href="/contact" className="hover:text-white/50 transition-colors">Contact</Link>
           </div>
         </div>
       </footer>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
+import Link from 'next/link'
 import { useBuilderStore } from '@/store/builder'
 import { E2BProvider } from '@/providers/E2BProvider'
 import { ErrorBoundary, ChatErrorFallback, PreviewErrorFallback } from '@/components/ErrorBoundary'
@@ -87,10 +88,10 @@ function BuilderPageContent() {
       {/* Preview Panel - Right side with header */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Preview Header */}
-        <header className="h-11 bg-[#0a0a0a] border-b border-[#1f1f1f] flex items-center justify-between px-4">
+        <header className="h-11 bg-[#0a0a0a] border-b border-[#1f1f1f] flex items-center justify-between px-2 sm:px-4 gap-2">
           {/* Left: Title + Tabs */}
-          <div className="flex items-center gap-4">
-            <span className="text-[13px] font-medium text-[#fafafa]">App Preview</span>
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <span className="hidden lg:block text-[13px] font-medium text-[#fafafa]">App Preview</span>
             <div className="flex items-center bg-[#141414] rounded-lg p-0.5 border border-[#1f1f1f]">
               <TabButton
                 label="Preview"
@@ -115,35 +116,44 @@ function BuilderPageContent() {
           </div>
           
           {/* Right: Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Home button */}
-            <a
+            <Link
               href="/dashboard"
+              aria-label="Go to dashboard"
               className="w-7 h-7 flex items-center justify-center rounded-md text-[#525252] hover:text-[#fafafa] hover:bg-[#141414] transition-all"
               title="Dashboard"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
               </svg>
-            </a>
+            </Link>
             
             {/* Status indicator */}
-            <div className="flex items-center gap-1.5 pr-2 border-r border-[#1f1f1f]">
+            <div className="flex items-center gap-1.5 px-2 border-r border-[#1f1f1f]">
               {isWorking ? (
                 <TorbitSpinner size="xs" speed="fast" />
               ) : (
                 <div className="w-1.5 h-1.5 rounded-full bg-[#333]" />
               )}
-              <span className="text-[11px] text-[#525252]">
+              <span className="hidden md:inline text-[11px] text-[#525252]">
                 {isWorking ? 'Building...' : 'Idle'}
               </span>
             </div>
             
-            <ScreenshotButton />
+            <div className="hidden md:block">
+              <ScreenshotButton />
+            </div>
+            <div className="hidden md:block">
+              <SoundToggle />
+            </div>
+            <div className="hidden md:block">
+              <FuelGauge />
+            </div>
+            <div className="hidden md:block">
+              <ShipMenu />
+            </div>
             <PublishPanel />
-            <SoundToggle />
-            <FuelGauge />
-            <ShipMenu />
             <UserMenu />
             
             {/* Tasks toggle */}

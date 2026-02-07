@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { UserMenu } from '@/components/builder/UserMenu'
 import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
+import type { Project } from '@/lib/supabase/types'
 
 type ViewMode = 'grid' | 'list'
 type SortOption = 'updated' | 'created' | 'name'
@@ -37,8 +38,9 @@ type SortOption = 'updated' | 'created' | 'name'
 export default function DashboardPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuthContext()
-  const { projects, loading: projectsLoading, deleteProject } = useProjects()
+  const { projects, loading: projectsLoading, deleteProject, updateProject, createProject } = useProjects()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [mutatingId, setMutatingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [sortBy, setSortBy] = useState<SortOption>('updated')
@@ -48,6 +50,7 @@ export default function DashboardPage() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         document.getElementById('search-input')?.focus()
+        document.getElementById('search-input-mobile')?.focus()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -120,6 +123,43 @@ export default function DashboardPage() {
     }
   }
 
+  const handleRename = async (project: Project) => {
+    const nextName = window.prompt('Rename project', project.name)?.trim()
+    if (!nextName || nextName === project.name) return
+
+    setMutatingId(project.id)
+    try {
+      await updateProject(project.id, {
+        name: nextName,
+        updated_at: new Date().toISOString(),
+      })
+    } catch (err) {
+      console.error('Failed to rename project:', err)
+      window.alert('Could not rename this project. Please try again.')
+    } finally {
+      setMutatingId(null)
+    }
+  }
+
+  const handleDuplicate = async (project: Project) => {
+    setMutatingId(project.id)
+    try {
+      await createProject({
+        name: `${project.name} (Copy)`,
+        description: project.description,
+        project_type: project.project_type,
+        files: project.files,
+        settings: project.settings,
+        knowledge_snapshot: project.knowledge_snapshot,
+      })
+    } catch (err) {
+      console.error('Failed to duplicate project:', err)
+      window.alert('Could not duplicate this project. Please try again.')
+    } finally {
+      setMutatingId(null)
+    }
+  }
+
   const formatDate = (date: string) => {
     const d = new Date(date)
     const now = new Date()
@@ -143,7 +183,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-[#0A0A0A]">
       {/* Header */}
       <header className="h-14 border-b border-white/[0.08] bg-[#0A0A0A] sticky top-0 z-50">
-        <div className="h-full max-w-[1200px] mx-auto px-6 flex items-center justify-between">
+        <div className="h-full max-w-[1200px] mx-auto px-4 sm:px-6 flex items-center justify-between gap-3">
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <TorbitLogo size="sm" animated />
             <span className="text-[15px] font-semibold tracking-tight text-white">TORBIT</span>
@@ -179,7 +219,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-[1200px] mx-auto px-6 py-12">
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Welcome Section */}
         <div className="mb-10">
           <h1 className="text-[28px] font-semibold text-white tracking-tight mb-1">
@@ -193,16 +233,31 @@ export default function DashboardPage() {
           </p>
         </div>
 
+        {/* Mobile Search */}
+        <div className="md:hidden mb-6">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <input
+              id="search-input-mobile"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search projects..."
+              className="w-full h-10 pl-9 pr-3 bg-white/[0.04] border border-white/[0.08] rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-all"
+            />
+          </div>
+        </div>
+
         {/* Toolbar - only show when there are projects */}
         {totalProjects > 0 && (
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div className="text-sm text-white/40">
               {filteredProjects.length !== totalProjects && (
                 <span>{filteredProjects.length} of {totalProjects} projects</span>
               )}
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortOption)}
@@ -269,8 +324,11 @@ export default function DashboardPage() {
                   project={project}
                   index={index}
                   onOpen={() => handleOpenProject(project.id)}
+                  onRename={() => handleRename(project)}
+                  onDuplicate={() => handleDuplicate(project)}
                   onDelete={() => handleDelete(project.id)}
                   deleting={deletingId === project.id}
+                  mutating={mutatingId === project.id}
                   formatDate={formatDate}
                 />
               ))}
@@ -288,8 +346,11 @@ export default function DashboardPage() {
                   project={project}
                   index={index}
                   onOpen={() => handleOpenProject(project.id)}
+                  onRename={() => handleRename(project)}
+                  onDuplicate={() => handleDuplicate(project)}
                   onDelete={() => handleDelete(project.id)}
                   deleting={deletingId === project.id}
+                  mutating={mutatingId === project.id}
                   formatDate={formatDate}
                   isLast={index === filteredProjects.length - 1}
                 />
@@ -338,15 +399,21 @@ function ProjectCard({
   project,
   index,
   onOpen,
+  onRename,
+  onDuplicate,
   onDelete,
   deleting,
+  mutating,
   formatDate,
 }: {
-  project: { id: string; name: string; description: string | null; project_type: string; updated_at: string }
+  project: Project
   index: number
   onOpen: () => void
+  onRename: () => void
+  onDuplicate: () => void
   onDelete: () => void
   deleting: boolean
+  mutating: boolean
   formatDate: (date: string) => string
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -412,7 +479,8 @@ function ProjectCard({
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }}
-              className="w-7 h-7 flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.08] transition-colors opacity-0 group-hover:opacity-100"
+              aria-label="Project actions"
+              className="w-7 h-7 flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.08] transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
             >
               <MoreHorizontal className="w-4 h-4" />
             </button>
@@ -436,24 +504,26 @@ function ProjectCard({
                       Open
                     </button>
                     <button 
-                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }} 
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onRename() }} 
+                      disabled={mutating || deleting}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      {mutating ? <TorbitSpinner size="xs" speed="fast" /> : <Pencil className="w-3.5 h-3.5" />}
                       Rename
                     </button>
                     <button 
-                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }} 
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDuplicate() }} 
+                      disabled={mutating || deleting}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Copy className="w-3.5 h-3.5" />
+                      {mutating ? <TorbitSpinner size="xs" speed="fast" /> : <Copy className="w-3.5 h-3.5" />}
                       Duplicate
                     </button>
                     <div className="border-t border-white/[0.08]" />
                     <button
                       onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete() }}
-                      disabled={deleting}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                      disabled={deleting || mutating}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {deleting ? <TorbitSpinner size="xs" speed="fast" /> : <Trash2 className="w-3.5 h-3.5" />}
                       Delete
@@ -473,16 +543,22 @@ function ProjectListItem({
   project,
   index,
   onOpen,
+  onRename,
+  onDuplicate,
   onDelete,
   deleting,
+  mutating,
   formatDate,
   isLast,
 }: {
-  project: { id: string; name: string; description: string | null; project_type: string; updated_at: string }
+  project: Project
   index: number
   onOpen: () => void
+  onRename: () => void
+  onDuplicate: () => void
   onDelete: () => void
   deleting: boolean
+  mutating: boolean
   formatDate: (date: string) => string
   isLast: boolean
 }) {
@@ -520,7 +596,7 @@ function ProjectListItem({
       </div>
 
       {/* Actions */}
-      <div className="relative flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="relative flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
         <button 
           onClick={(e) => { e.stopPropagation(); onOpen() }} 
           className="p-2 text-white/40 hover:text-white rounded hover:bg-white/[0.08] transition-colors"
@@ -547,24 +623,26 @@ function ProjectListItem({
                 onClick={(e) => e.stopPropagation()}
               >
                 <button 
-                  onClick={() => setMenuOpen(false)} 
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
+                  onClick={() => { setMenuOpen(false); onRename() }} 
+                  disabled={mutating || deleting}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
+                  {mutating ? <TorbitSpinner size="xs" speed="fast" /> : <Pencil className="w-3.5 h-3.5" />}
                   Rename
                 </button>
                 <button 
-                  onClick={() => setMenuOpen(false)} 
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
+                  onClick={() => { setMenuOpen(false); onDuplicate() }} 
+                  disabled={mutating || deleting}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Copy className="w-3.5 h-3.5" />
+                  {mutating ? <TorbitSpinner size="xs" speed="fast" /> : <Copy className="w-3.5 h-3.5" />}
                   Duplicate
                 </button>
                 <div className="border-t border-white/[0.08]" />
                 <button
                   onClick={() => { setMenuOpen(false); onDelete() }}
-                  disabled={deleting}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                  disabled={deleting || mutating}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {deleting ? <TorbitSpinner size="xs" speed="fast" /> : <Trash2 className="w-3.5 h-3.5" />}
                   Delete

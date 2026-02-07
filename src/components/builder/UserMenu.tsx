@@ -27,11 +27,6 @@ export function UserMenu() {
   const [avatarError, setAvatarError] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   
-  // Debug log
-  useEffect(() => {
-    console.log('[UserMenu] State:', { loading, hasUser: !!user, email: user?.email })
-  }, [loading, user])
-  
   // Reset avatar error when user changes
   useEffect(() => {
     setAvatarError(false)
@@ -85,6 +80,7 @@ export function UserMenu() {
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-label="Open account menu"
         className="flex items-center gap-2 px-2 py-1 hover:bg-neutral-800 rounded-lg transition-colors"
       >
         {/* Avatar */}

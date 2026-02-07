@@ -104,30 +104,30 @@ function SettingsPageContent() {
     <div className="min-h-screen bg-black">
       {/* Header */}
       <header className="h-14 border-b border-neutral-800 bg-black/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="h-full max-w-5xl mx-auto px-6 flex items-center justify-between">
+        <div className="h-full max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/dashboard" className="inline-flex items-center gap-2 group">
               <TorbitLogo size="sm" animated />
-              <span className="text-xl font-bold tracking-tight text-white">TORBIT</span>
+              <span className="text-lg sm:text-xl font-bold tracking-tight text-white">TORBIT</span>
             </Link>
-            <div className="w-px h-5 bg-neutral-800" />
-            <span className="text-neutral-400 text-sm">Settings</span>
+            <div className="w-px h-5 bg-neutral-800 hidden sm:block" />
+            <span className="text-neutral-400 text-sm hidden sm:block">Settings</span>
           </div>
           <UserMenu />
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        <div className="flex gap-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           {/* Sidebar */}
-          <nav className="w-48 flex-shrink-0">
-            <ul className="space-y-1">
+          <nav className="w-full lg:w-48 flex-shrink-0">
+            <ul className="flex lg:flex-col gap-2 lg:gap-1 overflow-x-auto lg:overflow-visible pb-1">
               {tabs.map(tab => (
-                <li key={tab.id}>
+                <li key={tab.id} className="min-w-fit lg:min-w-0">
                   <button
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`w-full flex items-center gap-2 lg:gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                       activeTab === tab.id
                         ? 'bg-neutral-800 text-white'
                         : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
@@ -160,7 +160,7 @@ function SettingsPageContent() {
                   <h2 className="text-lg font-medium text-white mb-4">Profile</h2>
                   
                   <div className="space-y-4">
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                       <div className="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center">
                         {profile?.avatar_url ? (
                           <img 
@@ -207,7 +207,7 @@ function SettingsPageContent() {
                 {/* Account Stats */}
                 <div className="p-6 bg-neutral-900 border border-neutral-800 rounded-xl">
                   <h2 className="text-lg font-medium text-white mb-4">Account Stats</h2>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="p-4 bg-neutral-800 rounded-lg">
                       <p className="text-2xl font-bold text-white">
                         {billingStatus?.lifetimePurchased?.toLocaleString() || '0'}
@@ -274,7 +274,7 @@ function SettingsPageContent() {
                         </div>
                       </div>
 
-                      <div className="pt-4 border-t border-neutral-800 flex gap-3">
+                      <div className="pt-4 border-t border-neutral-800 flex flex-wrap gap-3">
                         <button
                           onClick={() => openPortal()}
                           className="px-4 py-2 bg-white hover:bg-neutral-200 text-black text-sm font-medium rounded-lg transition-colors"
@@ -295,7 +295,7 @@ function SettingsPageContent() {
                 {/* Fuel Balance */}
                 <div className="p-6 bg-neutral-900 border border-neutral-800 rounded-xl">
                   <h2 className="text-lg font-medium text-white mb-4">Fuel Balance</h2>
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex-1">
                       <p className="text-3xl font-bold text-white">
                         {billingStatus?.currentFuel?.toLocaleString() || '0'}
@@ -375,7 +375,7 @@ function SettingsPageContent() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm text-neutral-300 mb-2">Theme</label>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {(['dark', 'light', 'system'] as const).map(theme => (
                           <button
                             key={theme}
@@ -420,7 +420,7 @@ function SettingsPageContent() {
                   <button
                     onClick={handleSavePreferences}
                     disabled={saving}
-                    className="flex items-center gap-2 px-6 py-2 bg-white hover:bg-neutral-200 text-black font-medium rounded-lg transition-colors disabled:opacity-50"
+                    className="w-full sm:w-auto justify-center flex items-center gap-2 px-6 py-2 bg-white hover:bg-neutral-200 text-black font-medium rounded-lg transition-colors disabled:opacity-50"
                   >
                     {saving ? (
                       <>
@@ -555,13 +555,15 @@ function ToggleOption({
   onChange: (value: boolean) => void
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <div>
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
         <p className="text-white text-sm font-medium">{label}</p>
         <p className="text-neutral-500 text-xs">{description}</p>
       </div>
       <button
         onClick={() => onChange(!checked)}
+        aria-pressed={checked}
+        aria-label={label}
         className={`w-11 h-6 rounded-full transition-colors relative ${
           checked ? 'bg-white' : 'bg-neutral-700'
         }`}
