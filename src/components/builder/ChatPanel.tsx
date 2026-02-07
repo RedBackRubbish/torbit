@@ -245,6 +245,16 @@ export default function ChatPanel() {
               }
               break
 
+            case 'proof':
+              if (chunk.proof) {
+                setMessages(prev => prev.map(m => 
+                  m.id === assistantId 
+                    ? { ...m, proofLines: chunk.proof }
+                    : m
+                ))
+              }
+              break
+
             case 'error':
               if (chunk.error) {
                 setMessages(prev => prev.map(m => 
@@ -267,6 +277,50 @@ export default function ChatPanel() {
       console.log('[DEBUG] Waiting for', toolExecutionPromises.length, 'tool executions to complete')
       await Promise.all(toolExecutionPromises)
       console.log('[DEBUG] All tool executions completed')
+    }
+
+    // Compute proof lines from tool results (client-side derivation)
+    // Later, server-sent governance proofs via 'proof' chunks will override these
+    const allToolCalls = Array.from(toolCalls.values())
+    const createFileCalls = allToolCalls.filter(tc => tc.name === 'createFile')
+    const editFileCalls = allToolCalls.filter(tc => tc.name === 'editFile')
+    const testCalls = allToolCalls.filter(tc => tc.name === 'runTests' || tc.name === 'runE2eCycle')
+    
+    if (createFileCalls.length > 0 || editFileCalls.length > 0) {
+      const proofLines: Array<{ label: string; status: 'verified' | 'warning' | 'failed' }> = []
+      
+      const successFiles = createFileCalls.filter(tc => tc.status === 'complete')
+      const failedFiles = createFileCalls.filter(tc => tc.status === 'error')
+      
+      if (successFiles.length > 0 && failedFiles.length === 0) {
+        proofLines.push({ label: `${successFiles.length} files created successfully`, status: 'verified' })
+      } else if (failedFiles.length > 0) {
+        proofLines.push({ label: `${failedFiles.length} file(s) failed to create`, status: 'failed' })
+      }
+      
+      if (editFileCalls.length > 0) {
+        const successEdits = editFileCalls.filter(tc => tc.status === 'complete')
+        if (successEdits.length === editFileCalls.length) {
+          proofLines.push({ label: `${successEdits.length} files updated`, status: 'verified' })
+        }
+      }
+      
+      if (testCalls.length > 0) {
+        const passedTests = testCalls.filter(tc => tc.status === 'complete')
+        if (passedTests.length === testCalls.length) {
+          proofLines.push({ label: 'All tests passed', status: 'verified' })
+        } else {
+          proofLines.push({ label: 'Some tests failed', status: 'warning' })
+        }
+      }
+      
+      if (proofLines.length > 0) {
+        setMessages(prev => prev.map(m => 
+          m.id === assistantId 
+            ? { ...m, proofLines }
+            : m
+        ))
+      }
     }
 
     setCurrentTask(null)

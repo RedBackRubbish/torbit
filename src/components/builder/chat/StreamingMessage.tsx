@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { Check, Loader2, ShieldCheck } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ActionLog } from './ActionLog'
-import type { Message, ToolCall } from './types'
+import type { Message, ToolCall, ProofLine } from './types'
 
 // ============================================================================
 // STREAMING MESSAGE - Clean real-time generation display
@@ -99,6 +99,7 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
   }, [completedFileIds])
   
   const createdCount = createdFiles.size
+  const proofLines: ProofLine[] = message.proofLines || []
 
   return (
     <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="py-3">
@@ -148,11 +149,41 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
         </div>
       )}
       
-      {/* Completion */}
+      {/* Completion + Proof Lines */}
       {!isLoading && createdCount > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-2 flex items-center gap-2 text-[11px] text-[#505050]">
-          <ShieldCheck className="w-3 h-3 text-emerald-500/60" />
-          <span>{createdCount} files ready</span>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-2 space-y-1">
+          <div className="flex items-center gap-2 text-[11px] text-[#505050]">
+            <ShieldCheck className="w-3 h-3 text-emerald-500/60" />
+            <span>{createdCount} files ready</span>
+          </div>
+          {proofLines.length > 0 && (
+            <div className="pl-5 space-y-0.5">
+              {proofLines.map((line, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-[11px]">
+                  {line.status === 'verified' && (
+                    <Check className="w-3 h-3 text-emerald-500/50" />
+                  )}
+                  {line.status === 'warning' && (
+                    <svg className="w-3 h-3 text-amber-500/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+                    </svg>
+                  )}
+                  {line.status === 'failed' && (
+                    <svg className="w-3 h-3 text-red-500/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  <span className={
+                    line.status === 'verified' ? 'text-[#505050]' :
+                    line.status === 'warning' ? 'text-amber-500/60' :
+                    'text-red-500/60'
+                  }>
+                    {line.label}{line.status === 'verified' ? ' (verified)' : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </motion.div>
       )}
     </motion.div>

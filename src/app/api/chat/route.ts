@@ -167,7 +167,7 @@ function classifyError(error: unknown): TorbitError {
 
 // Response with tool call metadata for UI streaming
 interface StreamChunk {
-  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry'
+  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry' | 'proof'
   content?: string
   toolCall?: {
     id: string
@@ -196,6 +196,7 @@ interface StreamChunk {
     maxAttempts: number
     retryAfterMs: number
   }
+  proof?: Array<{ label: string; status: 'verified' | 'warning' | 'failed' }>
 }
 
 // Maximum retry attempts for retryable errors
