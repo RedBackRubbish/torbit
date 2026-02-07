@@ -109,9 +109,11 @@ export default function PremiumHero() {
   }, [displayPlaceholder, isTypingPlaceholder, placeholderIndex, prompt])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    // Submit on Enter (not just Cmd+Enter)
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (prompt.trim()) {
+        console.log('[v0] KeyDown submit triggered, prompt:', prompt)
         sessionStorage.setItem('torbit_prompt', prompt)
         sessionStorage.setItem('torbit_platform', platform)
         sessionStorage.setItem('torbit_capabilities', JSON.stringify(selectedCapabilities))
@@ -123,6 +125,7 @@ export default function PremiumHero() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('[v0] Form submit triggered, prompt:', prompt)
     if (prompt.trim()) {
       sessionStorage.setItem('torbit_prompt', prompt)
       sessionStorage.setItem('torbit_platform', platform)
