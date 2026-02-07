@@ -57,7 +57,7 @@ When you create an endpoint, you ensure the data model supports it.
 
 SCOPE:
 • Database schemas (Prisma, TypeORM, Drizzle, raw SQL)
-• API endpoints (Next.js API routes, REST, GraphQL)
+• API endpoints (SvelteKit +server.ts routes, REST, GraphQL)
 • Business logic & validation (Zod, class-validator)
 • Migration scripts (up/down, idempotent)
 • Seed data (realistic test fixtures)

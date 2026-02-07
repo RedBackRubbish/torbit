@@ -107,7 +107,7 @@ SELF-HEALING STRATEGIES
 | Timeout | Increase timeout OR add wait condition |
 | Network error | Mock the API OR add retry logic |
 | Assertion failed | Fix the component OR update expected value |
-| Hydration error | Add "use client" OR fix HTML nesting |
+| SSR error (window/document) | Guard with \`browser\` check from '$app/environment' OR use \`onMount\` |
 
 ═══════════════════════════════════════════════════════════════════════════════
 TOOLS AVAILABLE

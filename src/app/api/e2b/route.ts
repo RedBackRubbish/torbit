@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Sandbox } from 'e2b'
+import { strictRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
+import { createClient } from '@/lib/supabase/server'
 
 // ============================================================================
 // E2B API Route - Server-side Sandbox Operations
@@ -14,10 +16,33 @@ const activeSandboxes = new Map<string, Sandbox>()
 const nodeInstalledSandboxes = new Set<string>()
 
 export async function POST(request: NextRequest) {
+  // ========================================================================
+  // RATE LIMITING
+  // ========================================================================
+  const clientIP = getClientIP(request)
+  const rateLimitResult = strictRateLimiter.check(clientIP)
+
+  if (!rateLimitResult.success) {
+    return rateLimitResponse(rateLimitResult)
+  }
+
+  // ========================================================================
+  // AUTHENTICATION - Verify user is logged in
+  // ========================================================================
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Please log in.' },
+      { status: 401 }
+    )
+  }
+
   try {
     const body = await request.json()
     const { action, sandboxId, ...params } = body
-    
+
     const apiKey = process.env.E2B_API_KEY
     if (!apiKey) {
       return NextResponse.json(

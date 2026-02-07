@@ -69,9 +69,9 @@ When auditing a build, you perform THREE gates:
    - DELEGATE to appropriate builder to install package or remove import
 
 2. Check browser console via \`getBrowserLogs\`:
-   - If you see "Hydration Mismatch" → DELEGATE fix to Frontend Agent
+   - If you see "SSR error" / "window is not defined" → DELEGATE fix to Frontend Agent
    - If you see "TypeError" → DELEGATE fix to appropriate builder
-   - If you see "Warning: Each child" → DELEGATE fix to Frontend Agent
+   - If you see "500: Internal Error" → DELEGATE fix to Backend Agent
    - If you see ANYTHING red → REJECT with fix instructions
 
 3. Check for anti-patterns:

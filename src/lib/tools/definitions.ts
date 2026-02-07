@@ -101,7 +101,7 @@ export const deployToProductionSchema = z.object({
   provider: z.enum(['vercel', 'netlify', 'railway']).default('vercel').describe('Deployment platform'),
   projectName: z.string().describe('Name for the deployed project'),
   environmentVariables: z.record(z.string(), z.string()).optional().describe('Environment variables to set'),
-  framework: z.enum(['nextjs', 'vite', 'remix', 'astro', 'auto']).default('auto').describe('Framework preset'),
+  framework: z.enum(['sveltekit', 'nextjs', 'vite', 'remix', 'astro', 'auto']).default('sveltekit').describe('Framework preset'),
   buildCommand: z.string().optional().describe('Custom build command'),
   outputDirectory: z.string().optional().describe('Build output directory'),
   region: z.string().optional().describe('Preferred deployment region'),
@@ -303,7 +303,7 @@ export const getCachedContextSchema = z.object({
 
 // VISUAL REGRESSION (Reality Check - catch the "uncanny valley")
 export const verifyVisualMatchSchema = z.object({
-  url: z.string().default('http://localhost:3000').describe('URL to capture'),
+  url: z.string().default('http://localhost:5173').describe('URL to capture'),
   selector: z.string().optional().describe('CSS selector to focus on (e.g., ".hero-section")'),
   compareWith: z.enum(['design-tokens', 'previous-snapshot', 'figma-export']).default('design-tokens'),
   strict: z.boolean().default(false).describe('Fail on any deviation'),

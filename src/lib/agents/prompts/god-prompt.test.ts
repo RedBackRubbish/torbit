@@ -53,18 +53,18 @@ describe('God Prompt', () => {
 
     describe('Tech Stack', () => {
       it('should specify the stack', () => {
-        expect(GOD_PROMPT).toContain('Next.js')
-        expect(GOD_PROMPT).toContain('React')
+        expect(GOD_PROMPT).toContain('SvelteKit')
+        expect(GOD_PROMPT).toContain('Svelte')
         expect(GOD_PROMPT).toContain('TypeScript')
         expect(GOD_PROMPT).toContain('Tailwind')
       })
 
-      it('should mention Framer Motion', () => {
-        expect(GOD_PROMPT).toContain('Framer Motion')
+      it('should mention DaisyUI', () => {
+        expect(GOD_PROMPT).toContain('DaisyUI')
       })
 
-      it('should mention Zustand', () => {
-        expect(GOD_PROMPT).toContain('Zustand')
+      it('should mention Svelte stores', () => {
+        expect(GOD_PROMPT).toContain('Svelte stores')
       })
     })
 
@@ -151,8 +151,8 @@ describe('God Prompt', () => {
   describe('Prompt Quality', () => {
     it('should be concise but complete', () => {
       // The prompt should be reasonably sized (not bloated)
-      // Increased from 5000 to allow for critical file creation instructions
-      expect(GOD_PROMPT.length).toBeLessThan(6000)
+      // Increased to 8000 to accommodate SvelteKit + DaisyUI patterns and component examples
+      expect(GOD_PROMPT.length).toBeLessThan(8000)
       expect(GOD_PROMPT.length).toBeGreaterThan(1000)
     })
 

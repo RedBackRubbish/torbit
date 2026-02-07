@@ -70,8 +70,8 @@ function getStepStyles(step: TimelineStep) {
       }
     case 'complete':
       return {
-        node: 'bg-[#c0c0c0]/10 border-[#c0c0c0]/30',
-        icon: 'text-[#c0c0c0]',
+        node: 'bg-emerald-500/10 border-emerald-500/30',
+        icon: 'text-emerald-400',
         label: 'text-[#a1a1a1]',
       }
     case 'failed':
@@ -102,7 +102,7 @@ function TimelineNode({ step, index, isLast }: { step: TimelineStep; index: numb
     >
       {/* Vertical Line */}
       {!isLast && (
-        <div className="absolute left-[11px] top-6 w-px h-[calc(100%+8px)] bg-[#1f1f1f]" />
+        <div className="absolute left-[11px] top-6 w-px h-[calc(100%+8px)] bg-[#2a2a2a]" />
       )}
       
       {/* Node */}
@@ -123,7 +123,7 @@ function TimelineNode({ step, index, isLast }: { step: TimelineStep; index: numb
           </span>
           
           {step.status === 'complete' && (
-            <svg className="w-3 h-3 text-[#c0c0c0]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
           )}

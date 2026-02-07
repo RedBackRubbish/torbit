@@ -110,21 +110,27 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <div className="flex flex-col items-center gap-1 pt-2">
             <button
               onClick={() => { onToggle(); setActiveTab('files'); }}
-              className="w-9 h-9 flex items-center justify-center text-[#505050] hover:text-[#c0c0c0] hover:bg-[#0a0a0a] rounded-lg transition-all"
+              className={`relative w-9 h-9 flex items-center justify-center hover:text-[#c0c0c0] hover:bg-[#0a0a0a] rounded-lg transition-all ${
+                activeTab === 'files' ? 'text-[#c0c0c0]' : 'text-[#505050]'
+              }`}
               title="Files"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
               </svg>
+              {activeTab === 'files' && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[#c0c0c0] rounded-r" />}
             </button>
             <button
               onClick={() => { onToggle(); setActiveTab('activity'); }}
-              className="w-9 h-9 flex items-center justify-center text-[#505050] hover:text-[#c0c0c0] hover:bg-[#0a0a0a] rounded-lg transition-all"
+              className={`relative w-9 h-9 flex items-center justify-center hover:text-[#c0c0c0] hover:bg-[#0a0a0a] rounded-lg transition-all ${
+                activeTab === 'activity' ? 'text-[#c0c0c0]' : 'text-[#505050]'
+              }`}
               title="Activity"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
               </svg>
+              {activeTab === 'activity' && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[#c0c0c0] rounded-r" />}
             </button>
           </div>
         )}
@@ -134,17 +140,19 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 }
 
 // Emergent-style tab button
-function TabButton({ 
-  children, 
-  active, 
-  onClick 
-}: { 
+function TabButton({
+  children,
+  active,
+  onClick,
+}: {
   children: React.ReactNode
   active: boolean
-  onClick: () => void 
+  onClick: () => void
 }) {
   return (
     <button
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium rounded transition-all ${
         active

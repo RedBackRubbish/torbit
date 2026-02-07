@@ -69,13 +69,13 @@ export function AgentMessage({ message, isLast, isLoading }: AgentMessageProps) 
         )}
         <span className="text-[14px] font-medium text-[#e5e5e5]">Torbit</span>
         {isLoading && hasTools && (
-          <span className="text-[11px] text-[#606060]">
+          <span className="text-[11px] text-[#808080]">
             {completedTools}/{toolCalls.length}
           </span>
         )}
       </div>
       
-      <div className="pl-4 border-l border-[#1a1a1a] space-y-3">
+      <div className="pl-4 border-l border-[#2a2a2a] space-y-3">
         
         {/* Main Content - Brief summary/intent */}
         {displayContent && (

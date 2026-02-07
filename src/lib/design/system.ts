@@ -782,6 +782,74 @@ The best designs don't look fancy. They look OBVIOUS.
 `
 }
 
+// ============================================================================
+// DaisyUI THEME MAPPING
+// ============================================================================
+// NOTE: The design presets above use raw Tailwind for Torbit's OWN UI (Next.js).
+// Generated apps use DaisyUI semantic classes. This mapping bridges the two:
+// when we detect a user's style intent, we recommend a DaisyUI theme name
+// rather than injecting raw hex colors that conflict with DaisyUI's theme system.
+
+const DAISYUI_THEME_MAP: Record<keyof typeof DESIGN_PRESETS, { theme: string; alt: string }> = {
+  premiumDark: { theme: 'dark', alt: 'business' },
+  cleanLight: { theme: 'light', alt: 'corporate' },
+  saasProf: { theme: 'corporate', alt: 'light' },
+}
+
+/**
+ * Get DaisyUI theme guidance for generated apps.
+ * This should be injected into agent prompts INSTEAD of raw design system hex values
+ * when building SvelteKit + DaisyUI apps.
+ */
+export function getDaisyUIGuidance(userPrompt: string): string {
+  const lower = userPrompt.toLowerCase()
+
+  let themeName = 'dark'
+  let altTheme = 'business'
+
+  if (lower.includes('light') || lower.includes('clean') || lower.includes('minimal')) {
+    themeName = 'light'
+    altTheme = 'corporate'
+  } else if (lower.includes('saas') || lower.includes('enterprise') || lower.includes('corporate')) {
+    themeName = 'corporate'
+    altTheme = 'light'
+  } else if (lower.includes('cupcake') || lower.includes('playful') || lower.includes('pastel')) {
+    themeName = 'cupcake'
+    altTheme = 'pastel'
+  } else if (lower.includes('luxury') || lower.includes('premium') || lower.includes('gold')) {
+    themeName = 'luxury'
+    altTheme = 'business'
+  } else if (lower.includes('cyberpunk') || lower.includes('neon') || lower.includes('retro')) {
+    themeName = 'cyberpunk'
+    altTheme = 'synthwave'
+  } else if (lower.includes('nature') || lower.includes('eco') || lower.includes('green')) {
+    themeName = 'emerald'
+    altTheme = 'garden'
+  }
+
+  return `
+═══════════════════════════════════════════════════════════════════════════════
+                      DAISYUI THEME (GENERATED APP)
+═══════════════════════════════════════════════════════════════════════════════
+
+RECOMMENDED THEME: "${themeName}" (alt: "${altTheme}")
+
+Set in app.html:
+<html lang="en" data-theme="${themeName}">
+
+USE SEMANTIC CLASSES (not raw hex colors):
+- Backgrounds: bg-base-100, bg-base-200, bg-base-300
+- Text: text-base-content, text-base-content/70 (muted)
+- Primary: bg-primary, text-primary-content, btn-primary
+- Cards: card bg-base-100 shadow-xl
+- Buttons: btn btn-primary, btn btn-secondary, btn btn-ghost
+- Inputs: input input-bordered
+- Alerts: alert alert-info, alert-success, alert-warning, alert-error
+
+DO NOT use raw hex colors like #3b82f6 — DaisyUI themes handle this automatically.
+`
+}
+
 export type DesignPreset = keyof typeof DESIGN_PRESETS
 export type ScreenIntent = keyof typeof SCREEN_INTENT_MODIFIERS
 export type DensityPreset = keyof typeof DENSITY_PRESETS

@@ -106,25 +106,24 @@ function FileItem({ path, status, index }: { path: string; status: FileStatus; i
 }
 
 // Phase badge
-function PhaseBadge({ phase, filesCreated, totalFiles, filesVerified }: { 
+function PhaseBadge({ phase, totalFiles, filesComplete }: {
   phase: GenerationPhase
-  filesCreated: number
   totalFiles: number
-  filesVerified: number
+  filesComplete: number
 }) {
   const config = {
     thinking: { label: 'Planning', color: 'text-violet-400', bg: 'bg-violet-500/10' },
     creating: { label: 'Creating', color: 'text-blue-400', bg: 'bg-blue-500/10' },
     installing: { label: 'Installing', color: 'text-amber-400', bg: 'bg-amber-500/10' },
     building: { label: 'Building', color: 'text-orange-400', bg: 'bg-orange-500/10' },
-    ready: { label: 'Verified', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    ready: { label: 'Created', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
   }[phase]
-  
-  const progress = totalFiles > 0 ? (filesVerified / totalFiles) * 100 : 0
-  
+
+  const progress = totalFiles > 0 ? (filesComplete / totalFiles) * 100 : 0
+
   return (
     <div className="mb-3">
-      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bg}`}>
+      <div role="status" className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bg}`}>
         {phase !== 'ready' ? (
           <Loader2 className={`w-3 h-3 ${config.color} animate-spin`} />
         ) : (
@@ -132,7 +131,7 @@ function PhaseBadge({ phase, filesCreated, totalFiles, filesVerified }: {
         )}
         <span className={`text-[12px] font-medium ${config.color}`}>{config.label}</span>
         {phase === 'creating' && totalFiles > 0 && (
-          <span className="text-[11px] text-[#606060] font-mono">{filesVerified}/{totalFiles}</span>
+          <span className="text-[11px] text-[#606060] font-mono">{filesComplete}/{totalFiles}</span>
         )}
       </div>
       
@@ -155,8 +154,8 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
   const [startTime] = useState(() => Date.now())
   const [elapsedTime, setElapsedTime] = useState(0)
   
-  // Track files that are in "auditing" phase (between complete and verified)
-  const [verifiedFiles, setVerifiedFiles] = useState<Set<string>>(new Set())
+  // Track files that are in "auditing" phase (between complete and created)
+  const [createdFiles, setCreatedFiles] = useState<Set<string>>(new Set())
   const prevCompletedRef = useRef<Set<string>>(new Set())
   
   const phase = getPhaseFromTools(toolCalls, isLoading && isLast)
@@ -164,17 +163,17 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
   const completedFileIds = new Set(fileToolCalls.filter(tc => tc.status === 'complete').map(tc => tc.id))
   const displayContent = useMemo(() => stripCodeBlocks(message.content || ''), [message.content])
   
-  // When a file completes, start audit timer before marking as verified
+  // When a file completes, start audit timer before marking as created
   useEffect(() => {
     const newlyCompleted = [...completedFileIds].filter(id => !prevCompletedRef.current.has(id))
     
     if (newlyCompleted.length > 0) {
-      // For each newly completed file, add a staggered delay before marking verified
+      // For each newly completed file, add a staggered delay before marking created
       newlyCompleted.forEach((id, idx) => {
         // Stagger verification: 800ms base + 200ms per file for realistic feel
         const delay = 800 + (idx * 200)
         setTimeout(() => {
-          setVerifiedFiles(prev => new Set([...prev, id]))
+          setCreatedFiles(prev => new Set([...prev, id]))
         }, delay)
       })
       
@@ -187,13 +186,13 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
     if (tc.status === 'running') return 'running'
     if (tc.status === 'complete') {
       // Check if this file has passed audit
-      if (verifiedFiles.has(tc.id)) return 'complete'
+      if (createdFiles.has(tc.id)) return 'complete'
       return 'auditing'
     }
     return 'error'
   }
   
-  const verifiedCount = verifiedFiles.size
+  const createdCount = createdFiles.size
   
   // Timer
   useEffect(() => {
@@ -221,11 +220,10 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
       <div className="pl-4 border-l border-[#1a1a1a] space-y-3">
         {/* Phase indicator */}
         {isLoading && isLast && (
-          <PhaseBadge 
-            phase={phase} 
-            filesCreated={completedFileIds.size} 
+          <PhaseBadge
+            phase={phase}
             totalFiles={fileToolCalls.length}
-            filesVerified={verifiedCount}
+            filesComplete={createdCount}
           />
         )}
         
@@ -242,7 +240,7 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
             <div className="flex items-center gap-2 px-2 py-1 text-[10px] uppercase tracking-wider text-[#404040] font-medium">
               <FileCode2 className="w-3 h-3" />
               <span>Files</span>
-              <span className="ml-auto text-[#505050]">{verifiedCount}/{fileToolCalls.length} verified</span>
+              <span className="ml-auto text-[#505050]">{createdCount}/{fileToolCalls.length} created</span>
             </div>
             <div className="max-h-[180px] overflow-y-auto custom-scrollbar">
               {fileToolCalls.map((tc, i) => (
@@ -276,10 +274,10 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
         )}
         
         {/* Completion */}
-        {!isLoading && verifiedCount > 0 && (
+        {!isLoading && createdCount > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-2 flex items-center gap-2 text-[11px] text-[#505050]">
             <ShieldCheck className="w-3 h-3 text-emerald-500/60" />
-            <span>{verifiedCount} files verified</span>
+            <span>{createdCount} files created</span>
             {message.usage && (
               <>
                 <span className="text-[#333]">•</span>

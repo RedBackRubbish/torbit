@@ -34,7 +34,7 @@ import { AUDITOR_SYSTEM_PROMPT } from '@/lib/agents/prompts/auditor'
 import { PLANNER_SYSTEM_PROMPT } from '@/lib/agents/prompts/planner'
 import { GOD_PROMPT } from '@/lib/agents/prompts/god-prompt'
 import { getMobileSystemPrompt } from '@/lib/mobile/prompts'
-import { getDesignGuidance } from '@/lib/design/system'
+import { getDesignGuidance, getDaisyUIGuidance } from '@/lib/design/system'
 import type { MobileCapabilities, MobileProjectConfig } from '@/lib/mobile/types'
 import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 
@@ -49,7 +49,7 @@ const AGENT_PROMPTS: Record<string, string> = {
   architect: createAgentPrompt(ARCHITECT_SYSTEM_PROMPT),
   frontend: createAgentPrompt(FRONTEND_SYSTEM_PROMPT),
   backend: createAgentPrompt(`You are THE BACKEND AGENT for TORBIT.
-Your role is to implement API routes, server actions, and server-side logic.
+Your role is to implement server routes, form actions, and server-side logic.
 
 ## TOOLS AT YOUR DISPOSAL
 You have access to verified tools - USE THEM. Don't just describe what you would do.
@@ -57,17 +57,17 @@ You have access to verified tools - USE THEM. Don't just describe what you would
 When given a task:
 1. Use 'think' to design your API structure
 2. Use 'readFile' to understand existing code patterns
-3. Use 'createFile' to generate new API routes
+3. Use 'createFile' to generate new server routes
 4. Use 'editFile' to modify existing endpoints
 5. Use 'runTests' to verify your implementation
 6. Use 'searchCode' to find related code
 
 ## CODE STANDARDS
-- Next.js App Router API routes (route.ts files)
+- SvelteKit server routes (+server.ts files) and form actions (+page.server.ts)
 - TypeScript with strict types
 - Zod for request/response validation
-- Proper error handling with status codes
-- Edge runtime where possible for performance
+- Proper error handling with SvelteKit error() and json() helpers
+- Use SvelteKit load functions for data fetching
 
 Always show your work through tool calls.`),
 
@@ -78,13 +78,13 @@ Your role is to design schemas, write migrations, and optimize queries.
 When given a task:
 1. Use 'think' to design your schema
 2. Use 'inspectSchema' to understand existing database structure
-3. Use 'createFile' to generate Prisma schemas
+3. Use 'createFile' to generate schema definitions
 4. Use 'editFile' to modify existing schemas
 5. Use 'runSqlQuery' to test queries (READ ONLY)
 6. Use 'runCommand' to run migrations
 
 ## STANDARDS
-- Prisma ORM with PostgreSQL
+- Drizzle ORM or Prisma with PostgreSQL (or direct SQL)
 - Proper indexing for query performance
 - Normalized schemas with clear relationships
 - Migration files for all changes
@@ -278,13 +278,14 @@ export async function POST(req: Request) {
     } else {
       // Get base agent prompt
       const basePrompt = AGENT_PROMPTS[agentId] || AGENT_PROMPTS.architect
-      
+
       // Inject design guidance based on user's message
       const userMessage = messages[messages.length - 1]?.content || ''
+      const daisyGuidance = getDaisyUIGuidance(userMessage)
       const designGuidance = getDesignGuidance(userMessage)
-      
-      // Combine base prompt with design guidance
-      systemPrompt = `${basePrompt}\n\n${designGuidance}`
+
+      // Combine base prompt with DaisyUI theme guidance + design system
+      systemPrompt = `${basePrompt}\n\n${daisyGuidance}\n\n${designGuidance}`
     }
     const complexity = analyzeTaskComplexity(messages)
     const model = getModelForTask(agentId as AgentId, complexity)

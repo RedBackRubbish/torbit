@@ -228,7 +228,7 @@ function renderInline(text: string): React.ReactNode {
           rel="noopener noreferrer"
           className="text-blue-400 hover:text-blue-300 underline underline-offset-2 decoration-blue-400/50"
         >
-          {linkMatch[1]}
+          {linkMatch[1]}<span className="inline-block ml-0.5 text-[10px] opacity-60" aria-hidden="true">{'\u2197'}</span>
         </a>
       )
       remaining = remaining.slice(linkMatch[0].length)
