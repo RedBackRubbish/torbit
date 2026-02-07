@@ -5,6 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore } from '@/store/builder'
 import { getEstimatedCostTier } from '@/lib/integrations/capabilities'
 import { recordMetric } from '@/lib/metrics/success'
+import { ExecutorService } from '@/services/executor'
+import { useLedger } from '@/store/ledger'
+import { createWebExportZip, downloadWebExportBlob, getWebExportFilename } from '@/lib/web/export'
+import { onPreDeploy, formatHealthSummary } from '@/lib/integrations/health'
+import { enforcePreDeploy } from '@/lib/integrations/policies/enforcement'
 
 /**
  * ShipMenu - Premium Deploy Button for Web Apps
@@ -17,10 +22,22 @@ export default function ShipMenu() {
   const [isDeploying, setIsDeploying] = useState(false)
   const [hasExportedBefore, setHasExportedBefore] = useState(true) // Assume true until checked
   const [showFirstExportHint, setShowFirstExportHint] = useState(false)
+  const [firstExportType, setFirstExportType] = useState<'vercel' | 'netlify' | 'github' | 'zip'>('vercel')
+  const [feedback, setFeedback] = useState<{
+    tone: 'success' | 'error' | 'info'
+    title: string
+    message: string
+  } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   
-  const { projectType } = useBuilderStore()
+  const { projectType, files, projectName } = useBuilderStore()
+  const { recordExport, getPhaseStatus, entries } = useLedger()
   const isMobile = projectType === 'mobile'
+  const hasFiles = files.length > 0
+  const packageJsonContent = useMemo(() => {
+    const pkg = files.find((file) => file.path === 'package.json' || file.path === '/package.json')
+    return pkg?.content ?? null
+  }, [files])
   
   // Check first export status on mount
   useEffect(() => {
@@ -73,27 +90,209 @@ export default function ShipMenu() {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [])
 
-  const handleDeploy = async () => {
+  const extractFirstUrl = (text: string): string | null => {
+    const match = text.match(/https?:\/\/[^\s)]+/i)
+    return match ? match[0] : null
+  }
+
+  const canDeploy = () => {
+    if (!hasFiles) {
+      return { allowed: false, reason: 'Generate files before deploying.' }
+    }
+
+    if (!packageJsonContent) {
+      return { allowed: false, reason: 'Deploy requires a generated project with package.json.' }
+    }
+
+    const auditorPassed = getPhaseStatus('verify') === 'complete'
+    if (!auditorPassed) {
+      return { allowed: false, reason: 'Run verification first. Deploy requires Auditor pass.' }
+    }
+
+    return { allowed: true, reason: null as string | null }
+  }
+
+  const runDeploy = async (provider: 'vercel' | 'netlify') => {
+    setIsOpen(false)
     setIsDeploying(true)
-    // TODO: Trigger deployToProduction tool
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    setIsDeploying(false)
+    setFeedback(null)
+
+    try {
+      const gate = canDeploy()
+      if (!gate.allowed) {
+        setFeedback({
+          tone: 'error',
+          title: 'Deploy blocked',
+          message: gate.reason || 'Pre-deploy checks failed.',
+        })
+        return
+      }
+
+      const health = await onPreDeploy({ packageJsonContent: packageJsonContent || '{}' })
+      const hasCritical = health.report.status === 'critical'
+
+      const policy = enforcePreDeploy({
+        isDriftPresent: health.report.issues.some((issue) => issue.type === 'version-drift'),
+        hasLedgerViolations: false,
+        healthCheckPassed: !hasCritical,
+        auditorPassed: true,
+        target: provider,
+      })
+
+      if (hasCritical || !policy.proceed) {
+        setFeedback({
+          tone: 'error',
+          title: 'Deploy blocked',
+          message: hasCritical ? formatHealthSummary(health.report) : policy.userMessage,
+        })
+        return
+      }
+
+      const deployResult = await ExecutorService.executeTool('deployToProduction', {
+        provider,
+        projectName: projectName || 'Torbit Project',
+        framework: 'auto',
+        files: files.map((file) => ({ path: file.path, content: file.content })),
+      })
+
+      if (!deployResult.success) {
+        setFeedback({
+          tone: 'error',
+          title: 'Deploy failed',
+          message: deployResult.output,
+        })
+        return
+      }
+
+      const deployUrl = extractFirstUrl(deployResult.output)
+      recordExport(`${provider}-deploy`, true, selectedCapabilities)
+      markFirstExport(provider)
+
+      setFeedback({
+        tone: 'success',
+        title: `${provider === 'vercel' ? 'Vercel' : 'Netlify'} deploy started`,
+        message: deployUrl
+          ? `Production URL opened: ${deployUrl}`
+          : 'Deploy command completed successfully.',
+      })
+
+      if (deployUrl && typeof window !== 'undefined') {
+        window.open(deployUrl, '_blank', 'noopener,noreferrer')
+      }
+    } catch (error) {
+      setFeedback({
+        tone: 'error',
+        title: 'Deploy failed',
+        message: error instanceof Error ? error.message : 'Unknown deploy error.',
+      })
+    } finally {
+      setIsDeploying(false)
+    }
   }
 
-  const handleGitHubPR = () => {
+  const handleGitHubPR = async () => {
     setIsOpen(false)
-    markFirstExport('github')
-    // TODO: Trigger syncToGithub tool
+    setFeedback(null)
+
+    if (!hasFiles) {
+      setFeedback({
+        tone: 'error',
+        title: 'Export blocked',
+        message: 'Generate files before exporting to GitHub.',
+      })
+      return
+    }
+
+    try {
+      const exportBranch = `torbit-export-${Date.now().toString(36)}`
+      const githubResult = await ExecutorService.executeTool('syncToGithub', {
+        operation: 'pull-request',
+        projectName: projectName || 'Torbit Project',
+        repoName: (projectName || 'torbit-project').toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+        branch: exportBranch,
+        baseBranch: 'main',
+        commitMessage: 'Export from TORBIT',
+        prTitle: `TORBIT export: ${projectName || 'Torbit Project'}`,
+        prDescription: 'Automated export from TORBIT.',
+        files: files.map((file) => ({ path: file.path, content: file.content })),
+      })
+
+      if (!githubResult.success) {
+        setFeedback({
+          tone: 'error',
+          title: 'GitHub export failed',
+          message: githubResult.output,
+        })
+        return
+      }
+
+      const githubUrl = extractFirstUrl(githubResult.output)
+      if (githubUrl && typeof window !== 'undefined') {
+        window.open(githubUrl, '_blank', 'noopener,noreferrer')
+      }
+
+      recordExport('github', true, selectedCapabilities)
+      markFirstExport('github')
+      setFeedback({
+        tone: 'success',
+        title: 'GitHub sync complete',
+        message: githubUrl
+          ? `Pull request opened: ${githubUrl}`
+          : 'Repository synced successfully.',
+      })
+    } catch (error) {
+      setFeedback({
+        tone: 'error',
+        title: 'GitHub export failed',
+        message: error instanceof Error ? error.message : 'Unknown export error.',
+      })
+    }
   }
 
-  const handleDownloadZip = () => {
+  const handleDownloadZip = async () => {
     setIsOpen(false)
-    markFirstExport('zip')
-    // TODO: Package all virtual files and download
+    setFeedback(null)
+
+    if (!hasFiles) {
+      setFeedback({
+        tone: 'error',
+        title: 'Export blocked',
+        message: 'Generate files before downloading ZIP.',
+      })
+      return
+    }
+
+    try {
+      const blob = await createWebExportZip(
+        files.map((file) => ({ path: file.path, content: file.content })),
+        {
+          projectName: projectName || 'Torbit Project',
+          target: 'zip',
+          ledgerEntries: entries,
+        }
+      )
+      const filename = getWebExportFilename(projectName || 'Torbit Project')
+      downloadWebExportBlob(blob, filename)
+
+      recordExport('zip', true, selectedCapabilities)
+      markFirstExport('zip')
+      setFeedback({
+        tone: 'success',
+        title: 'ZIP exported',
+        message: `${files.length} file${files.length === 1 ? '' : 's'} bundled for deployment.`,
+      })
+    } catch (error) {
+      setFeedback({
+        tone: 'error',
+        title: 'ZIP export failed',
+        message: error instanceof Error ? error.message : 'Unknown export error.',
+      })
+    }
   }
   
   // Track first export and show success hint
   const markFirstExport = (type: 'vercel' | 'netlify' | 'github' | 'zip') => {
+    setFirstExportType(type)
     // Record export metrics (Phase 6)
     recordMetric('export_initiated', { exportType: type })
     recordMetric('export_downloaded', { exportType: type })
@@ -112,17 +311,9 @@ export default function ShipMenu() {
     }
   }
   
-  const handleVercelDeploy = () => {
-    setIsOpen(false)
-    markFirstExport('vercel')
-    handleDeploy()
-  }
+  const handleVercelDeploy = () => void runDeploy('vercel')
   
-  const handleNetlifyDeploy = () => {
-    setIsOpen(false)
-    markFirstExport('netlify')
-    // TODO: Deploy to Netlify
-  }
+  const handleNetlifyDeploy = () => void runDeploy('netlify')
 
   // Hide Deploy button for mobile apps (they use Publish for iOS export)
   if (isMobile) {
@@ -135,7 +326,7 @@ export default function ShipMenu() {
       <div className="flex items-center rounded-lg overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.3)] group-hover/deploy:shadow-[0_4px_12px_rgba(192,192,192,0.3)] transition-shadow duration-300">
         {/* Primary Action: Deploy */}
         <button
-          onClick={handleDeploy}
+          onClick={() => void runDeploy('vercel')}
           disabled={isDeploying}
           aria-label={isDeploying ? 'Deploying your web app to production' : 'Deploy your web app to production hosting'}
           aria-busy={isDeploying}
@@ -194,6 +385,23 @@ export default function ShipMenu() {
           </svg>
         </button>
       </div>
+
+      {feedback && (
+        <div
+          className={`absolute top-full left-0 mt-2 z-50 w-72 rounded-lg border px-3 py-2 ${
+            feedback.tone === 'error'
+              ? 'bg-red-950/70 border-red-500/30'
+              : feedback.tone === 'success'
+                ? 'bg-emerald-950/70 border-emerald-500/30'
+                : 'bg-neutral-900 border-neutral-700'
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-[11px] font-medium text-[#d8d8d8]">{feedback.title}</p>
+          <p className="mt-0.5 text-[10px] leading-relaxed text-[#8a8a8a]">{feedback.message}</p>
+        </div>
+      )}
 
       {/* Dropdown Menu */}
       <AnimatePresence>
@@ -338,10 +546,22 @@ export default function ShipMenu() {
           >
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] font-medium text-[#a8a8a8]">
-                Deploy to Vercel
+                {firstExportType === 'github'
+                  ? 'GitHub export opened'
+                  : firstExportType === 'zip'
+                    ? 'ZIP export complete'
+                    : firstExportType === 'netlify'
+                      ? 'Deploy to Netlify'
+                      : 'Deploy to Vercel'}
               </span>
               <span className="text-[10px] text-[#505050] leading-relaxed">
-                Unzip, push to GitHub, and connect to Vercel.
+                {firstExportType === 'github'
+                  ? 'Review the generated pull request, merge, then connect the repo to deploy.'
+                  : firstExportType === 'zip'
+                    ? 'Push this ZIP to GitHub and connect it to Vercel or Netlify.'
+                    : firstExportType === 'netlify'
+                      ? 'Confirm environment variables, then publish from Netlify dashboard.'
+                      : 'Unzip, push to GitHub, and connect to Vercel.'}
               </span>
             </div>
           </motion.div>

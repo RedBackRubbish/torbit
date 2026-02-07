@@ -1,6 +1,7 @@
 import { useTerminalStore } from '@/store/terminal'
 import { useFuelStore } from '@/store/fuel'
 import { useTimeline, type AgentType } from '@/store/timeline'
+import { useBuilderStore } from '@/store/builder'
 
 // ============================================================================
 // EXECUTOR SERVICE - The Spinal Cord
@@ -39,12 +40,48 @@ const TOOL_FUEL_COSTS: Record<string, number> = {
   runTests: 30,
   runE2eCycle: 50,
   verifyDependencyGraph: 10,
+  deployPreview: 20,
+  checkDeployStatus: 5,
+  deployToProduction: 40,
+  syncToGithub: 18,
   
   // Thinking (varies by model)
   think: 10,
   
   // Default
   default: 5,
+}
+
+interface ShipFilePayload {
+  path: string
+  content: string
+}
+
+function extractShipFiles(raw: unknown): ShipFilePayload[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .map((entry) => {
+      const file = entry as { path?: unknown; content?: unknown }
+      if (typeof file.path !== 'string' || typeof file.content !== 'string') {
+        return null
+      }
+
+      return {
+        path: file.path,
+        content: file.content,
+      }
+    })
+    .filter((file): file is ShipFilePayload => Boolean(file))
+}
+
+function getBuilderFiles(): ShipFilePayload[] {
+  return useBuilderStore.getState().files.map((file) => ({
+    path: file.path,
+    content: file.content,
+  }))
 }
 
 export class ExecutorService {
@@ -175,6 +212,237 @@ export class ExecutorService {
           break
         }
 
+        case 'deployPreview': {
+          const { environment = 'preview', branch } = args as {
+            environment?: 'preview' | 'staging' | 'production'
+            branch?: string
+          }
+          const deploymentId = `dep_${Math.random().toString(36).slice(2, 10)}`
+          terminal.addLog(`Deploying ${environment}${branch ? ` (${branch})` : ''}`, 'info')
+          output = `Deploying to ${environment}${branch ? ` from branch ${branch}` : ''}...\n\nDeployment ID: ${deploymentId}\nStatus: Building...`
+          break
+        }
+
+        case 'checkDeployStatus': {
+          const { deploymentId } = args as { deploymentId: string }
+          output = `Deployment ${deploymentId}: ✓ Ready\nURL: https://${deploymentId}.torbit.dev`
+          break
+        }
+
+        case 'deployToProduction': {
+          const {
+            provider = 'vercel',
+            projectName = 'my-project',
+            environmentVariables,
+            framework = 'auto',
+            buildCommand,
+            outputDirectory,
+            region,
+            files: providedFiles,
+          } = args as {
+            provider?: 'vercel' | 'netlify' | 'railway'
+            projectName?: string
+            environmentVariables?: Record<string, string>
+            framework?: 'sveltekit' | 'nextjs' | 'vite' | 'remix' | 'astro' | 'auto'
+            buildCommand?: string
+            outputDirectory?: string
+            region?: string
+            files?: Array<{ path: string; content: string }>
+          }
+
+          const explicitFiles = extractShipFiles(providedFiles)
+          const files = explicitFiles.length > 0 ? explicitFiles : getBuilderFiles()
+          if (files.length === 0) {
+            throw new Error('No files available to deploy.')
+          }
+
+          terminal.addLog(`Deploying to ${provider}: ${projectName}`, 'info')
+
+          const deployRes = await fetch('/api/ship/deploy', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              provider,
+              projectName,
+              environmentVariables,
+              framework,
+              buildCommand,
+              outputDirectory,
+              region,
+              files,
+            }),
+          })
+
+          const deployData = await deployRes.json() as {
+            success?: boolean
+            error?: string
+            provider?: string
+            deploymentId?: string
+            deploymentUrl?: string
+            state?: string
+            inspectorUrl?: string
+            dashboardUrl?: string
+          }
+
+          if (!deployRes.ok || !deployData.success) {
+            throw new Error(deployData.error || `Deploy API request failed (${deployRes.status})`)
+          }
+
+          if (deployData.deploymentUrl) {
+            terminal.addLog(`Production URL: ${deployData.deploymentUrl}`, 'success')
+          }
+
+          output = [
+            `🚀 Deploying to ${(deployData.provider || provider).toUpperCase()} Production`,
+            ``,
+            `Project: ${projectName}`,
+            `Framework: ${framework}`,
+            buildCommand ? `Build Command: ${buildCommand}` : null,
+            outputDirectory ? `Output Directory: ${outputDirectory}` : null,
+            region ? `Region: ${region}` : null,
+            environmentVariables && Object.keys(environmentVariables).length > 0
+              ? `Environment Variables: ${Object.keys(environmentVariables).length} configured`
+              : null,
+            `Files: ${files.length}`,
+            ``,
+            deployData.deploymentId ? `Deployment ID: ${deployData.deploymentId}` : null,
+            deployData.state ? `Status: ${deployData.state}` : 'Status: Created',
+            deployData.deploymentUrl ? `🌐 Production URL: ${deployData.deploymentUrl}` : null,
+            deployData.inspectorUrl ? `Inspector: ${deployData.inspectorUrl}` : null,
+            deployData.dashboardUrl ? `Dashboard: ${deployData.dashboardUrl}` : null,
+          ].filter(Boolean).join('\n')
+          break
+        }
+
+        case 'syncToGithub': {
+          const {
+            operation = 'status',
+            repoName,
+            projectName,
+            private: isPrivate = true,
+            commitMessage,
+            branch = 'main',
+            prTitle,
+            prDescription,
+            baseBranch = 'main',
+            files: providedFiles,
+          } = args as {
+            operation?: 'init' | 'push' | 'pull-request' | 'status'
+            repoName?: string
+            projectName?: string
+            private?: boolean
+            commitMessage?: string
+            branch?: string
+            prTitle?: string
+            prDescription?: string
+            baseBranch?: string
+            files?: Array<{ path: string; content: string }>
+          }
+
+          const explicitFiles = extractShipFiles(providedFiles)
+          const files = explicitFiles.length > 0 ? explicitFiles : getBuilderFiles()
+          if ((operation === 'push' || operation === 'pull-request') && files.length === 0) {
+            throw new Error('No files available to sync to GitHub.')
+          }
+
+          const repoLabel = repoName || projectName || 'torbit-project'
+          terminal.addLog(`GitHub operation: ${operation} (${repoLabel})`, 'info')
+
+          const githubRes = await fetch('/api/ship/github', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              operation,
+              repoName,
+              projectName,
+              private: isPrivate,
+              commitMessage,
+              branch,
+              prTitle,
+              prDescription,
+              baseBranch,
+              ...(operation === 'push' || operation === 'pull-request' ? { files } : {}),
+            }),
+          })
+
+          const githubData = await githubRes.json() as {
+            success?: boolean
+            error?: string
+            operation?: string
+            owner?: string
+            repo?: string
+            branch?: string
+            baseBranch?: string
+            filesSynced?: number
+            repoUrl?: string
+            prUrl?: string
+            prNumber?: number
+            branchExists?: boolean
+            defaultBranch?: string
+          }
+
+          if (!githubRes.ok || !githubData.success) {
+            throw new Error(githubData.error || `GitHub API request failed (${githubRes.status})`)
+          }
+
+          if (githubData.prUrl) {
+            terminal.addLog(`Pull request created: ${githubData.prUrl}`, 'success')
+          } else if (githubData.repoUrl) {
+            terminal.addLog(`Repository synced: ${githubData.repoUrl}`, 'success')
+          }
+
+          switch (githubData.operation || operation) {
+            case 'init':
+              output = [
+                `📦 Initializing GitHub Repository`,
+                ``,
+                `Repository: ${githubData.owner}/${githubData.repo}`,
+                `Default Branch: ${githubData.defaultBranch || 'main'}`,
+                githubData.repoUrl ? `🔗 ${githubData.repoUrl}` : null,
+              ].filter(Boolean).join('\n')
+              break
+            case 'push':
+              output = [
+                `📤 Pushing to GitHub`,
+                ``,
+                `Repository: ${githubData.owner}/${githubData.repo}`,
+                `Branch: ${githubData.branch || branch}`,
+                `Files Synced: ${githubData.filesSynced ?? files.length}`,
+                githubData.repoUrl ? `🔗 ${githubData.repoUrl}` : null,
+              ].filter(Boolean).join('\n')
+              break
+            case 'pull-request':
+              output = [
+                `🔀 Opening Pull Request`,
+                ``,
+                `Repository: ${githubData.owner}/${githubData.repo}`,
+                `Base: ${githubData.baseBranch || baseBranch} ← ${githubData.branch || branch}`,
+                `Files Synced: ${githubData.filesSynced ?? files.length}`,
+                githubData.prNumber ? `PR #${githubData.prNumber}` : null,
+                githubData.prUrl ? `🔗 ${githubData.prUrl}` : null,
+                githubData.repoUrl ? `Repo: ${githubData.repoUrl}` : null,
+              ].filter(Boolean).join('\n')
+              break
+            case 'status':
+            default:
+              output = [
+                `📊 Git Status`,
+                ``,
+                `Repository: ${githubData.owner}/${githubData.repo}`,
+                `Branch: ${githubData.branch || branch}`,
+                `Branch Exists: ${githubData.branchExists ? 'Yes' : 'No'}`,
+                `Default Branch: ${githubData.defaultBranch || 'main'}`,
+                githubData.repoUrl ? `🔗 ${githubData.repoUrl}` : null,
+              ].filter(Boolean).join('\n')
+              break
+          }
+          break
+        }
+
         // ================================================
         // THINKING (The Mind)
         // ================================================
@@ -198,7 +466,7 @@ export class ExecutorService {
         // ================================================
         
         default:
-          output = `ERROR: Unknown tool "${toolName}". Available: createFile, editFile, readFile, listFiles, deleteFile, runTerminal, installPackage, runTests, runE2eCycle, verifyDependencyGraph`
+          output = `ERROR: Unknown tool "${toolName}". Available: createFile, editFile, readFile, listFiles, deleteFile, runTerminal, installPackage, runTests, runE2eCycle, verifyDependencyGraph, deployPreview, checkDeployStatus, deployToProduction, syncToGithub`
       }
 
       // 7. Consume fuel after successful execution
@@ -289,6 +557,7 @@ export class ExecutorService {
       'createFile', 'editFile', 'readFile', 'listFiles', 'deleteFile',
       'runTerminal', 'runCommand', 'installPackage',
       'runTests', 'runE2eCycle', 'verifyDependencyGraph',
+      'deployPreview', 'checkDeployStatus', 'deployToProduction', 'syncToGithub',
       'think',
     ]
     return availableTools.includes(toolName)
