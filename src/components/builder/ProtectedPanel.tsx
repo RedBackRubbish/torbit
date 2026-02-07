@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { useGovernanceStore, type PersistedInvariant } from '@/store/governance'
+import { useGovernanceStore, useProjectInvariants, type PersistedInvariant } from '@/store/governance'
 import { ShieldCheck, Trash2 } from 'lucide-react'
 
 /**
@@ -9,7 +9,7 @@ import { ShieldCheck, Trash2 } from 'lucide-react'
  * Shows the project's "constitution" -- things Torbit won't break.
  */
 export function ProtectedPanel() {
-  const invariants = useGovernanceStore(s => s.invariants)
+  const invariants = useProjectInvariants()
   const removeInvariant = useGovernanceStore(s => s.removeInvariant)
   const clearAll = useGovernanceStore(s => s.clearAll)
 

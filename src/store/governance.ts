@@ -17,6 +17,8 @@ import type { GovernanceObject, ProtectedInvariant } from '@/lib/agents/governan
 /** A persisted invariant with metadata */
 export interface PersistedInvariant {
   id: string
+  /** Which project this invariant belongs to */
+  projectId: string
   /** What must remain true */
   description: string
   /** Files or patterns this applies to */
@@ -42,34 +44,47 @@ export interface GovernanceEntry {
 }
 
 export interface GovernanceState {
+  /** Active project scope -- invariants are keyed to this */
+  projectId: string
   /** All accumulated invariants across sessions */
   invariants: PersistedInvariant[]
   /** Governance history log */
   history: GovernanceEntry[]
+  /** Invariant descriptions the user explicitly removed.
+   *  Prevents Strategist from silently re-adding them. */
+  dismissedDescriptions: string[]
 }
 
 export interface GovernanceActions {
+  /** Switch the active project scope. Only invariants for this project are returned. */
+  setProjectId: (projectId: string) => void
+  
   /**
    * Merge a new GovernanceObject into the persisted store.
    * Deduplicates by description (case-insensitive).
+   * Skips invariants the user explicitly dismissed.
    * New invariants are added; existing ones bump buildsSurvived.
    */
   addGovernance: (gov: GovernanceObject) => void
   
-  /** Remove an invariant by ID */
+  /** Remove an invariant by ID. Adds its description to the dismissed list
+   *  so the Strategist cannot silently re-introduce it. */
   removeInvariant: (id: string) => void
   
-  /** Clear all invariants (fresh start) */
+  /** Clear all invariants for the current project (fresh start) */
   clearAll: () => void
   
-  /** Get only hard invariants (for enforcement) */
+  /** Get only hard invariants for the current project */
   getHardInvariants: () => PersistedInvariant[]
   
-  /** Get all active invariants formatted for injection into agent prompts */
+  /** Get active-project invariants formatted for injection into agent prompts */
   getInvariantsForPrompt: () => string | null
   
   /** Increment buildsSurvived for invariants that were enforced in a build */
   markEnforced: (descriptions: string[]) => void
+  
+  /** Un-dismiss an invariant (allow Strategist to re-add it) */
+  undismiss: (description: string) => void
 }
 
 // ============================================
@@ -98,34 +113,50 @@ function isDuplicate(existing: PersistedInvariant, incoming: ProtectedInvariant)
 export const useGovernanceStore = create<GovernanceState & GovernanceActions>()(
   persist(
     immer((set, get) => ({
+      projectId: 'default',
       invariants: [],
       history: [],
+      dismissedDescriptions: [],
+
+      setProjectId: (projectId) => {
+        set((state) => { state.projectId = projectId })
+      },
 
       addGovernance: (gov) => {
         const now = Date.now()
+        const pid = get().projectId
         const intent = gov.scope.intent || 'Unknown intent'
+        const dismissed = get().dismissedDescriptions
         let added = 0
         let enforced = 0
 
         set((state) => {
           for (const incoming of gov.protected_invariants) {
-            const existingIndex = state.invariants.findIndex(inv => isDuplicate(inv, incoming))
+            // Skip invariants the user explicitly dismissed
+            if (dismissed.some(d => normalizeDescription(d) === normalizeDescription(incoming.description))) {
+              continue
+            }
+
+            // Only match against invariants for the same project
+            const existingIndex = state.invariants.findIndex(
+              inv => inv.projectId === pid && isDuplicate(inv, incoming)
+            )
 
             if (existingIndex !== -1) {
               // Existing invariant -- bump survival count and upgrade severity if needed
               const existing = state.invariants[existingIndex]
               existing.buildsSurvived += 1
               if (incoming.severity === 'hard' && existing.severity === 'soft') {
-                existing.severity = 'hard' // Promote to hard if Strategist now considers it critical
+                existing.severity = 'hard'
               }
-              // Merge scope (union of file paths)
               const newScope = new Set([...existing.scope, ...incoming.scope])
               existing.scope = Array.from(newScope)
               enforced += 1
             } else {
-              // New invariant -- add it
+              // New invariant -- add it scoped to the active project
               state.invariants.push({
                 id: `inv_${now}_${Math.random().toString(36).slice(2, 8)}`,
+                projectId: pid,
                 description: incoming.description,
                 scope: [...incoming.scope],
                 severity: incoming.severity,
@@ -154,23 +185,36 @@ export const useGovernanceStore = create<GovernanceState & GovernanceActions>()(
 
       removeInvariant: (id) => {
         set((state) => {
-          state.invariants = state.invariants.filter(inv => inv.id !== id)
+          const inv = state.invariants.find(i => i.id === id)
+          if (inv) {
+            // Add to dismissed list so Strategist cannot silently re-add it
+            const normalized = normalizeDescription(inv.description)
+            if (!state.dismissedDescriptions.includes(normalized)) {
+              state.dismissedDescriptions.push(normalized)
+            }
+          }
+          state.invariants = state.invariants.filter(i => i.id !== id)
         })
       },
 
       clearAll: () => {
+        const pid = get().projectId
         set((state) => {
-          state.invariants = []
-          state.history = []
+          // Only clear invariants for the active project
+          state.invariants = state.invariants.filter(inv => inv.projectId !== pid)
+          // Also clear dismissed list for this project so they can be re-established
+          state.dismissedDescriptions = []
         })
       },
 
       getHardInvariants: () => {
-        return get().invariants.filter(inv => inv.severity === 'hard')
+        const pid = get().projectId
+        return get().invariants.filter(inv => inv.projectId === pid && inv.severity === 'hard')
       },
 
       getInvariantsForPrompt: () => {
-        const invariants = get().invariants
+        const pid = get().projectId
+        const invariants = get().invariants.filter(inv => inv.projectId === pid)
         if (invariants.length === 0) return null
 
         const lines: string[] = [
@@ -196,23 +240,35 @@ export const useGovernanceStore = create<GovernanceState & GovernanceActions>()(
       },
 
       markEnforced: (descriptions) => {
+        const pid = get().projectId
         set((state) => {
           for (const desc of descriptions) {
             const normalized = normalizeDescription(desc)
-            const inv = state.invariants.find(i => normalizeDescription(i.description) === normalized)
+            const inv = state.invariants.find(
+              i => i.projectId === pid && normalizeDescription(i.description) === normalized
+            )
             if (inv) {
               inv.buildsSurvived += 1
             }
           }
         })
       },
+
+      undismiss: (description) => {
+        set((state) => {
+          const normalized = normalizeDescription(description)
+          state.dismissedDescriptions = state.dismissedDescriptions.filter(d => d !== normalized)
+        })
+      },
     })),
     {
       name: 'torbit-governance',
-      version: 1,
+      version: 2,
       partialize: (state) => ({
+        projectId: state.projectId,
         invariants: state.invariants,
         history: state.history.slice(0, 50),
+        dismissedDescriptions: state.dismissedDescriptions,
       }),
     }
   )
@@ -223,9 +279,23 @@ export const useGovernanceStore = create<GovernanceState & GovernanceActions>()(
 // ============================================
 
 export function useInvariantCount() {
-  return useGovernanceStore(s => s.invariants.length)
+  return useGovernanceStore(s => {
+    const pid = s.projectId
+    return s.invariants.filter(i => i.projectId === pid).length
+  })
 }
 
 export function useHardInvariantCount() {
-  return useGovernanceStore(s => s.invariants.filter(i => i.severity === 'hard').length)
+  return useGovernanceStore(s => {
+    const pid = s.projectId
+    return s.invariants.filter(i => i.projectId === pid && i.severity === 'hard').length
+  })
+}
+
+/** Get invariants for the active project (for UI rendering) */
+export function useProjectInvariants() {
+  return useGovernanceStore(s => {
+    const pid = s.projectId
+    return s.invariants.filter(i => i.projectId === pid)
+  })
 }
