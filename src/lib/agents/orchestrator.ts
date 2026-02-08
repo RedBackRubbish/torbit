@@ -17,8 +17,9 @@ import { google } from '@ai-sdk/google'
 import { openai } from '@ai-sdk/openai'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { AGENT_TOOLS, type ToolName, type AgentId } from '../tools/definitions'
+import type { AgentId } from '../tools/definitions'
 import { executeTool, createExecutionContext, type ToolExecutionContext } from '../tools/executor'
+import { createAgentTools } from '../tools/ai-sdk-tools'
 import { KimiRouter, type RoutingDecision, isKimiConfigured } from './router'
 import { checkCircuitBreaker, calculateFuelCost, type ModelTier as FuelModelTier } from '@/store/fuel'
 import { parseGovernanceOutput, formatGovernanceForAgent, formatInvariantsForQA, type GovernanceObject } from './governance'
@@ -152,21 +153,9 @@ const AGENT_PROMPTS: Record<AgentId, string> = {
 // TOOL CONVERSION FOR AI SDK
 // ============================================
 
-/**
- * Get tools for an agent - returns the AGENT_TOOLS directly
- * In AI SDK v6, tools are already properly formatted in definitions.ts
- */
-function getToolsForAgent(agentId: AgentId) {
-  return AGENT_TOOLS[agentId]
-}
-
-/**
- * Create tool executor for handling tool calls
- */
-function createToolExecutor(context: ToolExecutionContext) {
-  return async (toolName: string, args: Record<string, unknown>) => {
-    return executeTool(toolName as ToolName, args, context)
-  }
+// Wrap tool definitions with execute handlers so multi-step tool loops continue.
+function getToolsForAgent(agentId: AgentId, context: ToolExecutionContext) {
+  return createAgentTools(agentId, context)
 }
 
 // ============================================
@@ -321,12 +310,12 @@ export class TorbitOrchestrator {
   ): Promise<AgentResult> {
     const start = Date.now()
     const toolCalls: AgentResult['toolCalls'] = []
-    const toolExecutor = createToolExecutor(this.context)
     
     // Track which tool calls we've seen to avoid duplicates
     const seenToolCalls = new Set<string>()
     // Map tool call IDs to start times for duration tracking
     const toolStartTimes = new Map<string, number>()
+    const toolCallArgs = new Map<string, Record<string, unknown>>()
     
     // Check circuit breaker before execution
     const circuitCheck = checkCircuitBreaker(
@@ -345,7 +334,7 @@ export class TorbitOrchestrator {
     }
     
     const model = selectModel('medium', options?.modelTier)
-    const tools = getToolsForAgent(agentId)
+    const tools = getToolsForAgent(agentId, this.context)
     const systemPrompt = options?.systemPrompt ?? AGENT_PROMPTS[agentId]
     const sanitizedMessages = options?.messages
       ?.filter((msg) => msg.content && msg.content.trim().length > 0)
@@ -367,42 +356,6 @@ export class TorbitOrchestrator {
         tools,
         ...(options?.maxTokens ? { maxTokens: options.maxTokens } : {}),
         stopWhen: stepCountIs(options?.maxSteps ?? 10),
-        onStepFinish: async (step) => {
-          // Execute tool calls and track results
-          // Note: Tool calls are already streamed via fullStream below,
-          // this handles the actual execution after the step completes
-          if (step.toolCalls) {
-            for (const tc of step.toolCalls) {
-              const toolCallId = (tc as { toolCallId?: string }).toolCallId ?? tc.toolName
-              const toolStart = toolStartTimes.get(toolCallId) ?? Date.now()
-              // AI SDK v6: access input property - cast to any for compatibility
-              const toolInput = (tc as { input?: unknown }).input ?? {}
-              const toolResult = await toolExecutor(tc.toolName, toolInput as Record<string, unknown>)
-              
-              const duration = Date.now() - toolStart
-              
-              // Track fuel cost per tool call with model tier multiplier
-              const baseFuelCost = 1 // Base cost per tool call
-              const adjustedCost = calculateFuelCost(baseFuelCost, fuelModelTier)
-              this.sessionFuelSpent += adjustedCost
-              
-              toolCalls.push({
-                name: tc.toolName,
-                args: toolInput as Record<string, unknown>,
-                result: toolResult,
-                duration,
-              })
-              
-              // Notify caller of tool completion
-              options?.onToolResult?.({
-                id: toolCallId,
-                name: tc.toolName,
-                result: toolResult,
-                duration,
-              })
-            }
-          }
-        },
       })
       
       // Use fullStream to get tool calls IMMEDIATELY as they happen
@@ -417,10 +370,12 @@ export class TorbitOrchestrator {
           // AI SDK v6 uses 'input' not 'args' for tool parameters
           const tc = part as { toolCallId?: string; toolName: string; input?: unknown; args?: unknown }
           const toolCallId = tc.toolCallId ?? tc.toolName
+          const args = (tc.input ?? tc.args ?? {}) as Record<string, unknown>
           
           if (!seenToolCalls.has(toolCallId)) {
             seenToolCalls.add(toolCallId)
             toolStartTimes.set(toolCallId, Date.now())
+            toolCallArgs.set(toolCallId, args)
             
             // Notify caller immediately - this is the key fix!
             // Files will appear in sidebar as soon as the model decides to create them,
@@ -428,9 +383,42 @@ export class TorbitOrchestrator {
             options?.onToolCall?.({
               id: toolCallId,
               name: tc.toolName,
-              args: (tc.input ?? tc.args) as Record<string, unknown>,
+              args,
             })
           }
+        } else if (part.type === 'tool-result') {
+          const tr = part as {
+            toolCallId?: string
+            toolName?: string
+            output?: unknown
+            result?: unknown
+          }
+
+          const toolCallId = tr.toolCallId ?? tr.toolName ?? `tool-${Date.now()}`
+          const toolName = tr.toolName ?? 'unknown'
+          const rawResult = tr.output ?? tr.result ?? null
+          const resultText = typeof rawResult === 'string' ? rawResult : JSON.stringify(rawResult)
+          const success = !resultText.startsWith('Error:')
+          const duration = Date.now() - (toolStartTimes.get(toolCallId) ?? Date.now())
+
+          // Track fuel cost per tool call with model tier multiplier
+          const baseFuelCost = 1
+          const adjustedCost = calculateFuelCost(baseFuelCost, fuelModelTier)
+          this.sessionFuelSpent += adjustedCost
+
+          toolCalls.push({
+            name: toolName,
+            args: toolCallArgs.get(toolCallId) ?? {},
+            result: rawResult,
+            duration,
+          })
+
+          options?.onToolResult?.({
+            id: toolCallId,
+            name: toolName,
+            result: rawResult,
+            duration,
+          })
         }
       }
       
