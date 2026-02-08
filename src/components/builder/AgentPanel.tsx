@@ -59,7 +59,7 @@ function AgentCard({ agent }: AgentCardProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.02 }}
-      style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+      style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}
     >
       {/* Active indicator */}
       {isActive && (

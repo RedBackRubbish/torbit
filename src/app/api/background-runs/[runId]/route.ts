@@ -53,10 +53,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     .from('background_runs')
     .select('*')
     .eq('id', runId)
+    .eq('user_id', user.id)
     .single()
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 404 })
+    return NextResponse.json({ error: 'Run not found.' }, { status: 404 })
   }
 
   return NextResponse.json({ success: true, run: data })
@@ -87,10 +88,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .from('background_runs')
       .select('*')
       .eq('id', runId)
+      .eq('user_id', user.id)
       .single()
 
     if (existingRunError || !existingRun) {
-      return NextResponse.json({ error: existingRunError?.message || 'Run not found.' }, { status: 404 })
+      return NextResponse.json({ error: 'Run not found.' }, { status: 404 })
     }
 
     const transition = computeBackgroundRunTransition({
@@ -133,13 +135,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('[background-runs] Update failed:', error.message)
+      return NextResponse.json({ error: 'Failed to update background run.' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, run: data })
   } catch (error) {
+    console.error('[background-runs] Unexpected error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to update background run.' },
+      { error: 'Failed to update background run.' },
       { status: 500 }
     )
   }

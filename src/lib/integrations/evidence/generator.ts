@@ -162,9 +162,9 @@ export function generateEvidenceBundle(
     attestation,
     auditReport,
     ledger: resolvedOptions.includeLedger ? ledgerEntries : [],
-    policySnapshot: resolvedOptions.includePolicy ? policy : {} as any,
-    environmentProfile: resolvedOptions.includeEnvironment ? profile : {} as any,
-    healthStatus: resolvedOptions.includeHealth ? input.healthReport : {} as any,
+    policySnapshot: resolvedOptions.includePolicy ? policy : undefined,
+    environmentProfile: resolvedOptions.includeEnvironment ? profile : undefined,
+    healthStatus: resolvedOptions.includeHealth ? input.healthReport : undefined,
   }
   
   // Compute bundle hash (excluding the hash field itself)

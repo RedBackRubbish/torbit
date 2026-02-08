@@ -312,7 +312,7 @@ export default function TasksPanel() {
   return (
     <div 
       className="h-full flex flex-col bg-neutral-900"
-      style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+      style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}
     >
       {/* Header */}
       <div className="p-4 border-b border-neutral-800">

@@ -63,19 +63,19 @@ export interface EvidenceBundle {
   ledger: LedgerEntry[]
   
   /**
-   * Policy snapshot at export time
+   * Policy snapshot at export time (omitted when includePolicy is false)
    */
-  policySnapshot: OrganizationPolicy
-  
+  policySnapshot?: OrganizationPolicy
+
   /**
-   * Environment profile at export time
+   * Environment profile at export time (omitted when includeEnvironment is false)
    */
-  environmentProfile: EnvironmentProfile
-  
+  environmentProfile?: EnvironmentProfile
+
   /**
-   * Health status at export time
+   * Health status at export time (omitted when includeHealth is false)
    */
-  healthStatus: HealthReport
+  healthStatus?: HealthReport
   
   /**
    * Knowledge snapshot at export time (Directive I)

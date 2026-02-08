@@ -51,7 +51,7 @@ export function recordEnvironmentEvent(
   }
   
   return createEntry(
-    eventType as any,
+    eventType,
     integrationId || 'system',
     `Environment ${eventType.toLowerCase().replace('environment_', '')}`,
     {
@@ -77,7 +77,7 @@ export function recordUnifiedEnforcement(
   
   // Create policy entry via policy ledger events
   const policyEntry = createEntry(
-    result.ledgerEvents.policy.type as any,
+    result.ledgerEvents.policy.type,
     integrationId || 'system',
     `Policy ${result.ledgerEvents.policy.type.toLowerCase().replace('policy_', '')}`,
     {

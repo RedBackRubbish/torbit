@@ -168,7 +168,7 @@ export function ToolCallDisplay({ toolCall, compact = false }: ToolCallDisplayPr
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={`rounded-lg border ${statusColors[toolCall.status]} overflow-hidden`}
-      style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+      style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}
     >
       {/* Header */}
       <button

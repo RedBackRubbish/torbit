@@ -50,7 +50,9 @@ class SoundEngine {
     if (this.audioContext) return
 
     try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioCtx) throw new Error('Web Audio API not supported')
+      this.audioContext = new AudioCtx()
       this.masterGain = this.audioContext.createGain()
       this.masterGain.gain.value = this.masterVolume
       this.masterGain.connect(this.audioContext.destination)

@@ -41,7 +41,7 @@ export function recordPolicyEvent(
   const summary = `Policy ${eventType.toLowerCase().replace('policy_', '')}: ${evaluation.summary || 'evaluated'}`
   
   return createEntry(
-    eventType as any,
+    eventType,
     integrationId || 'system',
     summary,
     {

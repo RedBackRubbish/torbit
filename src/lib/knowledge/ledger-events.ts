@@ -353,8 +353,8 @@ export function getKnowledgeEventsByType(
 export function getEventsForSuggestion(
   suggestionId: string
 ): KnowledgeLedgerEvent[] {
-  return knowledgeEvents.filter(e => 
-    (e.payload as any).suggestionId === suggestionId
+  return knowledgeEvents.filter(e =>
+    (e.payload as Record<string, unknown>).suggestionId === suggestionId
   )
 }
 

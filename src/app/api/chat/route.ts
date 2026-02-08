@@ -37,6 +37,7 @@ function isValidAgentId(value: string): value is AgentId {
 // Import rich agent prompts
 import { ARCHITECT_SYSTEM_PROMPT } from '@/lib/agents/prompts/architect'
 import { FRONTEND_SYSTEM_PROMPT } from '@/lib/agents/prompts/frontend'
+import { BACKEND_SYSTEM_PROMPT } from '@/lib/agents/prompts/backend'
 import { DEVOPS_SYSTEM_PROMPT } from '@/lib/agents/prompts/devops'
 import { QA_SYSTEM_PROMPT } from '@/lib/agents/prompts/qa'
 import { AUDITOR_SYSTEM_PROMPT } from '@/lib/agents/prompts/auditor'
@@ -58,53 +59,12 @@ const MAX_OUTPUT_TOKENS = 16384
 // Combine God Prompt with agent-specific prompts
 const createAgentPrompt = (agentPrompt: string) => `${GOD_PROMPT}\n\n---\n\n## AGENT-SPECIFIC INSTRUCTIONS\n\n${agentPrompt}`
 
-// Rich agent system prompts - the sophisticated ones with tool awareness
+// Rich agent system prompts - imported from dedicated prompt files
 const AGENT_PROMPTS: Record<string, string> = {
   architect: createAgentPrompt(ARCHITECT_SYSTEM_PROMPT),
   frontend: createAgentPrompt(FRONTEND_SYSTEM_PROMPT),
-  backend: createAgentPrompt(`You are THE BACKEND AGENT for TORBIT.
-Your role is to implement server routes, form actions, and server-side logic.
-
-## TOOLS AT YOUR DISPOSAL
-You have access to verified tools - USE THEM. Don't just describe what you would do.
-
-When given a task:
-1. Use 'think' to design your API structure
-2. Use 'readFile' to understand existing code patterns
-3. Use 'createFile' to generate new server routes
-4. Use 'editFile' to modify existing endpoints
-5. Use 'runTests' to verify your implementation
-6. Use 'searchCode' to find related code
-
-## CODE STANDARDS
-- Next.js App Router route handlers (app/api/**/route.ts) and server actions where needed
-- TypeScript with strict types
-- Zod for request/response validation
-- Proper error handling with explicit status codes and structured JSON responses
-- Use server components/actions for secure data access patterns
-
-Always show your work through tool calls.`),
-
-  database: createAgentPrompt(`You are THE DATABASE AGENT for TORBIT.
-Your role is to design schemas, write migrations, and optimize queries.
-
-## TOOLS AT YOUR DISPOSAL
-When given a task:
-1. Use 'think' to design your schema
-2. Use 'inspectSchema' to understand existing database structure
-3. Use 'createFile' to generate schema definitions
-4. Use 'editFile' to modify existing schemas
-5. Use 'runSqlQuery' to test queries (READ ONLY)
-6. Use 'runCommand' to run migrations
-
-## STANDARDS
-- Drizzle ORM or Prisma with PostgreSQL (or direct SQL)
-- Proper indexing for query performance
-- Normalized schemas with clear relationships
-- Migration files for all changes
-
-Never hallucinate columns - use inspectSchema first.`),
-
+  backend: createAgentPrompt(BACKEND_SYSTEM_PROMPT),
+  database: createAgentPrompt(BACKEND_SYSTEM_PROMPT), // Database merged into backend agent
   devops: createAgentPrompt(DEVOPS_SYSTEM_PROMPT),
   qa: createAgentPrompt(QA_SYSTEM_PROMPT),
   planner: createAgentPrompt(PLANNER_SYSTEM_PROMPT),
@@ -200,7 +160,7 @@ function classifyError(error: unknown): TorbitError {
   
   return {
     type: 'unknown',
-    message: error.message,
+    message: 'An unexpected error occurred. Please try again.',
     retryable: false,
   }
 }
@@ -583,9 +543,7 @@ ${assumptionPreview ? `- Assumptions:\n${assumptionPreview}` : '- Assumptions: n
   } catch (error) {
     console.error('[TORBIT] Request error:', error)
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Failed to process request' 
-      }),
+      JSON.stringify({ error: 'Failed to process request' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
