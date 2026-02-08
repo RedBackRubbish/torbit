@@ -100,13 +100,14 @@ export function useFileSound() {
 }
 
 export function useGenerationSound() {
-  const { play, startHum, stopHum } = useSoundEffects()
+  const { play, stopHum } = useSoundEffects()
   
   return {
     onStart: useCallback(() => {
+      // Ensure no lingering ambient layer from previous runs.
+      stopHum()
       play('generation-start')
-      startHum()
-    }, [play, startHum]),
+    }, [play, stopHum]),
     onComplete: useCallback(() => {
       stopHum()
       play('generation-complete')

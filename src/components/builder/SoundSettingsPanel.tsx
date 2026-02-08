@@ -172,8 +172,8 @@ export default function SoundSettingsPanel({
                   <p className="text-[11px] font-medium text-[#606060] uppercase tracking-wider">Categories</p>
                   
                   <ToggleRow
-                    label="Ambient Hum"
-                    description="Reactor drone during generation"
+                    label="Generation Cues"
+                    description="Start and completion sounds for generation"
                     enabled={ambientHum}
                     onToggle={() => handleToggle(toggleAmbientHum)}
                   />
