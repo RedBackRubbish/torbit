@@ -105,18 +105,12 @@ export interface ParallelResult {
 const USE_CODEX_PRIMARY = process.env.TORBIT_USE_CODEX_PRIMARY === 'true'
 const CODEX_PRIMARY_MODEL = process.env.TORBIT_CODEX_MODEL || process.env.OPENAI_CODEX_MODEL || 'gpt-5.3-codex'
 const CODEX_FAST_MODEL = process.env.TORBIT_CODEX_FAST_MODEL || 'gpt-5-mini'
-
-const MODELS = USE_CODEX_PRIMARY
-  ? {
-      opus: openai(CODEX_PRIMARY_MODEL),
-      sonnet: openai(CODEX_PRIMARY_MODEL),
-      flash: openai(CODEX_FAST_MODEL),
-    }
-  : {
-      opus: anthropic('claude-opus-4-6'), // Governance only - different brain
-      sonnet: anthropic('claude-sonnet-4-5-20250929'), // Fallback/governance
-      flash: google('gemini-2.0-flash'), // Quick queries
-    } as const
+const OPENAI_FALLBACK_MODEL = process.env.TORBIT_OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
+const ANTHROPIC_OPUS_MODEL = 'claude-opus-4-6'
+const ANTHROPIC_SONNET_MODEL = 'claude-sonnet-4-5-20250929'
+const GOOGLE_PRO_MODEL = 'gemini-2.5-pro'
+const GOOGLE_FLASH_MODEL = 'gemini-2.0-flash'
+let codexFallbackWarningShown = false
 
 /**
  * Select model based on task complexity (legacy fallback)
@@ -124,13 +118,36 @@ const MODELS = USE_CODEX_PRIMARY
  * Governance: Claude for oversight (different brain principle)
  */
 function selectModel(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: ModelTier) {
-  if (preferredTier) return MODELS[preferredTier]
-  
-  switch (taskComplexity) {
-    case 'high': return MODELS.opus
-    case 'medium': return MODELS.sonnet
-    case 'low': return MODELS.flash
+  const tier: ModelTier = preferredTier ?? (
+    taskComplexity === 'high' ? 'opus' : taskComplexity === 'medium' ? 'sonnet' : 'flash'
+  )
+
+  const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY)
+  const hasGoogle = Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY)
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY)
+
+  if (USE_CODEX_PRIMARY && hasOpenAI) {
+    return tier === 'flash' ? openai(CODEX_FAST_MODEL) : openai(CODEX_PRIMARY_MODEL)
   }
+
+  if (USE_CODEX_PRIMARY && !hasOpenAI && !codexFallbackWarningShown) {
+    codexFallbackWarningShown = true
+    console.warn('[Orchestrator] TORBIT_USE_CODEX_PRIMARY=true but OPENAI_API_KEY is missing. Falling back to available providers.')
+  }
+
+  if (tier === 'flash') {
+    if (hasGoogle) return google(GOOGLE_FLASH_MODEL)
+    if (hasOpenAI) return openai(CODEX_FAST_MODEL)
+    if (hasAnthropic) return anthropic(ANTHROPIC_SONNET_MODEL)
+  } else {
+    if (hasAnthropic) return anthropic(tier === 'opus' ? ANTHROPIC_OPUS_MODEL : ANTHROPIC_SONNET_MODEL)
+    if (hasOpenAI) return openai(OPENAI_FALLBACK_MODEL)
+    if (hasGoogle) return google(tier === 'opus' ? GOOGLE_PRO_MODEL : GOOGLE_FLASH_MODEL)
+  }
+
+  throw new Error(
+    'No AI provider configured. Set at least one of OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY.'
+  )
 }
 
 // ============================================
@@ -365,6 +382,15 @@ export class TorbitOrchestrator {
         if (part.type === 'text-delta') {
           output += part.text
           options?.onTextDelta?.(part.text)
+        } else if (part.type === 'error') {
+          const streamError = (part as { error?: unknown }).error
+          if (streamError instanceof Error) {
+            throw streamError
+          }
+          if (typeof streamError === 'string') {
+            throw new Error(streamError)
+          }
+          throw new Error(streamError ? JSON.stringify(streamError) : 'Model streaming failed')
         } else if (part.type === 'tool-call') {
           // Stream tool call immediately when it starts (with complete args)
           // AI SDK v6 uses 'input' not 'args' for tool parameters
@@ -397,8 +423,6 @@ export class TorbitOrchestrator {
           const toolCallId = tr.toolCallId ?? tr.toolName ?? `tool-${Date.now()}`
           const toolName = tr.toolName ?? 'unknown'
           const rawResult = tr.output ?? tr.result ?? null
-          const resultText = typeof rawResult === 'string' ? rawResult : JSON.stringify(rawResult)
-          const success = !resultText.startsWith('Error:')
           const duration = Date.now() - (toolStartTimes.get(toolCallId) ?? Date.now())
 
           // Track fuel cost per tool call with model tier multiplier

@@ -138,11 +138,27 @@ function classifyError(error: unknown): TorbitError {
       retryable: false,
     }
   }
+
+  if (msg.includes('no ai provider configured')) {
+    return {
+      type: 'auth',
+      message: 'No AI provider key detected. Add OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY.',
+      retryable: false,
+    }
+  }
   
   if (msg.includes('api key') || msg.includes('authentication') || msg.includes('unauthorized')) {
     return {
       type: 'auth',
-      message: 'API key not configured. Please add ANTHROPIC_API_KEY or GOOGLE_API_KEY to environment variables.',
+      message: 'API key not configured. Add OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY.',
+      retryable: false,
+    }
+  }
+
+  if (msg.includes('model_not_found') || msg.includes('does not exist or you do not have access')) {
+    return {
+      type: 'auth',
+      message: 'Configured model is unavailable for your key. Update model env vars or switch provider keys.',
       retryable: false,
     }
   }
