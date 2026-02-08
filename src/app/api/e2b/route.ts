@@ -17,36 +17,61 @@ const sandboxOwners = new Map<string, string>()
 // Track which sandboxes have Node.js installed
 const nodeInstalledSandboxes = new Set<string>()
 
-function getOwnedSandbox(sandboxId: unknown, userId: string): {
+async function getOwnedSandbox(
+  sandboxId: unknown,
+  userId: string,
+  apiKey: string
+): Promise<{
   sandbox?: Sandbox
   error?: NextResponse
-} {
+}> {
   if (!sandboxId || typeof sandboxId !== 'string') {
     return {
       error: NextResponse.json(
-        { error: 'sandboxId is required' },
+        { error: 'sandboxId is required', code: 'SANDBOX_ID_REQUIRED' },
         { status: 400 }
       ),
     }
   }
 
-  const sandbox = activeSandboxes.get(sandboxId)
+  let sandbox = activeSandboxes.get(sandboxId)
   const ownerId = sandboxOwners.get(sandboxId)
 
-  if (!sandbox || !ownerId) {
-    return {
-      error: NextResponse.json(
-        { error: 'Sandbox not found' },
-        { status: 404 }
-      ),
+  if (!sandbox) {
+    try {
+      // Recover sandbox handle across process restarts/cold starts.
+      sandbox = await Sandbox.connect(sandboxId, { apiKey })
+      activeSandboxes.set(sandboxId, sandbox)
+      if (!ownerId) {
+        sandboxOwners.set(sandboxId, userId)
+      }
+      console.log(`♻️ Reconnected sandbox ${sandboxId.slice(0, 8)}...`)
+    } catch {
+      return {
+        error: NextResponse.json(
+          { error: 'Sandbox not found', code: 'SANDBOX_NOT_FOUND' },
+          { status: 404 }
+        ),
+      }
     }
   }
 
-  if (ownerId !== userId) {
+  if (!ownerId) {
+    sandboxOwners.set(sandboxId, userId)
+  } else if (ownerId !== userId) {
     return {
       error: NextResponse.json(
         { error: 'Forbidden: sandbox does not belong to current user' },
         { status: 403 }
+      ),
+    }
+  }
+
+  if (!sandbox) {
+    return {
+      error: NextResponse.json(
+        { error: 'Sandbox not found', code: 'SANDBOX_NOT_FOUND' },
+        { status: 404 }
       ),
     }
   }
@@ -117,7 +142,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'writeFile': {
-        const owned = getOwnedSandbox(sandboxId, user.id)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -126,7 +151,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'readFile': {
-        const owned = getOwnedSandbox(sandboxId, user.id)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -135,7 +160,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'makeDir': {
-        const owned = getOwnedSandbox(sandboxId, user.id)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -144,7 +169,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'runCommand': {
-        const owned = getOwnedSandbox(sandboxId, user.id)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -216,7 +241,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'getHost': {
-        const owned = getOwnedSandbox(sandboxId, user.id)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -225,7 +250,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'kill': {
-        const owned = getOwnedSandbox(sandboxId, user.id)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
