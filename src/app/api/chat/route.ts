@@ -172,6 +172,15 @@ function classifyError(error: unknown): TorbitError {
       retryAfterMs: 1000,
     }
   }
+
+  if (msg.includes('no_file_mutations')) {
+    return {
+      type: 'tool_error',
+      message: 'No files were generated on first pass. Retrying with strict execution mode...',
+      retryable: true,
+      retryAfterMs: 250,
+    }
+  }
   
   return {
     type: 'unknown',
@@ -216,6 +225,11 @@ interface StreamChunk {
 
 // Maximum retry attempts for retryable errors
 const MAX_RETRIES = 3
+
+function requestLikelyNeedsFileOutput(content: string): boolean {
+  const text = content.toLowerCase()
+  return /build|create|generate|make|implement|develop|app|website|landing|dashboard|todo|page|screen|ui/.test(text)
+}
 
 function detectRuntimeEnvironment(): 'local' | 'staging' | 'production' {
   const env = (process.env.VERCEL_ENV || process.env.NODE_ENV || 'development').toLowerCase()
@@ -423,6 +437,16 @@ ${assumptionPreview ? `- Assumptions:\n${assumptionPreview}` : '- Assumptions: n
           const sentToolCalls = new Set<string>()
 
           try {
+            const strictExecutionMode = attempt > 1
+            const attemptSystemPrompt = strictExecutionMode
+              ? `${systemPrompt}
+
+## STRICT EXECUTION MODE
+- Produce concrete file changes in this response.
+- Use createFile/editFile/applyPatch tools now.
+- Do not stop at planning/thinking only.`
+              : systemPrompt
+
             const orchestrator = createOrchestrator({
               projectId,
               userId,
@@ -450,7 +474,7 @@ ${assumptionPreview ? `- Assumptions:\n${assumptionPreview}` : '- Assumptions: n
               {
                 maxSteps: 15,
                 maxTokens: MAX_OUTPUT_TOKENS,
-                systemPrompt,
+                systemPrompt: attemptSystemPrompt,
                 messages,
                 onTextDelta: (delta) => {
                   sendChunk({ type: 'text', content: delta })
@@ -480,6 +504,20 @@ ${assumptionPreview ? `- Assumptions:\n${assumptionPreview}` : '- Assumptions: n
 
             if (!result.success) {
               throw new Error(result.output || 'Agent execution failed')
+            }
+
+            const mutationToolCount = result.toolCalls.filter((toolCall) => (
+              toolCall.name === 'createFile' ||
+              toolCall.name === 'editFile' ||
+              toolCall.name === 'applyPatch'
+            )).length
+
+            if (
+              mutationToolCount === 0 &&
+              agentId === 'architect' &&
+              requestLikelyNeedsFileOutput(lastUserContent)
+            ) {
+              throw new Error('NO_FILE_MUTATIONS')
             }
 
             safeClose()

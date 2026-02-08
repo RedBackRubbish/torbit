@@ -55,6 +55,7 @@ const E2BContext = createContext<E2BContextValue | null>(null)
 
 // Module-level flag to prevent duplicate boot logs in Strict Mode
 let hasLoggedBoot = false
+const RUNTIME_STARTUP_TIMEOUT_MS = 45000
 
 class E2BApiError extends Error {
   code?: string
@@ -156,6 +157,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
       // New generation starting - reset build state
       hasStartedBuildRef.current = false
       setServerUrl(null)
+      setError(null)
     }
     wasGeneratingRef.current = isGenerating
   }, [isGenerating])
@@ -334,6 +336,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sync failed'
       addLog(`❌ Sync error: ${msg}`, 'error')
+      throw new Error(msg)
     }
   }, [sandboxId, files, addLog])
   
@@ -376,7 +379,10 @@ export function E2BProvider({ children }: E2BProviderProps) {
     
     // Run build process
     ;(async () => {
+      const buildStart = Date.now()
       try {
+        setError(null)
+        setServerUrl(null)
         addLog('🔄 Starting build process...', 'info')
         
         // Sync files
@@ -387,7 +393,8 @@ export function E2BProvider({ children }: E2BProviderProps) {
         const installResult = await runCommand('npm install', [], 90000)
         
         if (installResult.exitCode !== 0) {
-          addLog('⚠️ npm install had issues, attempting to continue...', 'warning')
+          const installError = installResult.stderr || installResult.stdout || 'npm install failed'
+          throw new Error(`Dependency install failed: ${installError.slice(0, 300)}`)
         }
         
         // Update verification
@@ -411,25 +418,65 @@ export function E2BProvider({ children }: E2BProviderProps) {
         // Start dev server
         addLog('🚀 Starting Vite dev server...', 'info')
         
-        // Run dev server in background (don't await)
-        e2bApi('runCommand', { 
+        // Run dev server in background and check for early failures
+        const devServerPromise = e2bApi('runCommand', {
           sandboxId, 
           command: 'npm run dev -- --host 0.0.0.0',
           timeoutMs: 300000,
-        }).catch(console.error)
-        
-        // Wait a bit for server to start, then get URL
-        await new Promise(resolve => setTimeout(resolve, 5000))
-        
-        const hostResult = await e2bApi('getHost', { sandboxId, port: 5173 })
-        if (hostResult.host) {
-          setServerUrl(hostResult.host)
-          addLog(`✅ Preview ready: ${hostResult.host}`, 'success')
+        })
+
+        const earlyExit = await Promise.race([
+          devServerPromise
+            .then((result) => ({ state: 'exited' as const, result }))
+            .catch((err) => ({ state: 'failed' as const, error: err })),
+          new Promise<{ state: 'running' }>((resolve) => setTimeout(() => resolve({ state: 'running' }), 7000)),
+        ])
+
+        if (earlyExit.state === 'exited') {
+          const details = earlyExit.result.stderr || earlyExit.result.stdout || `exit code ${earlyExit.result.exitCode}`
+          throw new Error(`Dev server exited early: ${details.slice(0, 300)}`)
         }
+
+        if (earlyExit.state === 'failed') {
+          const details = earlyExit.error instanceof Error ? earlyExit.error.message : 'unknown error'
+          throw new Error(`Dev server failed to start: ${details}`)
+        }
+
+        // Poll for host availability
+        let host: string | null = null
+        let hostError: string | null = null
+
+        while (!host && (Date.now() - buildStart) < RUNTIME_STARTUP_TIMEOUT_MS) {
+          try {
+            const hostResult = await e2bApi('getHost', { sandboxId, port: 5173 })
+            if (hostResult.host) {
+              host = hostResult.host as string
+              break
+            }
+          } catch (err) {
+            hostError = err instanceof Error ? err.message : 'Host probe failed'
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 1500))
+        }
+
+        if (host) {
+          setServerUrl(host)
+          addLog(`✅ Preview ready: ${host}`, 'success')
+          return
+        }
+
+        throw new Error(
+          hostError
+            ? `Preview host not ready: ${hostError}`
+            : 'Preview host did not become ready in time.'
+        )
         
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Build failed'
         addLog(`❌ Build error: ${msg}`, 'error')
+        setError(msg)
+        setServerUrl(null)
         
         NervousSystem.dispatchPain({
           id: `e2b-build-${Date.now()}`,
