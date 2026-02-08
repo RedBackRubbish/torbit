@@ -2,22 +2,36 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import dynamic from 'next/dynamic'
 import { useBuilderStore } from '@/store/builder'
 import { ExecutorService } from '@/services/executor'
 import type { PainSignal } from '@/lib/nervous-system'
 import { MessageBubble } from './chat/MessageBubble'
 import { ChatInput } from './chat/ChatInput'
-import { InspectorView, type ActivityEntry } from './governance'
+import type { ActivityEntry } from './governance/InspectorView'
 import { TorbitLogo } from '@/components/ui/TorbitLogo'
 import { useE2BContext } from '@/providers/E2BProvider'
-import { VerificationDetailDrawer } from './governance/VerificationDetailDrawer'
 import { ActivityLedgerTimeline } from './governance/ActivityLedgerTimeline'
 import { useLedger, generateLedgerHash } from '@/store/ledger'
 import { useGenerationSound, useFileSound } from '@/lib/audio'
-import { SupervisorSlidePanel, type SupervisorReviewResult } from './chat/SupervisorSlidePanel'
+import type { SupervisorReviewResult } from './chat/SupervisorSlidePanel'
 import { useGovernanceStore } from '@/store/governance'
 import { getSupabase } from '@/lib/supabase/client'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
+import { ChatHistorySkeleton } from '@/components/ui/skeletons'
+
+const InspectorView = dynamic(
+  () => import('./governance/InspectorView').then((module) => module.InspectorView),
+  { ssr: false }
+)
+const VerificationDetailDrawer = dynamic(
+  () => import('./governance/VerificationDetailDrawer').then((module) => module.VerificationDetailDrawer),
+  { ssr: false }
+)
+const SupervisorSlidePanel = dynamic(
+  () => import('./chat/SupervisorSlidePanel').then((module) => module.SupervisorSlidePanel),
+  { ssr: false }
+)
 
 /**
  * ChatPanel - Single voice interface
@@ -36,6 +50,7 @@ export default function ChatPanel() {
   const activities: ActivityEntry[] = []
   const selectedAgent: AgentId = 'architect'
   const [showVerificationDrawer, setShowVerificationDrawer] = useState(false)
+  const [liveMessage, setLiveMessage] = useState('')
   
   // Supervisor slide panel state
   const [showSupervisor, setShowSupervisor] = useState(false)
@@ -879,12 +894,30 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     return toolName.replace(/([A-Z])/g, ' $1').trim()
   }
 
+  useEffect(() => {
+    const latestAssistant = [...messages]
+      .reverse()
+      .find((message) => message.role === 'assistant' && message.content?.trim().length)
+
+    if (!latestAssistant?.content) {
+      if (!isLoading) setLiveMessage('')
+      return
+    }
+
+    const snippet = latestAssistant.content.replace(/\s+/g, ' ').trim().slice(-180)
+    setLiveMessage(isLoading ? `Torbit is responding: ${snippet}` : `Torbit said: ${snippet}`)
+  }, [messages, isLoading])
+
   return (
     <motion.div
       className="h-full bg-[#000000] border-r border-[#151515] flex flex-col"
       animate={{ width: chatCollapsed ? 48 : 440 }}
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-    >
+      >
+      <div className="sr-only" aria-live="polite" aria-atomic="false">
+        {liveMessage}
+      </div>
+
       {/* Header - Torbit branding */}
       <div className="h-11 border-b border-[#151515] flex items-center justify-between px-4 shrink-0">
         <AnimatePresence mode="wait">
@@ -926,9 +959,13 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
             className="flex-1 overflow-y-auto custom-scrollbar"
           >
             {messages.length === 0 ? (
-              <EmptyState onSelectTemplate={(prompt) => {
-                setChatInput(prompt)
-              }} />
+              isLoading ? (
+                <ChatHistorySkeleton />
+              ) : (
+                <EmptyState onSelectTemplate={(templatePrompt) => {
+                  setChatInput(templatePrompt)
+                }} />
+              )
             ) : (
               <div className="p-4 space-y-0">
                 {messages.map((message, i) => (
@@ -940,6 +977,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
                     index={i}
                   />
                 ))}
+                {isLoading && <ChatHistorySkeleton rows={1} />}
                 <div ref={messagesEndRef} />
               </div>
             )}

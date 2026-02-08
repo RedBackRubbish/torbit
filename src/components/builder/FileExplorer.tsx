@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback, type KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore, ProjectFile } from '@/store/builder'
 import { Auditor, AuditStatus } from '@/lib/auditor'
+import { FileExplorerSkeleton } from '@/components/ui/skeletons'
 
 interface FileNode {
   name: string
@@ -108,6 +109,15 @@ function buildFileTree(files: ProjectFile[]): FileNode[] {
 interface FileTreeItemProps {
   node: FileNode
   depth: number
+}
+
+function getTreeItems(currentTarget: HTMLElement): HTMLButtonElement[] {
+  const treeRoot = currentTarget.closest('[data-file-tree-root="true"]')
+  if (!treeRoot) return []
+
+  return Array.from(
+    treeRoot.querySelectorAll<HTMLButtonElement>('[data-file-tree-item="true"]')
+  )
 }
 
 // Audit status indicator orb with animations
@@ -218,10 +228,79 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
     }
   }
 
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>) => {
+    const items = getTreeItems(event.currentTarget)
+    const currentIndex = items.indexOf(event.currentTarget)
+    if (currentIndex < 0) return
+
+    switch (event.key) {
+      case 'ArrowDown': {
+        event.preventDefault()
+        items[Math.min(currentIndex + 1, items.length - 1)]?.focus()
+        break
+      }
+      case 'ArrowUp': {
+        event.preventDefault()
+        items[Math.max(currentIndex - 1, 0)]?.focus()
+        break
+      }
+      case 'Home': {
+        event.preventDefault()
+        items[0]?.focus()
+        break
+      }
+      case 'End': {
+        event.preventDefault()
+        items[items.length - 1]?.focus()
+        break
+      }
+      case 'ArrowRight': {
+        if (node.type !== 'folder') return
+        event.preventDefault()
+        if (!expanded) {
+          setExpanded(true)
+          return
+        }
+
+        const child = items[currentIndex + 1]
+        if (child && Number(child.dataset.depth) === depth + 1) {
+          child.focus()
+        }
+        break
+      }
+      case 'ArrowLeft': {
+        event.preventDefault()
+        if (node.type === 'folder' && expanded) {
+          setExpanded(false)
+          return
+        }
+
+        for (let index = currentIndex - 1; index >= 0; index -= 1) {
+          const candidate = items[index]
+          const candidateDepth = Number(candidate.dataset.depth)
+          if (candidateDepth < depth) {
+            candidate.focus()
+            break
+          }
+        }
+        break
+      }
+      default:
+        break
+    }
+  }, [depth, expanded, node.type])
+
   return (
     <div>
       <motion.button
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        role="treeitem"
+        aria-level={depth + 1}
+        aria-selected={isSelected}
+        aria-expanded={node.type === 'folder' ? expanded : undefined}
+        data-file-tree-item="true"
+        data-depth={depth}
         className={`w-full flex items-center gap-1.5 px-2 py-[5px] text-left transition-all rounded group ${
           isSelected
             ? 'bg-[#0f0f0f] text-[#c0c0c0]'
@@ -283,11 +362,15 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
  * FileExplorer - Emergent-style minimal file tree
  */
 export default function FileExplorer() {
-  const { files } = useBuilderStore()
+  const { files, isGenerating } = useBuilderStore()
   
   const fileTree = useMemo(() => buildFileTree(files), [files])
 
   if (files.length === 0) {
+    if (isGenerating) {
+      return <FileExplorerSkeleton />
+    }
+
     return (
       <div className="h-full flex items-center justify-center p-4">
         <div className="text-center">
@@ -303,7 +386,13 @@ export default function FileExplorer() {
   }
 
   return (
-    <div className="h-full overflow-y-auto py-1 custom-scrollbar">
+    <div
+      className="h-full overflow-y-auto py-1 custom-scrollbar"
+      role="tree"
+      aria-label="Project file explorer"
+      data-file-tree-root="true"
+      data-testid="file-tree"
+    >
       {fileTree.map((node) => (
         <FileTreeItem
           key={node.path}

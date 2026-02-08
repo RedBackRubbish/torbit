@@ -49,7 +49,15 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable} font-sans antialiased bg-black text-white`}
       >
         <AuthProvider>
-          {children}
+          <a
+            href="#main-content"
+            className="sr-only absolute left-4 top-4 z-[100] rounded-md bg-white px-3 py-2 text-sm font-medium text-black focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-white"
+          >
+            Skip to content
+          </a>
+          <div id="main-content">
+            {children}
+          </div>
         </AuthProvider>
       </body>
     </html>

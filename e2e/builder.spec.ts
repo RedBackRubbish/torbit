@@ -59,6 +59,40 @@ test.describe('Builder with Initial Prompt', () => {
   });
 });
 
+test.describe('Builder End-to-End Flow', () => {
+  test('loads builder from landing prompt and renders preview controls', async ({ page }) => {
+    await enableTestAuth(page);
+    await page.goto('/');
+
+    const input = page.locator('input[type="text"]').first();
+    await expect(input).toBeVisible({ timeout: 10000 });
+    await input.fill('Build a status dashboard with activity feed');
+    await input.press('Enter');
+
+    await expect(page).toHaveURL('/builder');
+    await expect(page.getByTestId('builder-layout')).toBeVisible({ timeout: 20000 });
+
+    const previewTab = page.getByRole('button', { name: 'Preview' }).first();
+    await expect(previewTab).toBeVisible({ timeout: 10000 });
+    await previewTab.click();
+
+    await expect(page.getByTitle('Desktop')).toBeVisible({ timeout: 20000 });
+  });
+
+  test('shows the mobile single-column tab shell', async ({ page }) => {
+    await enableTestAuth(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/builder');
+
+    await expect(page.getByRole('tab', { name: 'Chat' })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('tab', { name: 'Preview' }).first()).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Files' }).click();
+    await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
+  });
+});
+
 // ============================================================================
 // REGRESSION TESTS: WebContainer + TypeScript Compatibility
 // ============================================================================

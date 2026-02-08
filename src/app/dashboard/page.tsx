@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { UserMenu } from '@/components/builder/UserMenu'
 import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
+import { DashboardProjectGridSkeleton } from '@/components/ui/skeletons'
 import type { Project } from '@/lib/supabase/types'
 
 type ViewMode = 'grid' | 'list'
@@ -293,8 +294,9 @@ export default function DashboardPage() {
 
         {/* Loading State */}
         {loading && (
-          <div className="flex items-center justify-center py-32">
-            <TorbitSpinner size="lg" />
+          <div className="space-y-5 py-4">
+            <p className="text-sm text-white/40">Loading projects...</p>
+            <DashboardProjectGridSkeleton />
           </div>
         )}
 

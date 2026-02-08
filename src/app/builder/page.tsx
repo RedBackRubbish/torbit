@@ -1,27 +1,30 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useBuilderStore } from '@/store/builder'
+import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react'
 import { E2BProvider } from '@/providers/E2BProvider'
 import { useAuthContext } from '@/providers/AuthProvider'
 import { ErrorBoundary, ChatErrorFallback, PreviewErrorFallback } from '@/components/ErrorBoundary'
 import BuilderLayout from '@/components/builder/BuilderLayout'
-import Sidebar from '@/components/builder/Sidebar'
-import ChatPanel from '@/components/builder/ChatPanel'
-import PreviewPanel from '@/components/builder/PreviewPanel'
-import TasksPanel from '@/components/builder/TasksPanel'
-import FuelGauge from '@/components/builder/FuelGauge'
-import SoundToggle from '@/components/builder/SoundToggle'
-import ShipMenu from '@/components/builder/ShipMenu'
-import { PublishPanel } from '@/components/builder/PublishPanel'
-import { ScreenshotButton } from '@/components/builder/ScreenshotButton'
-import { UserMenu } from '@/components/builder/UserMenu'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
+import { useBuilderStore } from '@/store/builder'
 import { useProjectPresence } from '@/hooks/useProjectPresence'
 import { flushQueuedTelemetryEvents, setMetricsProjectContext } from '@/lib/metrics'
+
+const Sidebar = dynamic(() => import('@/components/builder/Sidebar'))
+const ChatPanel = dynamic(() => import('@/components/builder/ChatPanel'))
+const PreviewPanel = dynamic(() => import('@/components/builder/PreviewPanel'))
+const TasksPanel = dynamic(() => import('@/components/builder/TasksPanel'))
+const FuelGauge = dynamic(() => import('@/components/builder/FuelGauge'))
+const SoundToggle = dynamic(() => import('@/components/builder/SoundToggle'))
+const ShipMenu = dynamic(() => import('@/components/builder/ShipMenu'))
+const PublishPanel = dynamic(() => import('@/components/builder/PublishPanel').then((module) => module.PublishPanel))
+const ScreenshotButton = dynamic(() => import('@/components/builder/ScreenshotButton').then((module) => module.ScreenshotButton))
+const UserMenu = dynamic(() => import('@/components/builder/UserMenu').then((module) => module.UserMenu))
+const MobileBuilderShell = dynamic(() => import('@/components/builder/MobileBuilderShell'))
+const MobileFilesPanel = dynamic(() => import('@/components/builder/MobileFilesPanel'))
 
 export default function BuilderPage() {
   const router = useRouter()
@@ -35,7 +38,7 @@ export default function BuilderPage() {
 
   if (authLoading || !user) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-[#0A0A0A]">
         <TorbitSpinner size="lg" />
       </div>
     )
@@ -52,22 +55,43 @@ function BuilderPageContent() {
   const [showTasks, setShowTasks] = useState(false)
   const [chatKey, setChatKey] = useState(0)
   const [previewKey, setPreviewKey] = useState(0)
-  const { 
-    initProject, 
+  const [isMobileLayout, setIsMobileLayout] = useState<boolean | null>(null)
+
+  const {
+    initProject,
     setProjectId,
     projectId,
     prompt,
-    previewTab, 
+    previewTab,
     setPreviewTab,
     sidebarCollapsed,
     toggleSidebar,
     agents,
     isGenerating,
   } = useBuilderStore()
+
   const { members, upsertPresence } = useProjectPresence(projectId)
 
-  const handleChatRetry = useCallback(() => setChatKey(k => k + 1), [])
-  const handlePreviewRetry = useCallback(() => setPreviewKey(k => k + 1), [])
+  const handleChatRetry = useCallback(() => setChatKey((value) => value + 1), [])
+  const handlePreviewRetry = useCallback(() => setPreviewKey((value) => value + 1), [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const mediaQuery = window.matchMedia('(max-width: 1023px)')
+    const updateLayout = () => setIsMobileLayout(mediaQuery.matches)
+
+    updateLayout()
+    mediaQuery.addEventListener('change', updateLayout)
+
+    return () => mediaQuery.removeEventListener('change', updateLayout)
+  }, [])
+
+  useEffect(() => {
+    if (isMobileLayout) {
+      setShowTasks(false)
+    }
+  }, [isMobileLayout])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -80,16 +104,14 @@ function BuilderPageContent() {
   useEffect(() => {
     const storedPrompt = sessionStorage.getItem('torbit_prompt')
     const storedCapabilityContext = sessionStorage.getItem('torbit_capability_context')
-    
+
     if (storedPrompt && !prompt) {
-      // If capabilities were selected, enhance the prompt with context
-      const enhancedPrompt = storedCapabilityContext 
+      const enhancedPrompt = storedCapabilityContext
         ? `${storedPrompt}\n\n${storedCapabilityContext}`
         : storedPrompt
-      
+
       initProject(enhancedPrompt)
-      
-      // Clean up session storage
+
       sessionStorage.removeItem('torbit_prompt')
       sessionStorage.removeItem('torbit_platform')
       sessionStorage.removeItem('torbit_capabilities')
@@ -126,44 +148,90 @@ function BuilderPageContent() {
     }
   }, [projectId])
 
-  const onlineCollaboratorCount = useMemo(() => (
-    members.filter((member) => member.status !== 'offline' && !member.isCurrentUser).length
-  ), [members])
+  const onlineCollaboratorCount = useMemo(
+    () => members.filter((member) => member.status !== 'offline' && !member.isCurrentUser).length,
+    [members]
+  )
 
-  // Get current active agent
-  const activeAgent = agents.find(a => a.status === 'working' || a.status === 'thinking')
-  const isWorking = isGenerating || !!activeAgent
+  const activeAgent = agents.find((agent) => agent.status === 'working' || agent.status === 'thinking')
+  const isWorking = isGenerating || Boolean(activeAgent)
+
+  const chatPanel = (
+    <ErrorBoundary name="ChatPanel" fallback={<ChatErrorFallback onRetry={handleChatRetry} />}>
+      <ChatPanel key={chatKey} />
+    </ErrorBoundary>
+  )
+
+  const previewPanel = (
+    <ErrorBoundary name="PreviewPanel" fallback={<PreviewErrorFallback onRetry={handlePreviewRetry} />}>
+      <PreviewPanel key={previewKey} />
+    </ErrorBoundary>
+  )
+
+  if (isMobileLayout === null) {
+    return (
+      <BuilderLayout>
+        <div className="flex h-full w-full items-center justify-center bg-[#000000]">
+          <TorbitSpinner size="md" />
+        </div>
+      </BuilderLayout>
+    )
+  }
+
+  if (isMobileLayout) {
+    return (
+      <BuilderLayout>
+        <MobileBuilderShell
+          chatPanel={chatPanel}
+          previewPanel={previewPanel}
+          filesPanel={<MobileFilesPanel />}
+          previewTab={previewTab}
+          onPreviewTabChange={setPreviewTab}
+          isWorking={isWorking}
+          onlineCollaboratorCount={onlineCollaboratorCount}
+          headerActions={(
+            <>
+              <Link
+                href="/dashboard"
+                aria-label="Go to dashboard"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[#525252] transition-colors hover:bg-[#141414] hover:text-[#fafafa]"
+                title="Dashboard"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+                  />
+                </svg>
+              </Link>
+              <FuelGauge />
+              <ShipMenu />
+              <UserMenu />
+            </>
+          )}
+        />
+      </BuilderLayout>
+    )
+  }
 
   return (
     <BuilderLayout>
-      {/* Left Sidebar - Files (collapsible) */}
-      <Sidebar 
-        collapsed={sidebarCollapsed} 
-        onToggle={toggleSidebar} 
-      />
-      
-      {/* Chat Panel - Left side (Emergent style) */}
-      <ErrorBoundary 
-        name="ChatPanel" 
-        fallback={<ChatErrorFallback onRetry={handleChatRetry} />}
-      >
-        <ChatPanel key={chatKey} />
-      </ErrorBoundary>
-      
-      {/* Preview Panel - Right side with header */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Preview Header */}
-        <header className="h-11 bg-[#0a0a0a] border-b border-[#1f1f1f] flex items-center justify-between px-2 sm:px-4 gap-2 overflow-hidden">
-          {/* Left: Title + Tabs */}
-          <div className="relative z-10 flex items-center gap-2 sm:gap-4 min-w-0 shrink-0">
-            <span className="hidden lg:block text-[13px] font-medium text-[#fafafa]">App Preview</span>
-            <div className="flex items-center bg-[#141414] rounded-lg p-0.5 border border-[#1f1f1f]">
+      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+
+      {chatPanel}
+
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <header className="flex h-11 items-center justify-between gap-2 overflow-hidden border-b border-[#1f1f1f] bg-[#0a0a0a] px-2 sm:px-4">
+          <div className="relative z-10 flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
+            <span className="hidden text-[13px] font-medium text-[#fafafa] lg:block">App Preview</span>
+            <div className="flex items-center rounded-lg border border-[#1f1f1f] bg-[#141414] p-0.5">
               <TabButton
                 label="Preview"
                 active={previewTab === 'preview'}
                 onClick={() => setPreviewTab('preview')}
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -173,115 +241,91 @@ function BuilderPageContent() {
                 active={previewTab === 'code'}
                 onClick={() => setPreviewTab('code')}
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
                 </svg>
               </TabButton>
             </div>
           </div>
-          
-          {/* Right: Actions */}
-          <div className="relative z-0 ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
-            {/* Home button */}
+
+          <div className="relative z-0 ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
             <Link
               href="/dashboard"
               aria-label="Go to dashboard"
-              className="w-7 h-7 flex items-center justify-center rounded-md text-[#525252] hover:text-[#fafafa] hover:bg-[#141414] transition-all"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[#525252] transition-all hover:bg-[#141414] hover:text-[#fafafa]"
               title="Dashboard"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+                />
               </svg>
             </Link>
-            
-            {/* Status indicator */}
-            <div className="flex items-center gap-1.5 px-2 border-r border-[#1f1f1f]">
-              {isWorking ? (
-                <TorbitSpinner size="xs" speed="fast" />
-              ) : (
-                <div className="w-1.5 h-1.5 rounded-full bg-[#333]" />
-              )}
-              <span className="hidden md:inline text-[11px] text-[#525252]">
-                {isWorking ? 'Building...' : 'Idle'}
+
+            <div className="flex items-center gap-1.5 border-r border-[#1f1f1f] px-2">
+              {isWorking ? <TorbitSpinner size="xs" speed="fast" /> : <div className="h-1.5 w-1.5 rounded-full bg-[#333]" />}
+              <span className="hidden text-[11px] text-[#525252] md:inline">{isWorking ? 'Building...' : 'Idle'}</span>
+            </div>
+
+            <div className="hidden items-center gap-1.5 border-r border-[#1f1f1f] px-2 xl:flex">
+              <span className={`h-1.5 w-1.5 rounded-full ${onlineCollaboratorCount > 0 ? 'bg-emerald-500' : 'bg-[#333]'}`} />
+              <span className="text-[11px] text-[#525252]">
+                {onlineCollaboratorCount > 0 ? `${onlineCollaboratorCount + 1} collaborators online` : 'Solo session'}
               </span>
             </div>
 
-            <div className="hidden xl:flex items-center gap-1.5 px-2 border-r border-[#1f1f1f]">
-              <span className={`w-1.5 h-1.5 rounded-full ${onlineCollaboratorCount > 0 ? 'bg-emerald-500' : 'bg-[#333]'}`} />
-              <span className="text-[11px] text-[#525252]">
-                {onlineCollaboratorCount > 0
-                  ? `${onlineCollaboratorCount + 1} collaborators online`
-                  : 'Solo session'}
-              </span>
-            </div>
-            
             <div className="hidden sm:block">
               <ScreenshotButton />
             </div>
             <div className="hidden lg:block">
               <SoundToggle />
             </div>
-            <div className="block">
-              <FuelGauge />
-            </div>
-            <div className="block">
-              <ShipMenu />
-            </div>
+            <FuelGauge />
+            <ShipMenu />
             <PublishPanel />
             <UserMenu />
-            
-            {/* Tasks toggle */}
+
             <button
-              onClick={() => setShowTasks(!showTasks)}
-              className={`w-7 h-7 flex items-center justify-center rounded-md transition-all ${
-                showTasks 
-                  ? 'bg-[#1f1f1f] text-[#fafafa]' 
-                  : 'text-[#525252] hover:text-[#a1a1a1] hover:bg-[#141414]'
+              onClick={() => setShowTasks((value) => !value)}
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
+                showTasks ? 'bg-[#1f1f1f] text-[#fafafa]' : 'text-[#525252] hover:bg-[#141414] hover:text-[#a1a1a1]'
               }`}
               title="Tasks"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </button>
           </div>
         </header>
-        
-        {/* Preview/Code Panel */}
-        <ErrorBoundary 
-          name="PreviewPanel" 
-          fallback={<PreviewErrorFallback onRetry={handlePreviewRetry} />}
+
+        {previewPanel}
+
+        <div
+          className={`pointer-events-none absolute bottom-0 right-0 top-11 z-40 w-72 border-l border-[#1f1f1f] bg-[#0a0a0a] shadow-2xl transition-all duration-150 ${
+            showTasks ? 'translate-x-0 opacity-100 pointer-events-auto' : 'translate-x-6 opacity-0'
+          }`}
+          aria-hidden={!showTasks}
         >
-          <PreviewPanel key={previewKey} />
-        </ErrorBoundary>
-        
-        {/* Tasks Slide-out */}
-        {showTasks && (
-          <motion.div 
-            initial={{ x: 20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 20, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-11 right-0 bottom-0 w-72 z-40 border-l border-[#1f1f1f] bg-[#0a0a0a] shadow-2xl"
-          >
-            <div className="h-full flex flex-col">
-              <div className="h-10 border-b border-[#1f1f1f] flex items-center justify-between px-3">
-                <span className="text-[12px] font-medium text-[#a1a1a1]">Tasks</span>
-                <button
-                  onClick={() => setShowTasks(false)}
-                  className="w-5 h-5 flex items-center justify-center text-[#525252] hover:text-[#fafafa] hover:bg-[#1a1a1a] rounded transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <TasksPanel />
-              </div>
+          <div className="flex h-full flex-col">
+            <div className="flex h-10 items-center justify-between border-b border-[#1f1f1f] px-3">
+              <span className="text-[12px] font-medium text-[#a1a1a1]">Tasks</span>
+              <button
+                onClick={() => setShowTasks(false)}
+                className="flex h-5 w-5 items-center justify-center rounded text-[#525252] transition-colors hover:bg-[#1a1a1a] hover:text-[#fafafa]"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-          </motion.div>
-        )}
+            <div className="flex-1 overflow-hidden">
+              <TasksPanel />
+            </div>
+          </div>
+        </div>
       </div>
     </BuilderLayout>
   )
@@ -293,7 +337,7 @@ function TabButton({
   active,
   onClick,
 }: {
-  children: React.ReactNode
+  children: ReactNode
   label: string
   active: boolean
   onClick: () => void
@@ -303,10 +347,8 @@ function TabButton({
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
-      className={`flex items-center justify-center w-8 h-8 rounded-md transition-all ${
-        active
-          ? 'bg-[#1f1f1f] text-[#fafafa]'
-          : 'text-[#525252] hover:text-[#a1a1a1]'
+      className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
+        active ? 'bg-[#1f1f1f] text-[#fafafa]' : 'text-[#525252] hover:text-[#a1a1a1]'
       }`}
     >
       {children}

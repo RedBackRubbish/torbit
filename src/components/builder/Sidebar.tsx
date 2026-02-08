@@ -1,14 +1,30 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
-import FileExplorer from './FileExplorer'
-import NeuralTimeline from './NeuralTimeline'
 import { ProjectTypeSelector } from './ProjectTypeSelector'
-import { CapabilitiesPanel } from './CapabilitiesPanel'
 import { useBuilderStore } from '@/store/builder'
 import { useInvariantCount } from '@/store/governance'
-import { ProtectedPanel } from './ProtectedPanel'
+import { FileExplorerSkeleton } from '@/components/ui/skeletons'
+
+const FileExplorer = dynamic(() => import('./FileExplorer'), {
+  loading: () => <FileExplorerSkeleton rows={8} />,
+})
+
+const NeuralTimeline = dynamic(() => import('./NeuralTimeline'), {
+  loading: () => <FileExplorerSkeleton rows={6} />,
+})
+
+const CapabilitiesPanel = dynamic(
+  () => import('./CapabilitiesPanel').then((module) => module.CapabilitiesPanel),
+  { loading: () => <FileExplorerSkeleton rows={4} /> }
+)
+
+const ProtectedPanel = dynamic(
+  () => import('./ProtectedPanel').then((module) => module.ProtectedPanel),
+  { loading: () => <FileExplorerSkeleton rows={6} /> }
+)
 
 interface SidebarProps {
   collapsed: boolean
