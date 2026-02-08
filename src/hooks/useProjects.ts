@@ -10,6 +10,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { getSupabase } from '@/lib/supabase/client'
 import type { Project, NewProject, UpdateProject, Json } from '@/lib/supabase/types'
 
+function sortProjectsByUpdatedAt(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => (
+    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  ))
+}
+
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,7 +35,7 @@ export function useProjects() {
         .order('updated_at', { ascending: false })
       
       if (fetchError) throw fetchError
-      setProjects(data || [])
+      setProjects(sortProjectsByUpdatedAt(data || []))
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to fetch projects'))
     } finally {
@@ -40,6 +46,65 @@ export function useProjects() {
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
+
+  useEffect(() => {
+    const supabase = getSupabase()
+    if (!supabase) return
+
+    let active = true
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    const bootstrapRealtime = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!active || !user) return
+
+      channel = supabase
+        .channel(`projects:${user.id}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'projects',
+          filter: `user_id=eq.${user.id}`,
+        }, (payload) => {
+          const eventType = payload.eventType
+          const nextProject = payload.new as Project
+          const oldProject = payload.old as Project
+
+          setProjects((current) => {
+            if (eventType === 'INSERT') {
+              if (current.some((project) => project.id === nextProject.id)) {
+                return current
+              }
+              return sortProjectsByUpdatedAt([nextProject, ...current])
+            }
+
+            if (eventType === 'UPDATE') {
+              return sortProjectsByUpdatedAt(current.map((project) => (
+                project.id === nextProject.id ? nextProject : project
+              )))
+            }
+
+            if (eventType === 'DELETE') {
+              return current.filter((project) => project.id !== oldProject.id)
+            }
+
+            return current
+          })
+        })
+        .subscribe()
+    }
+
+    bootstrapRealtime().catch(() => {
+      // Realtime is opportunistic. CRUD still works without subscriptions.
+    })
+
+    return () => {
+      active = false
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [])
 
   // Create project
   const createProject = useCallback(async (project: Omit<NewProject, 'user_id'>) => {

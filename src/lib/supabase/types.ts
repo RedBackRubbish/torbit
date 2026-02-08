@@ -278,6 +278,253 @@ export interface Database {
       }
 
       // ============================================
+      // PROJECT COLLABORATORS
+      // ============================================
+      project_collaborators: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          role: 'owner' | 'editor' | 'viewer'
+          invited_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          role?: 'owner' | 'editor' | 'viewer'
+          invited_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          role?: 'owner' | 'editor' | 'viewer'
+          invited_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_collaborators_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_collaborators_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_collaborators_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // PROJECT PRESENCE (REAL-TIME)
+      // ============================================
+      project_presence: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          status: 'online' | 'idle' | 'offline'
+          cursor: Json | null
+          heartbeat_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          status?: 'online' | 'idle' | 'offline'
+          cursor?: Json | null
+          heartbeat_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          status?: 'online' | 'idle' | 'offline'
+          cursor?: Json | null
+          heartbeat_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_presence_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_presence_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // BACKGROUND RUNS (ASYNC PIPELINE TASKS)
+      // ============================================
+      background_runs: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          run_type: string
+          status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+          input: Json
+          metadata: Json
+          output: Json | null
+          idempotency_key: string | null
+          retryable: boolean
+          attempt_count: number
+          max_attempts: number
+          cancel_requested: boolean
+          last_heartbeat_at: string | null
+          next_retry_at: string | null
+          error_message: string | null
+          progress: number
+          started_at: string | null
+          finished_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          run_type: string
+          status?: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+          input?: Json
+          metadata?: Json
+          output?: Json | null
+          idempotency_key?: string | null
+          retryable?: boolean
+          attempt_count?: number
+          max_attempts?: number
+          cancel_requested?: boolean
+          last_heartbeat_at?: string | null
+          next_retry_at?: string | null
+          error_message?: string | null
+          progress?: number
+          started_at?: string | null
+          finished_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          run_type?: string
+          status?: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+          input?: Json
+          metadata?: Json
+          output?: Json | null
+          idempotency_key?: string | null
+          retryable?: boolean
+          attempt_count?: number
+          max_attempts?: number
+          cancel_requested?: boolean
+          last_heartbeat_at?: string | null
+          next_retry_at?: string | null
+          error_message?: string | null
+          progress?: number
+          started_at?: string | null
+          finished_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "background_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "background_runs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // PRODUCT EVENTS (FUNNEL TELEMETRY)
+      // ============================================
+      product_events: {
+        Row: {
+          id: string
+          user_id: string
+          project_id: string | null
+          event_name: string
+          session_id: string
+          event_data: Json
+          occurred_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          project_id?: string | null
+          event_name: string
+          session_id: string
+          event_data?: Json
+          occurred_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          project_id?: string | null
+          event_name?: string
+          session_id?: string
+          event_data?: Json
+          occurred_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
       // STRIPE CUSTOMERS
       // ============================================
       stripe_customers: {
@@ -564,6 +811,10 @@ export type Conversation = Database['public']['Tables']['conversations']['Row']
 export type Message = Database['public']['Tables']['messages']['Row']
 export type FuelTransaction = Database['public']['Tables']['fuel_transactions']['Row']
 export type AuditEvent = Database['public']['Tables']['audit_events']['Row']
+export type ProjectCollaborator = Database['public']['Tables']['project_collaborators']['Row']
+export type ProjectPresence = Database['public']['Tables']['project_presence']['Row']
+export type BackgroundRun = Database['public']['Tables']['background_runs']['Row']
+export type ProductEvent = Database['public']['Tables']['product_events']['Row']
 export type StripeCustomer = Database['public']['Tables']['stripe_customers']['Row']
 export type FuelBalance = Database['public']['Tables']['fuel_balances']['Row']
 export type Subscription = Database['public']['Tables']['subscriptions']['Row']
@@ -572,3 +823,5 @@ export type BillingTransaction = Database['public']['Tables']['billing_transacti
 export type NewProject = Database['public']['Tables']['projects']['Insert']
 export type UpdateProject = Database['public']['Tables']['projects']['Update']
 export type NewMessage = Database['public']['Tables']['messages']['Insert']
+export type NewBackgroundRun = Database['public']['Tables']['background_runs']['Insert']
+export type UpdateBackgroundRun = Database['public']['Tables']['background_runs']['Update']

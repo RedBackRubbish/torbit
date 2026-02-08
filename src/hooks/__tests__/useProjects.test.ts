@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor, act } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 
 const mockProjects = [
   {
@@ -34,6 +34,14 @@ const mockSupabase = {
   auth: {
     getUser: vi.fn(() => Promise.resolve({ data: { user: { id: 'user-1' } } })),
   },
+  channel: vi.fn(() => {
+    const chain = {
+      on: vi.fn(() => chain),
+      subscribe: vi.fn(() => chain),
+    }
+    return chain
+  }),
+  removeChannel: vi.fn(() => Promise.resolve('ok')),
   from: vi.fn(() => ({
     select: vi.fn(() => ({
       order: vi.fn(() => Promise.resolve({ data: mockProjects, error: null })),
@@ -110,6 +118,15 @@ describe('useProjects Hook', () => {
         expect(mockSupabase.from).toHaveBeenCalledWith('projects')
       })
     })
+
+    it('should subscribe to realtime project changes', async () => {
+      const { useProjects } = await import('../useProjects')
+      renderHook(() => useProjects())
+
+      await waitFor(() => {
+        expect(mockSupabase.channel).toHaveBeenCalled()
+      })
+    })
   })
 
   describe('CRUD Operations', () => {
@@ -151,7 +168,6 @@ describe('useProjects Hook', () => {
 
   describe('Error Handling', () => {
     it('should set error state on fetch failure', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockSupabase.from.mockReturnValueOnce({
         select: vi.fn(() => ({
           order: vi.fn(() => Promise.resolve({ 
@@ -160,7 +176,7 @@ describe('useProjects Hook', () => {
           })),
           eq: vi.fn(),
         })),
-      } as any)
+      } as never)
 
       const { useProjects } = await import('../useProjects')
       const { result } = renderHook(() => useProjects())

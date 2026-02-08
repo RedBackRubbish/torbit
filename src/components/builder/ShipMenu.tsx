@@ -15,7 +15,7 @@ import { enforcePreDeploy } from '@/lib/integrations/policies/enforcement'
  * ShipMenu - Premium Deploy Button for Web Apps
  * 
  * Only shows for web projects (Vercel, Netlify deployment)
- * Hidden for mobile apps (use Publish for iOS export instead)
+ * Hidden for mobile apps (use Publish for iOS/Android release instead)
  */
 export default function ShipMenu() {
   const [isOpen, setIsOpen] = useState(false)
@@ -315,7 +315,7 @@ export default function ShipMenu() {
   
   const handleNetlifyDeploy = () => void runDeploy('netlify')
 
-  // Hide Deploy button for mobile apps (they use Publish for iOS export)
+  // Hide Deploy button for mobile apps (they use Publish for mobile release)
   if (isMobile) {
     return null
   }

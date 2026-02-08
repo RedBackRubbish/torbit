@@ -10,6 +10,9 @@
  * - Median time from prompt → verified preview
  */
 
+import { trackMetricEvent } from './telemetry'
+import { getMetricsProjectContext } from './context'
+
 // ============================================
 // METRIC TYPES
 // ============================================
@@ -51,6 +54,7 @@ export type MetricEventType =
   | 'export_downloaded'
   | 'export_opened'
   | 'export_deployed'
+  | 'prompt_to_verified'
   // Feature interest signals (disabled features clicked)
   | 'feature_interest_capacitor'
 
@@ -168,6 +172,17 @@ export function recordMetric(type: MetricEventType, metadata?: Record<string, un
   }
   
   saveMetrics(metrics)
+
+  const projectId = typeof metadata?.projectId === 'string'
+    ? metadata.projectId
+    : getMetricsProjectContext()
+
+  trackMetricEvent({
+    name: type,
+    metadata,
+    projectId,
+    timestamp: now,
+  })
 }
 
 /**
@@ -175,9 +190,17 @@ export function recordMetric(type: MetricEventType, metadata?: Record<string, un
  */
 export function recordPromptToVerified(promptStartTime: number): void {
   const metrics = getMetrics()
-  const elapsed = Date.now() - promptStartTime
+  const now = Date.now()
+  const elapsed = now - promptStartTime
   metrics.promptToVerifiedTimes.push(elapsed)
   saveMetrics(metrics)
+
+  trackMetricEvent({
+    name: 'prompt_to_verified',
+    metadata: { elapsedMs: elapsed },
+    projectId: getMetricsProjectContext(),
+    timestamp: now,
+  })
 }
 
 // ============================================

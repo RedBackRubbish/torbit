@@ -5,14 +5,12 @@ import type {
   MobileStack, 
   Platform, 
   MobileCapabilities, 
-  MobileProjectConfig,
-  DevicePreset 
+  MobileProjectConfig
 } from '@/lib/mobile/types'
 import { 
   DEFAULT_CAPABILITIES, 
   DEFAULT_MOBILE_CONFIG, 
-  DEFAULT_DEVICE,
-  DEVICE_PRESETS 
+  DEFAULT_DEVICE
 } from '@/lib/mobile/types'
 import { generateExpoTemplate } from '@/lib/mobile/template'
 import type { AuditStatus, AuditIssue } from '@/lib/auditor'
@@ -97,6 +95,7 @@ export interface BuilderState {
 export interface BuilderActions {
   // Project
   initProject: (prompt: string) => void
+  setProjectId: (projectId: string) => void
   setProjectType: (type: ProjectType) => void
   
   // Mobile
@@ -213,7 +212,7 @@ const initialState: BuilderState = {
   
   // Mobile defaults
   mobileStack: 'expo-rn',
-  platforms: ['ios'],
+  platforms: ['ios', 'android'],
   capabilities: DEFAULT_CAPABILITIES,
   mobileConfig: DEFAULT_MOBILE_CONFIG,
   devicePreset: DEFAULT_DEVICE,
@@ -244,7 +243,14 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
 
     initProject: (prompt) => {
       set((state) => {
-        state.projectId = crypto.randomUUID()
+        const sessionProjectId = typeof window !== 'undefined'
+          ? sessionStorage.getItem('torbit_project_id')
+          : null
+        const resolvedProjectId = state.projectId || sessionProjectId || crypto.randomUUID()
+        state.projectId = resolvedProjectId
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('torbit_project_id', resolvedProjectId)
+        }
         state.prompt = prompt
         state.messages = [
           {
@@ -260,6 +266,12 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
             timestamp: new Date(),
           },
         ]
+      })
+    },
+
+    setProjectId: (projectId) => {
+      set((state) => {
+        state.projectId = projectId
       })
     },
 

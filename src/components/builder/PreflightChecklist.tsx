@@ -21,6 +21,8 @@ interface PreflightChecklistProps {
   onProceed: () => void
   onCancel: () => void
   isExporting: boolean
+  actionLabel?: string
+  readyLabel?: string
 }
 
 const SEVERITY_CONFIG: Record<ValidationSeverity, {
@@ -53,7 +55,9 @@ export function PreflightChecklist({
   result, 
   onProceed, 
   onCancel,
-  isExporting 
+  isExporting,
+  actionLabel = 'Export',
+  readyLabel = 'Your project is configured correctly for mobile release.'
 }: PreflightChecklistProps) {
   const { valid, canExport, issues, stats } = result
   
@@ -78,7 +82,7 @@ export function PreflightChecklist({
             <div>
               <p className="text-emerald-400 font-medium">Ready to Export</p>
               <p className="text-emerald-500/60 text-sm mt-0.5">
-                All checks passed. Your project is ready for Xcode.
+                All checks passed. Your project is ready.
               </p>
             </div>
           </>
@@ -133,7 +137,7 @@ export function PreflightChecklist({
           </div>
           <p className="text-neutral-300 font-medium">All Checks Passed</p>
           <p className="text-neutral-500 text-sm mt-1">
-            Your project is configured correctly for iOS export.
+            {readyLabel}
           </p>
         </div>
       )}
@@ -159,11 +163,11 @@ export function PreflightChecklist({
           {isExporting ? (
             <>
               <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-              Exporting...
+              Processing...
             </>
           ) : (
             <>
-              {canExport ? 'Export for Xcode' : 'Fix Errors First'}
+              {canExport ? actionLabel : 'Fix Errors First'}
               {canExport && <ChevronRight className="w-4 h-4" />}
             </>
           )}

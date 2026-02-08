@@ -17,10 +17,10 @@ import type {
   ProjectKnowledge,
   FreezeMode,
 } from './types'
-import { createEmptySnapshot, createEmptyProjectKnowledge } from './types'
-import { getAllFacts, getCacheStats } from '../cache'
-import { APPROVED_SOURCES, getSource } from '../sources'
+import { createEmptyProjectKnowledge } from './types'
+import { getAllFacts } from '../cache'
 import { STABLE_DEFAULTS } from '../charter'
+import { loadPersistedKnowledge, savePersistedKnowledge } from '@/lib/persistence/project-state'
 
 // ============================================
 // SNAPSHOT STORAGE (in-memory for now)
@@ -92,7 +92,7 @@ export function generateSnapshot(
  */
 function buildAssumptions(
   frameworks: Record<string, string>,
-  facts: Array<{ id: string; sourceId: string; topic: string; confidence: number }>
+  _facts: Array<{ id: string; sourceId: string; topic: string; confidence: number }>
 ): KnowledgeAssumption[] {
   const assumptions: KnowledgeAssumption[] = []
   const now = new Date().toISOString()
@@ -129,7 +129,7 @@ function buildAssumptions(
   // Add stable defaults from charter
   for (const [tech, defaults] of Object.entries(STABLE_DEFAULTS)) {
     if (frameworks[tech]) {
-      for (const [key, value] of Object.entries(defaults)) {
+      for (const value of Object.values(defaults)) {
         assumptions.push({
           assumption: value,
           sourceId: `${tech}-official`,
@@ -227,10 +227,14 @@ function generateApprovalHash(assumption: string): string {
  * Get or create project knowledge
  */
 export function getProjectKnowledge(projectId: string): ProjectKnowledge {
-  if (!projectSnapshots.has(projectId)) {
-    projectSnapshots.set(projectId, createEmptyProjectKnowledge(projectId))
+  if (projectSnapshots.has(projectId)) {
+    return projectSnapshots.get(projectId)!
   }
-  return projectSnapshots.get(projectId)!
+
+  const persisted = loadPersistedKnowledge(projectId)
+  const knowledge = persisted ?? createEmptyProjectKnowledge(projectId)
+  projectSnapshots.set(projectId, knowledge)
+  return knowledge
 }
 
 /**
@@ -240,14 +244,15 @@ export function saveSnapshot(projectId: string, snapshot: KnowledgeSnapshot): vo
   const knowledge = getProjectKnowledge(projectId)
   knowledge.snapshot = snapshot
   projectSnapshots.set(projectId, knowledge)
+  savePersistedKnowledge(projectId, knowledge)
 }
 
 /**
  * Check if project has snapshot
  */
 export function hasSnapshot(projectId: string): boolean {
-  const knowledge = projectSnapshots.get(projectId)
-  return knowledge?.snapshot.snapshotHash !== ''
+  const knowledge = getProjectKnowledge(projectId)
+  return knowledge.snapshot.snapshotHash !== ''
 }
 
 /**
@@ -274,8 +279,8 @@ export function exportSnapshotJson(projectId: string): string {
  * Get snapshot for evidence bundle
  */
 export function getSnapshotForEvidence(projectId: string): KnowledgeSnapshot | null {
-  const knowledge = projectSnapshots.get(projectId)
-  return knowledge?.snapshot || null
+  const knowledge = getProjectKnowledge(projectId)
+  return knowledge.snapshot.snapshotHash ? knowledge.snapshot : null
 }
 
 /**

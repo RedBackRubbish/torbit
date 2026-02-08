@@ -1,8 +1,18 @@
 import { z } from 'zod'
+import fs from 'node:fs'
+import path from 'node:path'
 import { AGENT_TOOLS, type AgentId } from '@/lib/tools/definitions'
 import { createOrchestrator } from '@/lib/agents/orchestrator'
 import { chatRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 import { getAuthenticatedUser } from '@/lib/supabase/auth'
+import {
+  emitSnapshotCreated,
+  enforceEnvironmentFreeze,
+  generateSnapshot,
+  getProjectKnowledge,
+  hasSnapshot,
+  saveSnapshot,
+} from '@/lib/knowledge/memory'
 
 // Request validation schema
 const ChatRequestSchema = z.object({
@@ -39,6 +49,7 @@ import type { MobileCapabilities, MobileProjectConfig } from '@/lib/mobile/types
 import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 
 // Allow streaming responses up to 120 seconds for tool-heavy tasks
+export const runtime = 'nodejs'
 export const maxDuration = 120
 
 // Maximum output tokens per request to prevent unbounded cost
@@ -206,6 +217,44 @@ interface StreamChunk {
 // Maximum retry attempts for retryable errors
 const MAX_RETRIES = 3
 
+function detectRuntimeEnvironment(): 'local' | 'staging' | 'production' {
+  const env = (process.env.VERCEL_ENV || process.env.NODE_ENV || 'development').toLowerCase()
+  if (env === 'production') return 'production'
+  if (env === 'preview' || env === 'staging') return 'staging'
+  return 'local'
+}
+
+function detectFrameworkVersions(): Record<string, string> {
+  const fallback = { nextjs: '16', react: '19', typescript: '5' }
+  try {
+    const packageJsonPath = path.join(process.cwd(), 'package.json')
+    if (!fs.existsSync(packageJsonPath)) return fallback
+
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+
+    const dependencies = {
+      ...(packageJson.dependencies || {}),
+      ...(packageJson.devDependencies || {}),
+    }
+
+    const cleanVersion = (value: string | undefined, defaultValue: string): string => {
+      if (!value) return defaultValue
+      return value.replace(/^[^\d]*/, '') || defaultValue
+    }
+
+    return {
+      nextjs: cleanVersion(dependencies.next, fallback.nextjs),
+      react: cleanVersion(dependencies.react, fallback.react),
+      typescript: cleanVersion(dependencies.typescript, fallback.typescript),
+    }
+  } catch {
+    return fallback
+  }
+}
+
 export async function POST(req: Request) {
   // ========================================================================
   // RATE LIMITING - Protect against abuse
@@ -248,7 +297,7 @@ export async function POST(req: Request) {
     const {
       messages: rawMessages,
       agentId: requestedAgentId,
-      projectId = 'default',
+      projectId: incomingProjectId,
       projectType = 'web',
       capabilities = null,
       persistedInvariants = null,
@@ -256,6 +305,7 @@ export async function POST(req: Request) {
 
     // Use authenticated user ID, not the one from request
     const userId = user.id
+    const projectId = incomingProjectId?.trim() || `user-${userId}`
 
     // Filter out empty messages to prevent API errors
     const messages = rawMessages.filter((m) =>
@@ -307,6 +357,31 @@ export async function POST(req: Request) {
       systemPrompt = `${systemPrompt}\n\n${persistedInvariants}`
     }
 
+    // Bootstrap durable project memory (snapshot created once, then reused).
+    const environment = detectRuntimeEnvironment()
+    if (!hasSnapshot(projectId)) {
+      const snapshot = generateSnapshot(projectId, detectFrameworkVersions(), environment)
+      saveSnapshot(projectId, snapshot)
+      emitSnapshotCreated(snapshot)
+    } else {
+      enforceEnvironmentFreeze(projectId, environment)
+    }
+
+    const snapshot = getProjectKnowledge(projectId).snapshot
+    const assumptionPreview = snapshot.assumptions
+      .slice(0, 8)
+      .map((assumption) => `- ${assumption.assumption}`)
+      .join('\n')
+
+    systemPrompt = `${systemPrompt}
+
+## PROJECT MEMORY SNAPSHOT
+- Snapshot hash: ${snapshot.snapshotHash || 'none'}
+- Freeze mode: ${snapshot.freezeMode}
+- Confidence: ${Math.round(snapshot.confidence * 100)}%
+- Frameworks: ${Object.entries(snapshot.frameworks).map(([name, version]) => `${name}@${version}`).join(', ') || 'none'}
+${assumptionPreview ? `- Assumptions:\n${assumptionPreview}` : '- Assumptions: none'}`
+
     // Wrap user messages with XML delimiters to defend against prompt injection
     const lastUserContent = messages[messages.length - 1]?.content || ''
     if (messages.length > 0 && messages[messages.length - 1]?.role === 'user') {
@@ -352,6 +427,20 @@ export async function POST(req: Request) {
             enableKimiRouter: true,
             fastRouting: true,
           })
+
+          if (attempt === 1) {
+            const replayedCheckpointId = orchestrator.getContext().lastReplayedCheckpointId
+            const replayedScopes = orchestrator.getContext().lastReplayedCheckpointScopes
+            if (replayedCheckpointId) {
+              const scopeSuffix = replayedScopes && replayedScopes.length > 0
+                ? ` (${replayedScopes.join(', ')})`
+                : ''
+              sendChunk({
+                type: 'proof',
+                proof: [{ label: `Resumed from checkpoint ${replayedCheckpointId}${scopeSuffix}`, status: 'verified' }],
+              })
+            }
+          }
 
           try {
             const result = await orchestrator.executeAgent(

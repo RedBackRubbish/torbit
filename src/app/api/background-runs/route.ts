@@ -1,0 +1,130 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server'
+import type { Json } from '@/lib/supabase/types'
+
+export const runtime = 'nodejs'
+
+const CreateBackgroundRunSchema = z.object({
+  projectId: z.string().min(1),
+  runType: z.string().min(1),
+  input: z.record(z.string(), z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  idempotencyKey: z.string().trim().min(8).max(128).optional(),
+  maxAttempts: z.number().int().min(1).max(10).optional(),
+  retryable: z.boolean().optional(),
+})
+
+export async function GET(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const projectId = searchParams.get('projectId')
+  const statusParam = searchParams.get('status')
+  const limit = Number.parseInt(searchParams.get('limit') || '50', 10)
+  const status = (
+    statusParam === 'queued' ||
+    statusParam === 'running' ||
+    statusParam === 'succeeded' ||
+    statusParam === 'failed' ||
+    statusParam === 'cancelled'
+  ) ? statusParam : null
+
+  let query = supabase
+    .from('background_runs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(Number.isNaN(limit) ? 50 : Math.min(Math.max(limit, 1), 200))
+
+  if (projectId) {
+    query = query.eq('project_id', projectId)
+  }
+
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true, runs: data || [] })
+}
+
+export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
+  }
+
+  try {
+    const body = await request.json()
+    const parsed = CreateBackgroundRunSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const payload = parsed.data
+    if (payload.idempotencyKey) {
+      const { data: existingRun, error: existingRunError } = await supabase
+        .from('background_runs')
+        .select('*')
+        .eq('project_id', payload.projectId)
+        .eq('user_id', user.id)
+        .eq('run_type', payload.runType)
+        .eq('idempotency_key', payload.idempotencyKey)
+        .maybeSingle()
+
+      if (existingRunError) {
+        return NextResponse.json({ error: existingRunError.message }, { status: 500 })
+      }
+
+      if (existingRun) {
+        return NextResponse.json({ success: true, deduplicated: true, run: existingRun })
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('background_runs')
+      .insert({
+        project_id: payload.projectId,
+        user_id: user.id,
+        run_type: payload.runType,
+        status: 'queued',
+        progress: 0,
+        input: (payload.input || {}) as Json,
+        metadata: (payload.metadata || {}) as Json,
+        idempotency_key: payload.idempotencyKey || null,
+        max_attempts: payload.maxAttempts || 3,
+        retryable: payload.retryable !== false,
+        attempt_count: 0,
+        cancel_requested: false,
+      })
+      .select('*')
+      .single()
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, run: data }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to create background run.' },
+      { status: 500 }
+    )
+  }
+}

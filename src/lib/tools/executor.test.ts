@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { 
   createExecutionContext, 
   executeTool,
@@ -7,14 +9,26 @@ import {
 
 describe('Tool Executor', () => {
   let context: ToolExecutionContext
+  let dataDir: string
+  let projectId: string
 
   beforeEach(() => {
-    context = createExecutionContext('test-project', 'test-user')
+    dataDir = path.join(process.cwd(), '.tmp', `tool-executor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+    process.env.TORBIT_DATA_DIR = dataDir
+    fs.rmSync(dataDir, { recursive: true, force: true })
+
+    projectId = `test-project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    context = createExecutionContext(projectId, 'test-user')
+  })
+
+  afterEach(() => {
+    fs.rmSync(dataDir, { recursive: true, force: true })
+    delete process.env.TORBIT_DATA_DIR
   })
 
   describe('createExecutionContext', () => {
     it('should create context with required properties', () => {
-      expect(context.projectId).toBe('test-project')
+      expect(context.projectId).toBe(projectId)
       expect(context.userId).toBe('test-user')
       expect(context.workingDirectory).toBeDefined()
       expect(context.secrets).toBeInstanceOf(Map)
@@ -156,10 +170,129 @@ describe('Tool Executor', () => {
 
     it('rollbackToCheckpoint should fail for missing checkpoint', async () => {
       const result = await executeTool('rollbackToCheckpoint', {
-        checkpointName: 'nonexistent-checkpoint',
+        checkpointId: 'nonexistent-checkpoint',
+        confirm: true,
       }, context)
 
       expect(result.success).toBe(false)
+    })
+
+    it('atomicRollback should restore files, database state, and deployment config', async () => {
+      await executeTool('createFile', {
+        path: 'src/state.ts',
+        content: 'export const version = 1',
+      }, context)
+      context.dbState = {
+        schema: {
+          todos: {
+            columns: [{ name: 'id', type: 'uuid', nullable: false }],
+            indexes: ['PRIMARY KEY (id)'],
+          },
+        },
+        data: {
+          todos: [{ id: 'todo-1', title: 'first' }],
+        },
+      }
+      context.dbSchema = context.dbState.schema
+      context.deploymentConfig = {
+        provider: 'vercel',
+        environment: 'production',
+        url: 'https://initial.example.com',
+      }
+
+      const checkpointResult = await executeTool('createCheckpoint', {
+        name: 'atomic-restore-point',
+        reason: 'before mutation',
+      }, context)
+      const checkpointId = (
+        checkpointResult.data as { checkpointId?: string } | undefined
+      )?.checkpointId
+      expect(checkpointId).toBeTruthy()
+
+      await executeTool('editFile', {
+        path: 'src/state.ts',
+        oldContent: 'version = 1',
+        newContent: 'version = 2',
+      }, context)
+      context.dbState = {
+        ...(context.dbState || {}),
+        data: {
+          todos: [{ id: 'todo-2', title: 'changed' }],
+        },
+      }
+      context.dbSchema = context.dbState.schema
+      context.deploymentConfig = {
+        provider: 'netlify',
+        environment: 'staging',
+        url: 'https://changed.example.com',
+      }
+
+      const rollbackResult = await executeTool('atomicRollback', {
+        checkpointId: checkpointId!,
+        confirm: true,
+      }, context)
+
+      expect(rollbackResult.success).toBe(true)
+      expect(context.files.get('src/state.ts')).toContain('version = 1')
+      expect(context.dbState?.data).toEqual({ todos: [{ id: 'todo-1', title: 'first' }] })
+      expect(context.deploymentConfig?.provider).toBe('vercel')
+      expect(rollbackResult.output).toContain('Scopes restored: files, database, deployment')
+    })
+
+    it('should replay the latest checkpoint in a new execution context', async () => {
+      await executeTool('createFile', {
+        path: 'src/resume.ts',
+        content: 'export const resumed = true',
+      }, context)
+
+      const restoredContext = createExecutionContext(projectId, 'test-user')
+
+      expect(restoredContext.lastReplayedCheckpointId).toBeTruthy()
+      expect(restoredContext.files.get('src/resume.ts')).toContain('resumed = true')
+    })
+
+    it('should persist explicit checkpoints across contexts', async () => {
+      await executeTool('createCheckpoint', {
+        name: 'persisted-checkpoint',
+        reason: 'durability test',
+      }, context)
+
+      const restoredContext = createExecutionContext(projectId, 'test-user', undefined, {
+        replayLatestCheckpoint: false,
+      })
+
+      const ids = Array.from(restoredContext.checkpoints.keys())
+      expect(ids.some((id) => id.includes('persisted-checkpoint'))).toBe(true)
+    })
+
+    it('should replay checkpoint scopes and atomic state in a new execution context', async () => {
+      context.dbState = {
+        schema: {
+          sessions: {
+            columns: [{ name: 'id', type: 'uuid', nullable: false }],
+            indexes: ['PRIMARY KEY (id)'],
+          },
+        },
+        data: {
+          sessions: [{ id: 'session-1' }],
+        },
+      }
+      context.dbSchema = context.dbState.schema
+      context.deploymentConfig = {
+        provider: 'vercel',
+        environment: 'production',
+        url: 'https://resume.example.com',
+      }
+
+      await executeTool('createCheckpoint', {
+        name: 'atomic-replay',
+      }, context)
+
+      const restoredContext = createExecutionContext(projectId, 'test-user')
+      expect(restoredContext.lastReplayedCheckpointId).toBeTruthy()
+      expect(restoredContext.lastReplayedCheckpointScopes).toEqual(['files', 'database', 'deployment'])
+      expect(restoredContext.dbState?.data).toEqual({ sessions: [{ id: 'session-1' }] })
+      expect(restoredContext.deploymentConfig?.url).toBe('https://resume.example.com')
     })
   })
 

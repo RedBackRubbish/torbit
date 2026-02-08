@@ -115,7 +115,7 @@ export interface MobileProjectConfig {
 
 export const DEFAULT_MOBILE_CONFIG: MobileProjectConfig = {
   stack: 'expo-rn',
-  platforms: ['ios'],
+  platforms: ['ios', 'android'],
   capabilities: DEFAULT_CAPABILITIES,
   bundleId: 'com.torbit.app',
   appName: 'My App',

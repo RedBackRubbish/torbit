@@ -4,7 +4,7 @@
  */
 
 import type { MobileCapabilities, MobileProjectConfig } from './types'
-import { CAPABILITY_PACKAGES, CAPABILITY_PERMISSIONS } from './types'
+import { CAPABILITY_PACKAGES } from './types'
 
 // ============================================
 // Validation Types
@@ -150,7 +150,7 @@ function validateBundleId(bundleId: string): ValidationIssue[] {
       id: 'bundle-id-missing',
       severity: 'error',
       title: 'Bundle ID is required',
-      description: 'A bundle identifier is required for iOS apps.',
+      description: 'A bundle identifier is required for mobile app store builds.',
       fix: 'Set a bundle ID like com.yourcompany.appname',
       category: 'config',
     })
@@ -201,7 +201,7 @@ function validateAppIcon(files: ProjectFile[]): ValidationIssue[] {
       id: 'app-icon-missing',
       severity: 'error',
       title: 'App icon is missing',
-      description: 'iOS requires an app icon (1024x1024 PNG, no alpha channel).',
+      description: 'Store releases require an app icon (1024x1024 PNG recommended).',
       fix: 'Add an icon.png file to your assets folder.',
       category: 'icon',
     })
@@ -387,11 +387,6 @@ export function generatePodfile(
   const enabledCapabilities = Object.entries(config.capabilities)
     .filter(([_, enabled]) => enabled)
     .map(([cap]) => cap as keyof MobileCapabilities)
-  
-  // Base pods that are always included
-  const basePods = [
-    'use_expo_modules!',
-  ]
   
   // Capability-specific pods are handled by Expo autolinking,
   // but we document which capabilities are in use

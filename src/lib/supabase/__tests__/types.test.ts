@@ -13,9 +13,15 @@ import type {
   Message,
   FuelTransaction,
   AuditEvent,
+  ProjectCollaborator,
+  ProjectPresence,
+  BackgroundRun,
+  ProductEvent,
   NewProject,
   UpdateProject,
   NewMessage,
+  NewBackgroundRun,
+  UpdateBackgroundRun,
   Json,
 } from '../types'
 
@@ -34,6 +40,10 @@ describe('Supabase Types', () => {
       const _message: Message | null = null
       const _fuelTransaction: FuelTransaction | null = null
       const _auditEvent: AuditEvent | null = null
+      const _projectCollaborator: ProjectCollaborator | null = null
+      const _projectPresence: ProjectPresence | null = null
+      const _backgroundRun: BackgroundRun | null = null
+      const _productEvent: ProductEvent | null = null
 
       expect(_profile).toBeNull()
       expect(_project).toBeNull()
@@ -41,16 +51,24 @@ describe('Supabase Types', () => {
       expect(_message).toBeNull()
       expect(_fuelTransaction).toBeNull()
       expect(_auditEvent).toBeNull()
+      expect(_projectCollaborator).toBeNull()
+      expect(_projectPresence).toBeNull()
+      expect(_backgroundRun).toBeNull()
+      expect(_productEvent).toBeNull()
     })
 
     it('should export insert/update types', () => {
       const _newProject: NewProject | null = null
       const _updateProject: UpdateProject | null = null
       const _newMessage: NewMessage | null = null
+      const _newBackgroundRun: NewBackgroundRun | null = null
+      const _updateBackgroundRun: UpdateBackgroundRun | null = null
 
       expect(_newProject).toBeNull()
       expect(_updateProject).toBeNull()
       expect(_newMessage).toBeNull()
+      expect(_newBackgroundRun).toBeNull()
+      expect(_updateBackgroundRun).toBeNull()
     })
 
     it('should export Json type', () => {
@@ -146,6 +164,37 @@ describe('Supabase Types', () => {
     it('should support all transaction types', () => {
       const types: FuelTransaction['type'][] = ['purchase', 'usage', 'refund', 'bonus']
       expect(types).toHaveLength(4)
+    })
+  })
+
+  describe('BackgroundRun Type', () => {
+    it('should include retry and orchestration metadata fields', () => {
+      const run: BackgroundRun = {
+        id: 'run-1',
+        project_id: 'project-1',
+        user_id: 'user-1',
+        run_type: 'mobile-release',
+        status: 'queued',
+        input: {},
+        metadata: {},
+        output: null,
+        idempotency_key: null,
+        retryable: true,
+        attempt_count: 0,
+        max_attempts: 3,
+        cancel_requested: false,
+        last_heartbeat_at: null,
+        next_retry_at: null,
+        error_message: null,
+        progress: 0,
+        started_at: null,
+        finished_at: null,
+        created_at: '2026-02-08',
+        updated_at: '2026-02-08',
+      }
+
+      expect(run.max_attempts).toBe(3)
+      expect(run.retryable).toBe(true)
     })
   })
 })

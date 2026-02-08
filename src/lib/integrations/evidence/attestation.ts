@@ -7,6 +7,12 @@
 
 import type { AttestationFile, AttestationData } from './types'
 import type { EnvironmentName } from '../environments/types'
+import { createHash, createHmac } from 'node:crypto'
+
+interface AttestationSigningOptions {
+  signingSecret?: string
+  signingKeyId?: string
+}
 
 // ============================================
 // ATTESTATION GENERATOR
@@ -15,15 +21,22 @@ import type { EnvironmentName } from '../environments/types'
 /**
  * Generate an attestation file for export
  */
-export function generateAttestation(data: AttestationData): AttestationFile {
+export function generateAttestation(
+  data: AttestationData,
+  options: AttestationSigningOptions = {}
+): AttestationFile {
   const statement = generateStatement(data)
   const hash = generateHash(JSON.stringify(data))
+  const signature = options.signingSecret
+    ? signHash(hash, options.signingSecret, options.signingKeyId || 'torbit-default')
+    : undefined
   
   return {
     statement,
     data,
     generatedAt: new Date().toISOString(),
     hash,
+    signature,
   }
 }
 
@@ -177,22 +190,35 @@ function padRight(str: string, length: number): string {
  * In production, use crypto.subtle.digest
  */
 function generateHash(input: string): string {
-  let hash = 0
-  for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
+  return `sha256:${createHash('sha256').update(input).digest('hex')}`
+}
+
+function signHash(hash: string, signingSecret: string, keyId: string) {
+  return {
+    algorithm: 'HMAC-SHA256' as const,
+    keyId,
+    value: createHmac('sha256', signingSecret).update(hash).digest('hex'),
+    signedAt: new Date().toISOString(),
   }
-  
-  // Convert to hex-like string
-  const hexHash = Math.abs(hash).toString(16).padStart(8, '0')
-  return `sha256:${hexHash}${hexHash}${hexHash}${hexHash}`
 }
 
 /**
  * Serialize attestation to text file
  */
 export function serializeAttestation(attestation: AttestationFile): string {
+  const signatureBlock = attestation.signature
+    ? [
+        '',
+        '───────────────────────────────────────────────────────────────',
+        'ATTESTATION SIGNATURE',
+        '───────────────────────────────────────────────────────────────',
+        `Algorithm: ${attestation.signature.algorithm}`,
+        `Key ID: ${attestation.signature.keyId}`,
+        `Signed At: ${attestation.signature.signedAt}`,
+        `Signature: ${attestation.signature.value}`,
+      ]
+    : []
+
   return [
     attestation.statement,
     '',
@@ -202,6 +228,7 @@ export function serializeAttestation(attestation: AttestationFile): string {
     attestation.hash,
     '',
     'This hash can be used to verify the integrity of this attestation.',
+    ...signatureBlock,
     '───────────────────────────────────────────────────────────────',
   ].join('\n')
 }

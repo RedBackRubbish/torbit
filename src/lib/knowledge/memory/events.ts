@@ -19,6 +19,7 @@ import type {
   OverrideRequest,
   KnowledgeAssumption,
 } from './types'
+import { appendPersistedMemoryEvent, loadPersistedMemoryEvents } from '@/lib/persistence/project-state'
 
 // ============================================
 // EVENT TYPES
@@ -120,7 +121,18 @@ export interface MemoryLedgerEvent {
 // EVENT STORAGE
 // ============================================
 
-const memoryEvents: MemoryLedgerEvent[] = []
+const memoryEventsByProject = new Map<string, MemoryLedgerEvent[]>()
+
+function getProjectEventStore(projectId: string): MemoryLedgerEvent[] {
+  const cached = memoryEventsByProject.get(projectId)
+  if (cached) {
+    return cached
+  }
+
+  const persisted = loadPersistedMemoryEvents(projectId)
+  memoryEventsByProject.set(projectId, persisted)
+  return persisted
+}
 
 /**
  * Emit a memory event to the ledger
@@ -140,7 +152,10 @@ export function emitMemoryEvent(
     metadata,
   }
   
-  memoryEvents.push(event)
+  const store = getProjectEventStore(projectId)
+  store.push(event)
+  memoryEventsByProject.set(projectId, store)
+  appendPersistedMemoryEvent(projectId, event)
   
   return event
 }
@@ -149,7 +164,7 @@ export function emitMemoryEvent(
  * Get all memory events for a project
  */
 export function getMemoryEvents(projectId: string): MemoryLedgerEvent[] {
-  return memoryEvents.filter(e => e.projectId === projectId)
+  return [...getProjectEventStore(projectId)]
 }
 
 /**
@@ -159,14 +174,14 @@ export function getEventsByType(
   projectId: string,
   type: MemoryEventType
 ): MemoryLedgerEvent[] {
-  return memoryEvents.filter(e => e.projectId === projectId && e.type === type)
+  return getProjectEventStore(projectId).filter(e => e.type === type)
 }
 
 /**
  * Get all memory events (for export)
  */
 export function getAllMemoryEvents(): MemoryLedgerEvent[] {
-  return [...memoryEvents]
+  return Array.from(memoryEventsByProject.values()).flatMap(events => [...events])
 }
 
 // ============================================

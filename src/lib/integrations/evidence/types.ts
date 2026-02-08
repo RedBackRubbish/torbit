@@ -36,6 +36,11 @@ export interface EvidenceBundle {
    * SHA-256 hash of bundle contents (excluding this field)
    */
   bundleHash: string
+
+  /**
+   * Signature over bundle hash (customer-verifiable trust proof)
+   */
+  signature?: SignedArtifactSignature
   
   /**
    * Export metadata
@@ -138,6 +143,33 @@ export interface AttestationFile {
    * Hash of the attestation data
    */
   hash: string
+
+  /**
+   * Optional signature over attestation hash
+   */
+  signature?: SignedArtifactSignature
+}
+
+export interface SignedArtifactSignature {
+  /**
+   * Signature algorithm used for signing
+   */
+  algorithm: 'HMAC-SHA256'
+
+  /**
+   * Key identifier used for verification routing
+   */
+  keyId: string
+
+  /**
+   * Hex signature payload
+   */
+  value: string
+
+  /**
+   * ISO timestamp of signing operation
+   */
+  signedAt: string
 }
 
 export interface AttestationData {
@@ -221,6 +253,11 @@ export interface ComplianceManifest {
    * Total hash of all files
    */
   manifestHash: string
+
+  /**
+   * Optional signature for manifest tamper proof
+   */
+  signature?: SignedArtifactSignature
 }
 
 export interface ComplianceFile {
@@ -338,6 +375,18 @@ export interface EvidenceBundleOptions {
    * @default true
    */
   redactSensitive: boolean
+
+  /**
+   * HMAC secret for signed bundle output
+   * If omitted, bundle remains hash-only.
+   */
+  signingSecret?: string
+
+  /**
+   * Identifier for signature verification routing
+   * @default torbit-default
+   */
+  signingKeyId?: string
 }
 
 export const DEFAULT_BUNDLE_OPTIONS: EvidenceBundleOptions = {
@@ -346,4 +395,6 @@ export const DEFAULT_BUNDLE_OPTIONS: EvidenceBundleOptions = {
   includePolicy: true,
   includeEnvironment: true,
   redactSensitive: true,
+  signingSecret: undefined,
+  signingKeyId: 'torbit-default',
 }

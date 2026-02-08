@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -20,6 +20,8 @@ import { PublishPanel } from '@/components/builder/PublishPanel'
 import { ScreenshotButton } from '@/components/builder/ScreenshotButton'
 import { UserMenu } from '@/components/builder/UserMenu'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
+import { useProjectPresence } from '@/hooks/useProjectPresence'
+import { flushQueuedTelemetryEvents, setMetricsProjectContext } from '@/lib/metrics'
 
 export default function BuilderPage() {
   const router = useRouter()
@@ -52,6 +54,8 @@ function BuilderPageContent() {
   const [previewKey, setPreviewKey] = useState(0)
   const { 
     initProject, 
+    setProjectId,
+    projectId,
     prompt,
     previewTab, 
     setPreviewTab,
@@ -60,9 +64,18 @@ function BuilderPageContent() {
     agents,
     isGenerating,
   } = useBuilderStore()
+  const { members, upsertPresence } = useProjectPresence(projectId)
 
   const handleChatRetry = useCallback(() => setChatKey(k => k + 1), [])
   const handlePreviewRetry = useCallback(() => setPreviewKey(k => k + 1), [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const storedProjectId = sessionStorage.getItem('torbit_project_id')
+    if (storedProjectId && !projectId) {
+      setProjectId(storedProjectId)
+    }
+  }, [projectId, setProjectId])
 
   useEffect(() => {
     const storedPrompt = sessionStorage.getItem('torbit_prompt')
@@ -83,6 +96,39 @@ function BuilderPageContent() {
       sessionStorage.removeItem('torbit_capability_context')
     }
   }, [initProject, prompt])
+
+  useEffect(() => {
+    if (!projectId) return
+
+    let active = true
+    upsertPresence('online').catch(() => {})
+
+    const heartbeat = setInterval(() => {
+      if (!active) return
+      upsertPresence('online').catch(() => {})
+    }, 30000)
+
+    return () => {
+      active = false
+      clearInterval(heartbeat)
+      upsertPresence('offline').catch(() => {})
+    }
+  }, [projectId, upsertPresence])
+
+  useEffect(() => {
+    void flushQueuedTelemetryEvents()
+  }, [])
+
+  useEffect(() => {
+    setMetricsProjectContext(projectId)
+    return () => {
+      setMetricsProjectContext(null)
+    }
+  }, [projectId])
+
+  const onlineCollaboratorCount = useMemo(() => (
+    members.filter((member) => member.status !== 'offline' && !member.isCurrentUser).length
+  ), [members])
 
   // Get current active agent
   const activeAgent = agents.find(a => a.status === 'working' || a.status === 'thinking')
@@ -157,6 +203,15 @@ function BuilderPageContent() {
               )}
               <span className="hidden md:inline text-[11px] text-[#525252]">
                 {isWorking ? 'Building...' : 'Idle'}
+              </span>
+            </div>
+
+            <div className="hidden md:flex items-center gap-1.5 px-2 border-r border-[#1f1f1f]">
+              <span className={`w-1.5 h-1.5 rounded-full ${onlineCollaboratorCount > 0 ? 'bg-emerald-500' : 'bg-[#333]'}`} />
+              <span className="text-[11px] text-[#525252]">
+                {onlineCollaboratorCount > 0
+                  ? `${onlineCollaboratorCount + 1} collaborators online`
+                  : 'Solo session'}
               </span>
             </div>
             

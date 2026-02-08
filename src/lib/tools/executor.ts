@@ -1,4 +1,9 @@
 import type { ToolName } from './definitions'
+import {
+  loadPersistedCheckpoints,
+  saveAllPersistedCheckpoints,
+  savePersistedCheckpoint,
+} from '@/lib/persistence/project-state'
 
 /**
  * Tool Executor
@@ -18,6 +23,128 @@ function adjustColor(hex: string, percent: number): string {
   return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`
 }
 
+function cloneFilesMap(files: Map<string, string>): Map<string, string> {
+  const copy = new Map<string, string>()
+  for (const [filePath, content] of files.entries()) {
+    copy.set(filePath, content)
+  }
+  return copy
+}
+
+function cloneSerializable<T>(value: T): T {
+  if (value === undefined || value === null) return value
+
+  try {
+    return JSON.parse(JSON.stringify(value)) as T
+  } catch {
+    return value
+  }
+}
+
+export interface DatabaseSchemaTable {
+  columns: Array<{ name: string; type: string; nullable: boolean }>
+  indexes: string[]
+}
+
+export type DatabaseSchema = Record<string, DatabaseSchemaTable>
+
+export interface DatabaseSnapshot {
+  schema?: DatabaseSchema
+  data?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}
+
+export interface DeploymentConfigSnapshot {
+  provider?: string
+  environment?: string
+  branch?: string
+  url?: string
+  lastDeploymentId?: string
+  config?: Record<string, unknown>
+  updatedAt?: number
+}
+
+export type CheckpointScope = 'files' | 'database' | 'deployment'
+
+export interface ExecutionCheckpoint {
+  name: string
+  files: Map<string, string>
+  timestamp: number
+  reason?: string
+  dbState?: DatabaseSnapshot
+  deploymentConfig?: DeploymentConfigSnapshot
+}
+
+function getCheckpointScopes(checkpoint: ExecutionCheckpoint): CheckpointScope[] {
+  const scopes: CheckpointScope[] = ['files']
+  if (checkpoint.dbState) scopes.push('database')
+  if (checkpoint.deploymentConfig) scopes.push('deployment')
+  return scopes
+}
+
+function formatCheckpointScopes(scopes: CheckpointScope[]): string {
+  return scopes.join(', ')
+}
+
+function createCheckpointSnapshot(
+  ctx: ToolExecutionContext,
+  name: string,
+  reason: string | undefined,
+  timestamp = Date.now()
+): ExecutionCheckpoint {
+  return {
+    name,
+    files: cloneFilesMap(ctx.files),
+    timestamp,
+    reason,
+    dbState: ctx.dbState ? cloneSerializable(ctx.dbState) : undefined,
+    deploymentConfig: ctx.deploymentConfig ? cloneSerializable(ctx.deploymentConfig) : undefined,
+  }
+}
+
+function restoreCheckpointSnapshot(
+  ctx: ToolExecutionContext,
+  checkpoint: ExecutionCheckpoint
+): CheckpointScope[] {
+  const scopes = getCheckpointScopes(checkpoint)
+
+  ctx.files.clear()
+  checkpoint.files.forEach((content, filePath) => {
+    ctx.files.set(filePath, content)
+  })
+
+  if (checkpoint.dbState) {
+    ctx.dbState = cloneSerializable(checkpoint.dbState)
+    ctx.dbSchema = checkpoint.dbState.schema ? cloneSerializable(checkpoint.dbState.schema) : undefined
+  } else {
+    ctx.dbState = undefined
+    ctx.dbSchema = undefined
+  }
+
+  if (checkpoint.deploymentConfig) {
+    ctx.deploymentConfig = cloneSerializable(checkpoint.deploymentConfig)
+  } else {
+    ctx.deploymentConfig = undefined
+  }
+
+  return scopes
+}
+
+function persistCheckpointState(ctx: ToolExecutionContext): void {
+  saveAllPersistedCheckpoints(ctx.projectId, ctx.checkpoints)
+}
+
+function upsertLatestStateCheckpoint(ctx: ToolExecutionContext, reason?: string): void {
+  const checkpointId = 'cp_latest_state'
+  const checkpoint = createCheckpointSnapshot(
+    ctx,
+    'latest-state',
+    reason || 'Latest project state'
+  )
+  ctx.checkpoints.set(checkpointId, checkpoint)
+  savePersistedCheckpoint(ctx.projectId, checkpointId, checkpoint)
+}
+
 export interface ToolResult {
   success: boolean
   output: string
@@ -32,10 +159,14 @@ export interface ToolExecutionContext {
   workingDirectory: string
   agentId?: string // Current agent executing tools
   files: Map<string, string> // In-memory file system for sandboxed execution
-  checkpoints: Map<string, { name: string; files: Map<string, string>; timestamp: number }> // Time travel
+  checkpoints: Map<string, ExecutionCheckpoint> // Time travel
+  lastReplayedCheckpointId?: string
+  lastReplayedCheckpointScopes?: CheckpointScope[]
   browserLogs: Array<{ level: string; message: string; timestamp: number }> // Browser console
   screenshots: Map<string, { data: string; viewport: { width: number; height: number }; timestamp: number }> // Vision
-  dbSchema?: Record<string, { columns: Array<{ name: string; type: string; nullable: boolean }>; indexes: string[] }> // Database
+  dbSchema?: DatabaseSchema // Database
+  dbState?: DatabaseSnapshot // Database data + metadata snapshot
+  deploymentConfig?: DeploymentConfigSnapshot // Deployment snapshot for atomic rollback
   // PHASE 2: New context fields
   mcpServers: Map<string, { url: string; tools: Array<{ name: string; description: string; parameters: unknown }> }> // MCP connections
   designTokens: DesignTokens // Design system
@@ -107,6 +238,53 @@ function getLanguageFromPath(path: string): string {
   return langMap[ext || ''] || 'typescript'
 }
 
+function executeAtomicRollback(
+  ctx: ToolExecutionContext,
+  checkpointId: string,
+  confirm: boolean,
+  start: number,
+  label: string
+): ToolResult {
+  if (!confirm) {
+    return {
+      success: false,
+      output: '',
+      error: 'Rollback requires confirm: true',
+      duration: Date.now() - start,
+    }
+  }
+
+  const checkpoint = ctx.checkpoints.get(checkpointId)
+  if (!checkpoint) {
+    return {
+      success: false,
+      output: '',
+      error: `Checkpoint not found: ${checkpointId}`,
+      duration: Date.now() - start,
+    }
+  }
+
+  const restoredScopes = restoreCheckpointSnapshot(ctx, checkpoint)
+  upsertLatestStateCheckpoint(ctx, `Replayed checkpoint: ${checkpointId}`)
+  persistCheckpointState(ctx)
+
+  return {
+    success: true,
+    output: `${label}: ${checkpointId}\n` +
+      `Name: ${checkpoint.name}\n` +
+      `Scopes restored: ${formatCheckpointScopes(restoredScopes)}\n` +
+      `Files restored: ${checkpoint.files.size}\n` +
+      `Created: ${new Date(checkpoint.timestamp).toISOString()}`,
+    data: {
+      checkpointId,
+      name: checkpoint.name,
+      filesRestored: checkpoint.files.size,
+      restoredScopes,
+    },
+    duration: Date.now() - start,
+  }
+}
+
 // Tool execution handlers
 const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolExecutionContext) => Promise<ToolResult>> = {
   
@@ -120,6 +298,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     
     // Store in virtual file system
     ctx.files.set(path, content)
+    upsertLatestStateCheckpoint(ctx, `File created: ${path}`)
     
     // Return in a format the UI can parse to extract files
     const output = `Created file: ${path}${description ? ` - ${description}` : ''}\n\n\`\`\`${getLanguageFromPath(path)}\n// ${path}\n${content}\n\`\`\``
@@ -149,6 +328,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     
     const updatedContent = existingContent.replace(oldContent, newContent)
     ctx.files.set(path, updatedContent)
+    upsertLatestStateCheckpoint(ctx, `File edited: ${path}`)
     
     return {
       success: true,
@@ -184,6 +364,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     }
     
     ctx.files.delete(path)
+    upsertLatestStateCheckpoint(ctx, `File deleted: ${path}`)
     
     return {
       success: true,
@@ -409,11 +590,23 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   // DEPLOYMENT
   // ============================================
   
-  deployPreview: async (args, _ctx) => {
+  deployPreview: async (args, ctx) => {
     const { environment, branch } = args as { environment: string; branch?: string }
     const start = Date.now()
     
     const deploymentId = `dep_${Math.random().toString(36).slice(2, 10)}`
+    ctx.deploymentConfig = {
+      provider: 'preview',
+      environment,
+      branch,
+      lastDeploymentId: deploymentId,
+      updatedAt: Date.now(),
+      config: {
+        environment,
+        ...(branch ? { branch } : {}),
+      },
+    }
+    upsertLatestStateCheckpoint(ctx, `Deployment preview configured: ${deploymentId}`)
     
     return {
       success: true,
@@ -423,14 +616,23 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     }
   },
   
-  checkDeployStatus: async (args, _ctx) => {
+  checkDeployStatus: async (args, ctx) => {
     const { deploymentId } = args as { deploymentId: string }
     const start = Date.now()
+    const url = `https://${deploymentId}.torbit.dev`
+
+    ctx.deploymentConfig = {
+      ...(ctx.deploymentConfig || {}),
+      lastDeploymentId: deploymentId,
+      url,
+      updatedAt: Date.now(),
+    }
+    upsertLatestStateCheckpoint(ctx, `Deployment status checked: ${deploymentId}`)
     
     return {
       success: true,
-      output: `Deployment ${deploymentId}: ✓ Ready\nURL: https://${deploymentId}.torbit.dev`,
-      data: { deploymentId, status: 'ready', url: `https://${deploymentId}.torbit.dev` },
+      output: `Deployment ${deploymentId}: ✓ Ready\nURL: ${url}`,
+      data: { deploymentId, status: 'ready', url },
       duration: Date.now() - start,
     }
   },
@@ -439,7 +641,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   // CLOSER TOOLS - Ship to Production
   // ============================================
   
-  deployToProduction: async (args, _ctx) => {
+  deployToProduction: async (args, ctx) => {
     const { provider, projectName, environmentVariables, framework, buildCommand, outputDirectory, region } = args as {
       provider: 'vercel' | 'netlify' | 'railway'
       projectName: string
@@ -465,6 +667,22 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     
     const productionUrl = providerUrls[provider]
     const envCount = environmentVariables ? Object.keys(environmentVariables).length : 0
+    ctx.deploymentConfig = {
+      provider,
+      environment: 'production',
+      url: productionUrl,
+      lastDeploymentId: deploymentId,
+      updatedAt: Date.now(),
+      config: {
+        projectName,
+        framework,
+        buildCommand,
+        outputDirectory,
+        region,
+        environmentVariables: environmentVariables ? Object.keys(environmentVariables) : [],
+      },
+    }
+    upsertLatestStateCheckpoint(ctx, `Production deploy configured: ${deploymentId}`)
     
     return {
       success: true,
@@ -1020,6 +1238,11 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
           indexes: ['PRIMARY KEY (id)', 'FOREIGN KEY (user_id) REFERENCES users(id)'],
         },
       }
+      ctx.dbState = {
+        ...(ctx.dbState || {}),
+        schema: cloneSerializable(ctx.dbSchema),
+      }
+      upsertLatestStateCheckpoint(ctx, 'Database schema initialized')
     }
     
     const schema = ctx.dbSchema
@@ -1113,28 +1336,23 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   createCheckpoint: async (args, ctx) => {
     const { name, reason } = args as { name: string; reason?: string }
     const start = Date.now()
+    const timestamp = Date.now()
     
-    const checkpointId = `cp_${Date.now()}_${name.replace(/\s+/g, '-').toLowerCase()}`
-    
-    // Deep clone the current file state
-    const filesCopy = new Map<string, string>()
-    ctx.files.forEach((content, path) => {
-      filesCopy.set(path, content)
-    })
-    
-    ctx.checkpoints.set(checkpointId, {
-      name,
-      files: filesCopy,
-      timestamp: Date.now(),
-    })
+    const checkpointId = `cp_${timestamp}_${name.replace(/\s+/g, '-').toLowerCase()}`
+    const checkpoint = createCheckpointSnapshot(ctx, name, reason, timestamp)
+    const scopes = getCheckpointScopes(checkpoint)
+
+    ctx.checkpoints.set(checkpointId, checkpoint)
+    savePersistedCheckpoint(ctx.projectId, checkpointId, checkpoint)
     
     return {
       success: true,
       output: `💾 Checkpoint created: ${checkpointId}\n` +
         `Name: ${name}\n` +
-        `Files: ${filesCopy.size}\n` +
+        `Files: ${checkpoint.files.size}\n` +
+        `Scopes: ${formatCheckpointScopes(scopes)}\n` +
         (reason ? `Reason: ${reason}` : ''),
-      data: { checkpointId, name, fileCount: filesCopy.size },
+      data: { checkpointId, name, fileCount: checkpoint.files.size, scopes },
       duration: Date.now() - start,
     }
   },
@@ -1142,35 +1360,13 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
   rollbackToCheckpoint: async (args, ctx) => {
     const { checkpointId, confirm } = args as { checkpointId: string; confirm: boolean }
     const start = Date.now()
-    
-    if (!confirm) {
-      return { 
-        success: false, 
-        output: '', 
-        error: 'Rollback requires confirm: true' 
-      }
-    }
-    
-    const checkpoint = ctx.checkpoints.get(checkpointId)
-    if (!checkpoint) {
-      return { success: false, output: '', error: `Checkpoint not found: ${checkpointId}` }
-    }
-    
-    // Restore file state
-    ctx.files.clear()
-    checkpoint.files.forEach((content, path) => {
-      ctx.files.set(path, content)
-    })
-    
-    return {
-      success: true,
-      output: `⏪ Rolled back to checkpoint: ${checkpointId}\n` +
-        `Name: ${checkpoint.name}\n` +
-        `Files restored: ${checkpoint.files.size}\n` +
-        `Created: ${new Date(checkpoint.timestamp).toISOString()}`,
-      data: { checkpointId, name: checkpoint.name, filesRestored: checkpoint.files.size },
-      duration: Date.now() - start,
-    }
+    return executeAtomicRollback(ctx, checkpointId, confirm, start, '⏪ Rolled back to checkpoint')
+  },
+
+  atomicRollback: async (args, ctx) => {
+    const { checkpointId, confirm } = args as { checkpointId: string; confirm: boolean }
+    const start = Date.now()
+    return executeAtomicRollback(ctx, checkpointId, confirm, start, '🧨 Atomic rollback complete')
   },
   
   listCheckpoints: async (args, ctx) => {
@@ -1191,13 +1387,23 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
     }
     
     const output = checkpoints
-      .map(([id, cp]) => `  ${id}\n    Name: ${cp.name}\n    Files: ${cp.files.size}\n    Created: ${new Date(cp.timestamp).toISOString()}`)
+      .map(([id, cp]) => {
+        const scopes = formatCheckpointScopes(getCheckpointScopes(cp))
+        return `  ${id}\n    Name: ${cp.name}\n    Files: ${cp.files.size}\n    Scopes: ${scopes}\n    Created: ${new Date(cp.timestamp).toISOString()}${cp.reason ? `\n    Reason: ${cp.reason}` : ''}`
+      })
       .join('\n\n')
     
     return {
       success: true,
       output: `📋 Checkpoints (${checkpoints.length}):\n\n${output}`,
-      data: { checkpoints: checkpoints.map(([id, cp]) => ({ id, name: cp.name, files: cp.files.size })) },
+      data: {
+        checkpoints: checkpoints.map(([id, cp]) => ({
+          id,
+          name: cp.name,
+          files: cp.files.size,
+          scopes: getCheckpointScopes(cp),
+        })),
+      },
       duration: Date.now() - start,
     }
   },
@@ -1264,6 +1470,7 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
       
       const newContent = resultLines.join('\n')
       ctx.files.set(path, newContent)
+      upsertLatestStateCheckpoint(ctx, `Patch applied: ${path}`)
       
       const linesChanged = patch.split('\n').filter(l => l.startsWith('+') || l.startsWith('-')).length
       
@@ -3195,6 +3402,7 @@ export function createExecutionContext(
   options?: {
     designTokens?: DesignTokens
     initialSecrets?: Record<string, { value: string; description: string }>
+    replayLatestCheckpoint?: boolean
   }
 ): ToolExecutionContext {
   const files = new Map<string, string>()
@@ -3211,16 +3419,45 @@ export function createExecutionContext(
       secrets.set(key, info)
     })
   }
+
+  const checkpoints = loadPersistedCheckpoints(projectId)
+  let lastReplayedCheckpointId: string | undefined
+  let lastReplayedCheckpointScopes: CheckpointScope[] | undefined
+  let replayedDbState: DatabaseSnapshot | undefined
+  let replayedDeploymentConfig: DeploymentConfigSnapshot | undefined
+
+  const shouldReplayLatestCheckpoint = options?.replayLatestCheckpoint !== false
+  if (files.size === 0 && shouldReplayLatestCheckpoint && checkpoints.size > 0) {
+    const latest = Array.from(checkpoints.entries())
+      .sort((a, b) => b[1].timestamp - a[1].timestamp)[0]
+
+    if (latest) {
+      const [checkpointId, checkpoint] = latest
+      for (const [filePath, content] of checkpoint.files.entries()) {
+        files.set(filePath, content)
+      }
+      lastReplayedCheckpointId = checkpointId
+      lastReplayedCheckpointScopes = getCheckpointScopes(checkpoint)
+      replayedDbState = checkpoint.dbState ? cloneSerializable(checkpoint.dbState) : undefined
+      replayedDeploymentConfig = checkpoint.deploymentConfig
+        ? cloneSerializable(checkpoint.deploymentConfig)
+        : undefined
+    }
+  }
   
   return {
     projectId,
     userId,
     workingDirectory: '/',
     files,
-    checkpoints: new Map(),
+    checkpoints,
+    lastReplayedCheckpointId,
+    lastReplayedCheckpointScopes,
     browserLogs: [],
     screenshots: new Map(),
-    dbSchema: undefined,
+    dbSchema: replayedDbState?.schema ? cloneSerializable(replayedDbState.schema) : undefined,
+    dbState: replayedDbState,
+    deploymentConfig: replayedDeploymentConfig,
     // Phase 2: MCP Connectivity
     mcpServers: new Map(),
     // Phase 2: Design Consistency
@@ -3261,7 +3498,29 @@ export function addBrowserLog(
  */
 export function setDbSchema(
   ctx: ToolExecutionContext,
-  schema: Record<string, { columns: Array<{ name: string; type: string; nullable: boolean }>; indexes: string[] }>
+  schema: DatabaseSchema
 ): void {
-  ctx.dbSchema = schema
+  ctx.dbSchema = cloneSerializable(schema)
+  ctx.dbState = {
+    ...(ctx.dbState || {}),
+    schema: cloneSerializable(schema),
+  }
+  upsertLatestStateCheckpoint(ctx, 'Database schema updated')
+}
+
+export function setDbState(
+  ctx: ToolExecutionContext,
+  state: DatabaseSnapshot
+): void {
+  ctx.dbState = cloneSerializable(state)
+  ctx.dbSchema = state.schema ? cloneSerializable(state.schema) : undefined
+  upsertLatestStateCheckpoint(ctx, 'Database state updated')
+}
+
+export function setDeploymentConfig(
+  ctx: ToolExecutionContext,
+  config: DeploymentConfigSnapshot
+): void {
+  ctx.deploymentConfig = cloneSerializable(config)
+  upsertLatestStateCheckpoint(ctx, 'Deployment configuration updated')
 }

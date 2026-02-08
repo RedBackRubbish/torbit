@@ -77,6 +77,7 @@ export default function ChatPanel() {
     setAgentStatus,
     addFile,
     setIsGenerating,
+    projectId,
     prompt,
     files,
     projectType,
@@ -425,6 +426,7 @@ export default function ChatPanel() {
             .filter(m => m.content && m.content.trim().length > 0)
             .map(m => ({ role: m.role, content: m.content })),
           agentId,
+          projectId: projectId || undefined,
           projectType,
           capabilities,
           persistedInvariants,
@@ -496,7 +498,7 @@ export default function ChatPanel() {
       // 🔊 Complete sound (if not error)
       if (!requestFailed) generationSound.onComplete()
     }
-  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectType, capabilities, files, generationSound, generateGreeting, prompt])
+  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectId, projectType, capabilities, files, generationSound, generateGreeting, prompt])
 
   // Auto-submit initial prompt
   useEffect(() => {

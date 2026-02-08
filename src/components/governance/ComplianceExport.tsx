@@ -92,6 +92,7 @@ export function ComplianceBundlePreview({ className }: ComplianceBundlePreviewPr
     { name: 'POLICY_SNAPSHOT.json', description: 'Policy at export' },
     { name: 'ENVIRONMENT_PROFILE.json', description: 'Environment rules' },
     { name: 'HEALTH_STATUS.json', description: 'Health status' },
+    { name: 'SIGNED_AUDIT_BUNDLE.json', description: 'Signed bundle proof' },
     { name: 'MANIFEST.json', description: 'File inventory' },
   ]
   

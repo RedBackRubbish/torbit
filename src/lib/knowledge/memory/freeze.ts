@@ -138,6 +138,7 @@ export function requestOverride(
   }
   
   knowledge.overrideRequests.push(request)
+  saveSnapshot(projectId, knowledge.snapshot)
   
   return request
 }
@@ -167,6 +168,8 @@ export function resolveOverride(
     // This would typically set a temporary override flag
     // For now, we just record the approval
   }
+
+  saveSnapshot(projectId, knowledge.snapshot)
   
   return { success: true }
 }

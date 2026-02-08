@@ -11,15 +11,16 @@ import type {
   ComplianceManifest,
   ComplianceFile,
   EvidenceBundleOptions,
-  DEFAULT_BUNDLE_OPTIONS,
 } from './types'
+import { DEFAULT_BUNDLE_OPTIONS } from './types'
 import { generateAttestation, serializeAttestation } from './attestation'
 import { generateAuditReport, buildAuditReportData } from './report'
-import { getPolicy, serializePolicy } from '../policies'
-import { getActiveProfile, getActiveEnvironment, serializeConfig, getEnvironmentConfig } from '../environments'
-import { getLedger, exportLedger } from '../ledger'
+import { getPolicy } from '../policies'
+import { getActiveProfile, getActiveEnvironment } from '../environments'
+import { getLedger } from '../ledger'
 import type { HealthReport } from '../health/types'
 import type { LedgerEntry } from '../ledger/types'
+import { createHash, createHmac } from 'node:crypto'
 
 // ============================================
 // BUNDLE GENERATOR
@@ -89,14 +90,12 @@ export interface BundleGeneratorInput {
  */
 export function generateEvidenceBundle(
   input: BundleGeneratorInput,
-  options: EvidenceBundleOptions = {
-    includeLedger: true,
-    includeHealth: true,
-    includePolicy: true,
-    includeEnvironment: true,
-    redactSensitive: true,
-  }
+  options: EvidenceBundleOptions = DEFAULT_BUNDLE_OPTIONS
 ): EvidenceBundle {
+  const resolvedOptions: EvidenceBundleOptions = {
+    ...DEFAULT_BUNDLE_OPTIONS,
+    ...options,
+  }
   const now = new Date().toISOString()
   const buildId = generateBuildId()
   const environment = getActiveEnvironment()
@@ -108,19 +107,25 @@ export function generateEvidenceBundle(
   const hasDrift = input.integrations.some(i => i.hasDrift)
   const hasHealthIssues = input.healthReport.issues.length > 0
   
-  const attestation = generateAttestation({
-    exportDate: now,
-    environment,
-    policyName: policy.name ?? 'Default Policy',
-    integrationHealth: hasHealthIssues ? 'ERRORS' : 'CLEAN',
-    driftStatus: hasDrift ? 'DETECTED' : 'NONE',
-    auditorStatus: input.auditorPassed ? 'PASSED' : 'SKIPPED',
-    strategistStatus: input.strategistPassed ? 'PASSED' : 'SKIPPED',
-    integrationCount: input.integrations.length,
-    ledgerEntryCount: ledger?.entries.length ?? 0,
-    policyViolations: input.policyViolations.length,
-    environmentViolations: input.environmentViolations.length,
-  })
+  const attestation = generateAttestation(
+    {
+      exportDate: now,
+      environment,
+      policyName: policy.name ?? 'Default Policy',
+      integrationHealth: hasHealthIssues ? 'ERRORS' : 'CLEAN',
+      driftStatus: hasDrift ? 'DETECTED' : 'NONE',
+      auditorStatus: input.auditorPassed ? 'PASSED' : 'SKIPPED',
+      strategistStatus: input.strategistPassed ? 'PASSED' : 'SKIPPED',
+      integrationCount: input.integrations.length,
+      ledgerEntryCount: ledger?.entries.length ?? 0,
+      policyViolations: input.policyViolations.length,
+      environmentViolations: input.environmentViolations.length,
+    },
+    {
+      signingSecret: resolvedOptions.signingSecret,
+      signingKeyId: resolvedOptions.signingKeyId,
+    }
+  )
   
   // Generate audit report
   const reportData = buildAuditReportData({
@@ -145,7 +150,7 @@ export function generateEvidenceBundle(
   }
   
   // Redact sensitive data if needed
-  const ledgerEntries = options.redactSensitive 
+  const ledgerEntries = resolvedOptions.redactSensitive 
     ? redactLedgerEntries(ledger?.entries ?? [])
     : (ledger?.entries ?? [])
   
@@ -156,14 +161,21 @@ export function generateEvidenceBundle(
     export: exportMetadata,
     attestation,
     auditReport,
-    ledger: options.includeLedger ? ledgerEntries : [],
-    policySnapshot: options.includePolicy ? policy : {} as any,
-    environmentProfile: options.includeEnvironment ? profile : {} as any,
-    healthStatus: options.includeHealth ? input.healthReport : {} as any,
+    ledger: resolvedOptions.includeLedger ? ledgerEntries : [],
+    policySnapshot: resolvedOptions.includePolicy ? policy : {} as any,
+    environmentProfile: resolvedOptions.includeEnvironment ? profile : {} as any,
+    healthStatus: resolvedOptions.includeHealth ? input.healthReport : {} as any,
   }
   
   // Compute bundle hash (excluding the hash field itself)
   bundle.bundleHash = computeBundleHash(bundle)
+  if (resolvedOptions.signingSecret) {
+    bundle.signature = signDigest(
+      bundle.bundleHash,
+      resolvedOptions.signingSecret,
+      resolvedOptions.signingKeyId || 'torbit-default'
+    )
+  }
   
   return bundle
 }
@@ -175,7 +187,10 @@ export function generateEvidenceBundle(
 /**
  * Generate all compliance files as a map
  */
-export function generateComplianceFiles(bundle: EvidenceBundle): Map<string, string> {
+export function generateComplianceFiles(
+  bundle: EvidenceBundle,
+  options: Pick<EvidenceBundleOptions, 'signingSecret' | 'signingKeyId'> = {}
+): Map<string, string> {
   const files = new Map<string, string>()
   
   // README-DEPLOY.md (Phase 5.2 - calm, facts only)
@@ -198,9 +213,19 @@ export function generateComplianceFiles(bundle: EvidenceBundle): Map<string, str
   
   // HEALTH_STATUS.json
   files.set('HEALTH_STATUS.json', JSON.stringify(bundle.healthStatus, null, 2))
+
+  // SIGNED_AUDIT_BUNDLE.json
+  if (bundle.signature) {
+    files.set('SIGNED_AUDIT_BUNDLE.json', JSON.stringify({
+      bundleHash: bundle.bundleHash,
+      signature: bundle.signature,
+      attestationHash: bundle.attestation.hash,
+      attestationSignature: bundle.attestation.signature || null,
+    }, null, 2))
+  }
   
   // MANIFEST.json
-  const manifest = generateComplianceManifest(files, bundle.generatedAt)
+  const manifest = generateComplianceManifest(files, bundle.generatedAt, options)
   files.set('MANIFEST.json', JSON.stringify(manifest, null, 2))
   
   return files
@@ -211,7 +236,8 @@ export function generateComplianceFiles(bundle: EvidenceBundle): Map<string, str
  */
 function generateComplianceManifest(
   files: Map<string, string>,
-  generatedAt: string
+  generatedAt: string,
+  options: Pick<EvidenceBundleOptions, 'signingSecret' | 'signingKeyId'> = {}
 ): ComplianceManifest {
   const complianceFiles: ComplianceFile[] = []
   
@@ -221,16 +247,26 @@ function generateComplianceManifest(
     complianceFiles.push({
       path,
       description: getFileDescription(path),
-      hash: simpleHash(content),
+      hash: sha256Hex(content),
       size: new TextEncoder().encode(content).length,
     })
   }
-  
+
+  const manifestHash = sha256Hex(JSON.stringify(complianceFiles))
+  const signature = options.signingSecret
+    ? signDigest(
+        `sha256:${manifestHash}`,
+        options.signingSecret,
+        options.signingKeyId || 'torbit-default'
+      )
+    : undefined
+
   return {
     version: '1.0.0',
     files: complianceFiles,
     generatedAt,
-    manifestHash: simpleHash(JSON.stringify(complianceFiles)),
+    manifestHash,
+    signature,
   }
 }
 
@@ -243,6 +279,7 @@ function getFileDescription(path: string): string {
     'POLICY_SNAPSHOT.json': 'Organization policy at export time',
     'ENVIRONMENT_PROFILE.json': 'Environment profile at export time',
     'HEALTH_STATUS.json': 'Integration health status at export time',
+    'SIGNED_AUDIT_BUNDLE.json': 'Signed hash proof for customer verification',
   }
   return descriptions[path] || 'Compliance artifact'
 }
@@ -310,19 +347,22 @@ function generateBuildId(): string {
 
 function computeBundleHash(bundle: EvidenceBundle): string {
   // Create a copy without the hash field for consistent hashing
-  const { bundleHash, ...rest } = bundle
+  const { bundleHash: _bundleHash, signature: _signature, ...rest } = bundle
   const content = JSON.stringify(rest)
-  return `sha256:${simpleHash(content)}`
+  return `sha256:${sha256Hex(content)}`
 }
 
-function simpleHash(input: string): string {
-  let hash = 0
-  for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
+function sha256Hex(input: string): string {
+  return createHash('sha256').update(input).digest('hex')
+}
+
+function signDigest(digest: string, secret: string, keyId: string) {
+  return {
+    algorithm: 'HMAC-SHA256' as const,
+    keyId,
+    value: createHmac('sha256', secret).update(digest).digest('hex'),
+    signedAt: new Date().toISOString(),
   }
-  return Math.abs(hash).toString(16).padStart(16, '0')
 }
 
 function redactLedgerEntries(entries: LedgerEntry[]): LedgerEntry[] {
@@ -341,8 +381,8 @@ function redactLedgerEntries(entries: LedgerEntry[]): LedgerEntry[] {
  * Generate a minimal evidence bundle for quick exports
  */
 export function generateQuickBundle(
-  projectName: string,
-  target: string
+  _projectName: string,
+  _target: string
 ): {
   attestation: string
   manifest: ComplianceManifest

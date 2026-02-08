@@ -20,6 +20,7 @@ export type {
   ExportMetadata,
   AttestationFile,
   AttestationData,
+  SignedArtifactSignature,
   ComplianceManifest,
   ComplianceFile,
   AuditReportData,

@@ -23,7 +23,7 @@ describe('Tool Definitions', () => {
     })
 
     it('tool descriptions should be meaningful', () => {
-      for (const [name, def] of Object.entries(TOOL_DEFINITIONS)) {
+      for (const [_name, def] of Object.entries(TOOL_DEFINITIONS)) {
         expect(def.description.toLowerCase()).not.toContain('todo')
         expect(def.description.toLowerCase()).not.toContain('placeholder')
       }
@@ -51,6 +51,7 @@ describe('Tool Definitions', () => {
     it('should have checkpoint tools', () => {
       expect(TOOL_DEFINITIONS.createCheckpoint).toBeDefined()
       expect(TOOL_DEFINITIONS.rollbackToCheckpoint).toBeDefined()
+      expect(TOOL_DEFINITIONS.atomicRollback).toBeDefined()
       expect(TOOL_DEFINITIONS.listCheckpoints).toBeDefined()
     })
 

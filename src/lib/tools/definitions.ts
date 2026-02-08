@@ -207,6 +207,11 @@ export const rollbackToCheckpointSchema = z.object({
   confirm: z.boolean().describe('Must be true to confirm rollback'),
 })
 
+export const atomicRollbackSchema = z.object({
+  checkpointId: z.string().describe('ID of checkpoint to restore (files + database + deployment config)'),
+  confirm: z.boolean().describe('Must be true to confirm rollback'),
+})
+
 export const listCheckpointsSchema = z.object({
   limit: z.number().default(10).describe('Number of checkpoints to list'),
 })
@@ -540,6 +545,10 @@ export const TOOL_DEFINITIONS = {
     description: 'Rollback to a previous checkpoint. Use when an edit breaks the build or causes errors. Enables try/catch at the agent level.',
     inputSchema: rollbackToCheckpointSchema,
   },
+  atomicRollback: {
+    description: 'Perform a full atomic rollback in one action. Restores files, database snapshot, and deployment config from a checkpoint.',
+    inputSchema: atomicRollbackSchema,
+  },
   listCheckpoints: {
     description: 'List available checkpoints for rollback.',
     inputSchema: listCheckpointsSchema,
@@ -827,6 +836,7 @@ export const AGENT_TOOLS = {
     // Safety (Full Time Travel access)
     createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
     rollbackToCheckpoint: TOOL_DEFINITIONS.rollbackToCheckpoint,
+    atomicRollback: TOOL_DEFINITIONS.atomicRollback,
     listCheckpoints: TOOL_DEFINITIONS.listCheckpoints,
     // PHASE 2: Secret Management (Secret Keeper)
     listSecrets: TOOL_DEFINITIONS.listSecrets,
@@ -889,6 +899,7 @@ export const AGENT_TOOLS = {
     // Safety
     createCheckpoint: TOOL_DEFINITIONS.createCheckpoint,
     rollbackToCheckpoint: TOOL_DEFINITIONS.rollbackToCheckpoint,
+    atomicRollback: TOOL_DEFINITIONS.atomicRollback,
     listCheckpoints: TOOL_DEFINITIONS.listCheckpoints,
     // PHASE 2: MCP (for connecting external services)
     connectMcpServer: TOOL_DEFINITIONS.connectMcpServer,

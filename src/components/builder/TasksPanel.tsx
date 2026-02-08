@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTaskStore, type Task, type TaskStatus } from '@/store/tasks'
+import { useBuilderStore } from '@/store/builder'
+import { useBackgroundRuns } from '@/hooks/useBackgroundRuns'
+import type { BackgroundRun } from '@/lib/supabase/types'
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; icon: string }> = {
   'not-started': { label: 'To Do', color: '#6b7280', icon: '○' },
@@ -16,6 +19,88 @@ const PRIORITY_CONFIG = {
   medium: { label: 'Med', color: '#f59e0b' },
   high: { label: 'High', color: '#f97316' },
   critical: { label: 'Critical', color: '#ef4444' },
+}
+
+type ReleaseStageState = 'pending' | 'active' | 'complete' | 'error'
+
+function getReleaseActionLabel(run: BackgroundRun): string {
+  const metadata = run.metadata && typeof run.metadata === 'object'
+    ? run.metadata as Record<string, unknown>
+    : null
+  const action = metadata?.releaseAction
+
+  if (action === 'testflight') return 'TestFlight'
+  if (action === 'appstore-connect') return 'App Store'
+  if (action === 'android') return 'Android'
+  return 'Release'
+}
+
+function getReleaseSummary(run: BackgroundRun): string {
+  if (run.status === 'queued') {
+    if (run.next_retry_at) {
+      const retryAt = new Date(run.next_retry_at)
+      if (!Number.isNaN(retryAt.getTime())) {
+        return `Queued · retry ${retryAt.toLocaleTimeString()}`
+      }
+    }
+    return 'Queued for worker dispatch'
+  }
+
+  if (run.status === 'running') {
+    if (run.cancel_requested) {
+      return 'Cancel requested'
+    }
+    return 'Build and submit in progress'
+  }
+
+  if (run.status === 'succeeded') {
+    return 'Submitted successfully'
+  }
+
+  if (run.status === 'cancelled') {
+    return 'Cancelled'
+  }
+
+  return run.error_message || 'Failed'
+}
+
+function getReleaseStages(run: BackgroundRun): Array<{ label: string; state: ReleaseStageState }> {
+  if (run.status === 'queued') {
+    return [
+      { label: 'Req', state: 'complete' },
+      { label: 'Build', state: 'pending' },
+      { label: 'Submit', state: 'pending' },
+    ]
+  }
+
+  if (run.status === 'running') {
+    return [
+      { label: 'Req', state: 'complete' },
+      { label: 'Build', state: 'active' },
+      { label: 'Submit', state: 'pending' },
+    ]
+  }
+
+  if (run.status === 'succeeded') {
+    return [
+      { label: 'Req', state: 'complete' },
+      { label: 'Build', state: 'complete' },
+      { label: 'Submit', state: 'complete' },
+    ]
+  }
+
+  return [
+    { label: 'Req', state: 'complete' },
+    { label: 'Build', state: 'error' },
+    { label: 'Submit', state: 'pending' },
+  ]
+}
+
+function getReleaseStageClass(state: ReleaseStageState): string {
+  if (state === 'complete') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+  if (state === 'active') return 'border-blue-500/30 bg-blue-500/10 text-blue-300'
+  if (state === 'error') return 'border-red-500/30 bg-red-500/10 text-red-300'
+  return 'border-neutral-700 bg-neutral-900 text-neutral-500'
 }
 
 function TaskCard({ task, onUpdate, onDelete }: { 
@@ -149,8 +234,23 @@ function TaskCard({ task, onUpdate, onDelete }: {
  */
 export default function TasksPanel() {
   const { tasks, addTask, updateTask, deleteTask, clearCompleted } = useTaskStore()
+  const projectId = useBuilderStore((state) => state.projectId)
+  const { runs, updateRun, dispatchRun } = useBackgroundRuns(projectId)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [filter, setFilter] = useState<TaskStatus | 'all'>('all')
+  const [runActionPending, setRunActionPending] = useState<Record<string, boolean>>({})
+
+  const backgroundRuns = useMemo(() => (
+    [...runs]
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      .slice(0, 6)
+  ), [runs])
+  const latestReleaseRun = useMemo(() => (
+    backgroundRuns.find((run) => run.run_type === 'mobile-release') || null
+  ), [backgroundRuns])
+  const latestReleaseStages = useMemo(() => (
+    latestReleaseRun ? getReleaseStages(latestReleaseRun) : []
+  ), [latestReleaseRun])
 
   const filteredTasks = filter === 'all' 
     ? tasks 
@@ -173,6 +273,40 @@ export default function TasksPanel() {
       priority: 'medium',
     })
     setNewTaskTitle('')
+  }
+
+  const handleCancelRun = async (runId: string) => {
+    setRunActionPending((current) => ({ ...current, [runId]: true }))
+    try {
+      await updateRun(runId, { operation: 'request-cancel' })
+    } catch {
+      // UI action is best-effort; realtime stream will reconcile latest run state.
+    } finally {
+      setRunActionPending((current) => {
+        const next = { ...current }
+        delete next[runId]
+        return next
+      })
+    }
+  }
+
+  const handleRetryRun = async (runId: string) => {
+    setRunActionPending((current) => ({ ...current, [runId]: true }))
+    try {
+      await updateRun(runId, {
+        operation: 'retry',
+        retryAfterSeconds: 10,
+      })
+      await dispatchRun({ runId, limit: 1 })
+    } catch {
+      // UI action is best-effort; realtime stream will reconcile latest run state.
+    } finally {
+      setRunActionPending((current) => {
+        const next = { ...current }
+        delete next[runId]
+        return next
+      })
+    }
   }
 
   return (
@@ -241,6 +375,140 @@ export default function TasksPanel() {
           </button>
         ))}
       </div>
+
+      {latestReleaseRun && (
+        <div className="px-4 py-3 border-b border-neutral-800">
+          <div className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-neutral-500">Release Rail</p>
+                <p className="text-xs text-neutral-200 mt-0.5">{getReleaseActionLabel(latestReleaseRun)}</p>
+              </div>
+              <span className={`text-[10px] uppercase ${
+                latestReleaseRun.status === 'running'
+                  ? 'text-blue-400'
+                  : latestReleaseRun.status === 'queued'
+                    ? 'text-amber-400'
+                    : latestReleaseRun.status === 'succeeded'
+                      ? 'text-emerald-400'
+                      : latestReleaseRun.status === 'cancelled'
+                        ? 'text-neutral-400'
+                        : 'text-red-400'
+              }`}>
+                {latestReleaseRun.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              {latestReleaseStages.map((stage) => (
+                <div
+                  key={stage.label}
+                  className={`rounded border px-1.5 py-1 text-center text-[10px] ${getReleaseStageClass(stage.state)}`}
+                >
+                  {stage.label}
+                </div>
+              ))}
+            </div>
+
+            <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+              <motion.div
+                className={`h-full ${
+                  latestReleaseRun.status === 'failed'
+                    ? 'bg-red-500'
+                    : latestReleaseRun.status === 'succeeded'
+                      ? 'bg-emerald-500'
+                      : latestReleaseRun.status === 'cancelled'
+                        ? 'bg-neutral-500'
+                        : 'bg-blue-500'
+                }`}
+                animate={{ width: `${Math.max(5, latestReleaseRun.progress)}%` }}
+                transition={{ duration: 0.2 }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] text-neutral-500">
+              <span>{getReleaseSummary(latestReleaseRun)}</span>
+              <span>{latestReleaseRun.attempt_count}/{latestReleaseRun.max_attempts}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {backgroundRuns.length > 0 && (
+        <div className="px-4 py-3 border-b border-neutral-800 space-y-2">
+          <p className="text-[10px] uppercase tracking-wider text-neutral-500">Background Runs</p>
+          {backgroundRuns.map((run) => {
+            const canRetry = run.status === 'failed' && run.retryable && run.attempt_count < run.max_attempts
+            const canCancel = run.status === 'queued' || run.status === 'running'
+            const isPending = runActionPending[run.id] === true
+
+            return (
+            <div key={run.id} className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-neutral-200">{run.run_type}</span>
+                <span className={`text-[10px] uppercase ${
+                  run.status === 'running'
+                    ? 'text-blue-400'
+                    : run.status === 'queued'
+                      ? 'text-amber-400'
+                      : run.status === 'succeeded'
+                        ? 'text-emerald-400'
+                        : run.status === 'cancelled'
+                          ? 'text-neutral-400'
+                          : 'text-red-400'
+                }`}>
+                  {run.status}
+                </span>
+              </div>
+              <div className="mt-1.5 text-[10px] text-neutral-500 flex items-center justify-between">
+                <span>Attempt {run.attempt_count}/{run.max_attempts}</span>
+                {run.cancel_requested && run.status === 'running' ? (
+                  <span className="text-amber-400">Cancel requested</span>
+                ) : null}
+              </div>
+
+              <div className="mt-2 h-1 bg-neutral-800 rounded-full overflow-hidden">
+                <motion.div
+                  className={`h-full ${
+                    run.status === 'failed'
+                      ? 'bg-red-500'
+                      : run.status === 'succeeded'
+                        ? 'bg-emerald-500'
+                        : 'bg-blue-500'
+                  }`}
+                  animate={{ width: `${Math.max(5, run.progress)}%` }}
+                  transition={{ duration: 0.2 }}
+                />
+              </div>
+
+              {(canRetry || canCancel) && (
+                <div className="mt-2.5 flex items-center gap-2">
+                  {canCancel && (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleCancelRun(run.id)}
+                      className="px-2 py-1 text-[10px] rounded border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  {canRetry && (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleRetryRun(run.id)}
+                      className="px-2 py-1 text-[10px] rounded border border-blue-500/30 text-blue-300 hover:bg-blue-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )})}
+        </div>
+      )}
 
       {/* Task list */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
