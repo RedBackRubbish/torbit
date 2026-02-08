@@ -36,6 +36,15 @@ export function useAuth() {
   const [state, setState] = useState<AuthState>(initialState)
 
   useEffect(() => {
+    let cancelled = false
+    const SAFETY_TIMEOUT_MS = 8000
+    const safetyTimer = setTimeout(() => {
+      if (cancelled) return
+      console.warn(`[useAuth] Session initialization timed out after ${SAFETY_TIMEOUT_MS}ms`)
+      setState((s) => (s.loading ? { ...s, loading: false } : s))
+    }, SAFETY_TIMEOUT_MS)
+    const clearSafetyTimer = () => clearTimeout(safetyTimer)
+
     if (hasE2EAuthCookieClient()) {
       setState({
         user: createE2EUser(),
@@ -44,6 +53,7 @@ export function useAuth() {
         loading: false,
         error: null,
       })
+      clearSafetyTimer()
       return
     }
 
@@ -51,10 +61,10 @@ export function useAuth() {
     if (!supabase) {
       // Supabase not configured -- skip auth, just mark as loaded
       setState(s => ({ ...s, loading: false }))
+      clearSafetyTimer()
       return
     }
     const sb = supabase // non-null binding for closures
-    let cancelled = false
 
     async function loadSession() {
       try {
@@ -70,6 +80,7 @@ export function useAuth() {
           }
           console.error('[useAuth] getSession error:', error)
           setState(s => ({ ...s, loading: false, error }))
+          clearSafetyTimer()
           return
         }
 
@@ -81,6 +92,7 @@ export function useAuth() {
             session, 
             loading: false 
           }))
+          clearSafetyTimer()
           
           // Fetch profile
           const { data: profile } = await sb
@@ -95,6 +107,7 @@ export function useAuth() {
         } else {
           console.log('[useAuth] No session')
           setState(s => ({ ...s, loading: false }))
+          clearSafetyTimer()
         }
       } catch (err: any) {
         // Ignore AbortError - happens during HMR or fast unmount
@@ -105,6 +118,7 @@ export function useAuth() {
         console.error('[useAuth] Error:', err)
         if (!cancelled) {
           setState(s => ({ ...s, loading: false, error: err as Error }))
+          clearSafetyTimer()
         }
       }
     }
@@ -150,6 +164,7 @@ export function useAuth() {
 
     return () => {
       cancelled = true
+      clearSafetyTimer()
       subscription.unsubscribe()
     }
   }, [])

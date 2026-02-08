@@ -16,7 +16,7 @@ type AuthMode = 'login' | 'signup'
 
 export function LoginForm() {
   const router = useRouter()
-  const { signIn, signUp, signInWithOAuth, loading, user } = useAuthContext()
+  const { signIn, signUp, signInWithOAuth, user } = useAuthContext()
   
   const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
@@ -25,7 +25,7 @@ export function LoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (loading || !user) return
+    if (!user) return
 
     const nextPath = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('next')
@@ -35,7 +35,7 @@ export function LoginForm() {
       : '/dashboard'
 
     router.replace(safeRedirect)
-  }, [loading, user, router])
+  }, [user, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -90,7 +90,7 @@ export function LoginForm() {
         <div className="space-y-3 mb-6">
           <button
             onClick={() => handleOAuth('google')}
-            disabled={loading || isSubmitting}
+            disabled={isSubmitting}
             className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white hover:bg-neutral-100 text-black font-medium rounded-xl transition-colors disabled:opacity-50"
           >
             <Chrome className="w-5 h-5" />
@@ -98,7 +98,7 @@ export function LoginForm() {
           </button>
           <button
             onClick={() => handleOAuth('github')}
-            disabled={loading || isSubmitting}
+            disabled={isSubmitting}
             className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-neutral-800 hover:bg-neutral-700 text-white font-medium rounded-xl border border-neutral-700 transition-colors disabled:opacity-50"
           >
             <Github className="w-5 h-5" />
@@ -165,7 +165,7 @@ export function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading || isSubmitting}
+            disabled={isSubmitting}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white hover:bg-neutral-200 text-black font-semibold rounded-xl transition-colors disabled:opacity-50"
           >
             {isSubmitting ? (

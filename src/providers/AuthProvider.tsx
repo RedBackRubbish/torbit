@@ -87,20 +87,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!mounted) return
+    const SAFETY_TIMEOUT_MS = 8000
+    let safetyTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      console.warn(`[AuthProvider] Session initialization timed out after ${SAFETY_TIMEOUT_MS}ms`)
+      setLoading(false)
+    }, SAFETY_TIMEOUT_MS)
+    const clearSafetyTimer = () => {
+      if (!safetyTimer) return
+      clearTimeout(safetyTimer)
+      safetyTimer = null
+    }
 
     if (hasE2EAuthCookieClient()) {
       setUser(createE2EUser())
       setProfile(createE2EProfile())
       setSession(null)
       setLoading(false)
-      return
+      clearSafetyTimer()
+      return () => {
+        clearSafetyTimer()
+      }
     }
     
     const supabase = getClient()
     if (!supabase) {
       // Supabase not configured -- skip auth, just mark as loaded
       setLoading(false)
-      return
+      clearSafetyTimer()
+      return () => {
+        clearSafetyTimer()
+      }
     }
     let active = true
 
@@ -111,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('[AuthProvider] getSession error:', error)
         setLoading(false)
+        clearSafetyTimer()
         return
       }
       
@@ -123,7 +140,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) setProfile(profile)
       }
       
-      if (active) setLoading(false)
+      if (active) {
+        setLoading(false)
+        clearSafetyTimer()
+      }
     }).catch((err) => {
       // Ignore AbortError - happens during HMR or fast unmount, not a real error
       if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
@@ -131,7 +151,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       console.error('[AuthProvider] getSession exception:', err)
-      if (active) setLoading(false)
+      if (active) {
+        setLoading(false)
+        clearSafetyTimer()
+      }
     })
 
     // Listen for auth changes
@@ -154,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false
+      clearSafetyTimer()
       subscription.unsubscribe()
     }
   }, [mounted, fetchProfile, getClient])
