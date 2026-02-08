@@ -51,7 +51,7 @@ export default function PremiumHero() {
   const moreRef = useRef<HTMLDivElement>(null)
   
   const isLoggedIn = !authLoading && !!user
-  const builderEntryPath = isLoggedIn ? '/builder' : '/login?next=/builder'
+  const builderEntryPath = '/builder'
 
   // Close "More" dropdown when clicking outside
   useEffect(() => {

@@ -18,9 +18,6 @@ import {
 // Routes that require authentication
 const protectedRoutes = ['/builder', '/dashboard']
 
-// Routes that should redirect to dashboard if already authenticated
-const authRoutes = ['/login', '/signup']
-
 function matchesRoute(pathname: string, routes: string[]): boolean {
   return routes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
@@ -30,7 +27,6 @@ function matchesRoute(pathname: string, routes: string[]): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isProtectedRoute = matchesRoute(pathname, protectedRoutes)
-  const isAuthRoute = matchesRoute(pathname, authRoutes)
 
   // Check if user has any Supabase auth cookies
   const hasSupabaseAuthCookies = request.cookies.getAll().some((c) =>
@@ -51,11 +47,6 @@ export async function proxy(request: NextRequest) {
 
   if (hasSupabaseAuthCookies) {
     response = await updateSession(request)
-  }
-
-  // Redirect authenticated users away from auth pages
-  if (isAuthRoute && hasAuthCookies) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return response

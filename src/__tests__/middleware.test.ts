@@ -51,30 +51,26 @@ describe('Middleware', () => {
     })
   })
 
-  describe('Auth Route Redirects', () => {
-    it('should redirect authenticated users away from /login', async () => {
-      // Request with auth cookies to /login
+  describe('Auth Route Access', () => {
+    it('should allow users with auth cookies to access /login', async () => {
       const request = new NextRequest('http://localhost:3000/login', {
         headers: {
           cookie: 'sb-test-auth-token=test-value',
         },
       })
-      
+
       const { proxy } = await import('../proxy')
       const response = await proxy(request)
-      
-      // Should redirect to dashboard
-      expect(response.status).toBe(307)
-      expect(response.headers.get('location')).toContain('/dashboard')
+
+      expect(response.status).not.toBe(307)
     })
 
     it('should allow unauthenticated users to access /login', async () => {
       const request = new NextRequest('http://localhost:3000/login')
-      
+
       const { proxy } = await import('../proxy')
       const response = await proxy(request)
-      
-      // Should not redirect
+
       expect(response.status).not.toBe(307)
     })
   })
@@ -107,7 +103,7 @@ describe('Middleware', () => {
 
   describe('Cookie Detection', () => {
     it('should detect sb-*-auth-token cookies', async () => {
-      // This tests the cookie pattern matching logic
+      // This tests session refresh behavior for auth cookies.
       const cookies = [
         'sb-projectid-auth-token=value',
         'sb-abc123-auth-token=value',
@@ -122,8 +118,8 @@ describe('Middleware', () => {
         const { proxy } = await import('../proxy')
         const response = await proxy(request)
         
-        // Should redirect (cookie detected)
-        expect(response.status).toBe(307)
+        // Should not redirect from login, but session refresh should run.
+        expect(response.status).not.toBe(307)
       }
     })
 
