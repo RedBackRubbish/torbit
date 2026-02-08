@@ -5,7 +5,7 @@
  * Read-only, does not alter code.
  */
 
-import type { KnowledgeCache, TrendFact, DEFAULT_CACHE_TTL, EMPTY_CACHE } from './types'
+import type { KnowledgeCache, TrendFact } from './types'
 
 // ============================================
 // CACHE STATE

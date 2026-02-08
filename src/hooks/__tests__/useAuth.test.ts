@@ -30,6 +30,15 @@ vi.mock('@/lib/supabase/client', () => ({
 }))
 
 describe('useAuth Hook', () => {
+  async function renderSettledUseAuth() {
+    const { useAuth } = await import('../useAuth')
+    const rendered = renderHook(() => useAuth())
+    await waitFor(() => {
+      expect(rendered.result.current.loading).toBe(false)
+    })
+    return rendered
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -41,6 +50,11 @@ describe('useAuth Hook', () => {
       
       // Initial state should have loading true
       expect(result.current.loading).toBe(true)
+
+      // Let async session bootstrap settle to avoid act warnings
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false)
+      })
     })
 
     it('should have null user initially', async () => {
@@ -57,29 +71,25 @@ describe('useAuth Hook', () => {
 
   describe('Authentication Methods', () => {
     it('should expose signIn method', async () => {
-      const { useAuth } = await import('../useAuth')
-      const { result } = renderHook(() => useAuth())
+      const { result } = await renderSettledUseAuth()
       
       expect(typeof result.current.signIn).toBe('function')
     })
 
     it('should expose signUp method', async () => {
-      const { useAuth } = await import('../useAuth')
-      const { result } = renderHook(() => useAuth())
+      const { result } = await renderSettledUseAuth()
       
       expect(typeof result.current.signUp).toBe('function')
     })
 
     it('should expose signInWithOAuth method', async () => {
-      const { useAuth } = await import('../useAuth')
-      const { result } = renderHook(() => useAuth())
+      const { result } = await renderSettledUseAuth()
       
       expect(typeof result.current.signInWithOAuth).toBe('function')
     })
 
     it('should expose signOut method', async () => {
-      const { useAuth } = await import('../useAuth')
-      const { result } = renderHook(() => useAuth())
+      const { result } = await renderSettledUseAuth()
       
       expect(typeof result.current.signOut).toBe('function')
     })
@@ -105,8 +115,7 @@ describe('useAuth Hook', () => {
         error: { name: 'AuthError', message: 'Invalid credentials', status: 400 } as unknown as null,
       })
 
-      const { useAuth } = await import('../useAuth')
-      const { result } = renderHook(() => useAuth())
+      const { result } = await renderSettledUseAuth()
       
       await expect(
         result.current.signIn('test@example.com', 'wrong-password')
@@ -116,8 +125,7 @@ describe('useAuth Hook', () => {
 
   describe('OAuth Providers', () => {
     it('should support google provider', async () => {
-      const { useAuth } = await import('../useAuth')
-      const { result } = renderHook(() => useAuth())
+      const { result } = await renderSettledUseAuth()
       
       await result.current.signInWithOAuth('google')
       
@@ -130,8 +138,7 @@ describe('useAuth Hook', () => {
     })
 
     it('should support github provider', async () => {
-      const { useAuth } = await import('../useAuth')
-      const { result } = renderHook(() => useAuth())
+      const { result } = await renderSettledUseAuth()
       
       await result.current.signInWithOAuth('github')
       

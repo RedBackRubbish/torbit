@@ -21,7 +21,7 @@ describe('Activity Ledger Store', () => {
 
   describe('Recording Events', () => {
     it('should record intent', () => {
-      const { recordIntent, entries } = useLedger.getState()
+      const { recordIntent } = useLedger.getState()
       recordIntent('0x12345678')
       
       const updated = useLedger.getState().entries
@@ -124,7 +124,7 @@ describe('Activity Ledger Store', () => {
 
   describe('Queries', () => {
     it('should count completed phases', () => {
-      const { recordIntent, recordArtifactsGenerated, getCompletedCount } = useLedger.getState()
+      const { recordIntent, getCompletedCount } = useLedger.getState()
       
       expect(getCompletedCount()).toBe(0)
       
@@ -160,7 +160,6 @@ describe('Activity Ledger Store', () => {
   describe('generateLedgerHash', () => {
     it('should generate consistent hash for same input', () => {
       const hash1 = generateLedgerHash('test input')
-      const hash2 = generateLedgerHash('test input')
       
       // Note: hash includes random component, so just check format
       expect(hash1.startsWith('0x')).toBe(true)

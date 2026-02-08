@@ -9,6 +9,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import { 
   User, 
@@ -85,9 +86,12 @@ export function UserMenu() {
       >
         {/* Avatar */}
         {avatarUrl && !avatarError ? (
-          <img 
+          <Image
             src={avatarUrl} 
             alt={displayName}
+            width={28}
+            height={28}
+            unoptimized
             className="w-7 h-7 rounded-full object-cover border border-neutral-700"
             onError={() => setAvatarError(true)}
           />
@@ -116,9 +120,12 @@ export function UserMenu() {
             <div className="p-4 border-b border-neutral-800">
               <div className="flex items-center gap-3">
                 {avatarUrl && !avatarError ? (
-                  <img 
+                  <Image
                     src={avatarUrl} 
                     alt={displayName}
+                    width={40}
+                    height={40}
+                    unoptimized
                     className="w-10 h-10 rounded-full object-cover border border-neutral-700"
                     onError={() => setAvatarError(true)}
                   />

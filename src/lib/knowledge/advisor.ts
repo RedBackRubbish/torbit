@@ -220,7 +220,7 @@ function generateTitle(fact: TrendFact, category: SuggestionCategory): string {
  */
 export function prioritizeSuggestions(
   suggestions: Suggestion[],
-  context: KnowledgeContext
+  _context: KnowledgeContext
 ): Suggestion[] {
   return [...suggestions].sort((a, b) => {
     // Security always first

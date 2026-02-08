@@ -8,13 +8,11 @@
  */
 
 import type {
-  IntegrationManifest,
   IntegrationPlan,
   IntegrationResult,
   IntegrationPlatform,
   StrategistReview,
   AuditorReview,
-  GovernanceVerdict,
   ValidationError,
 } from "./types";
 import {
@@ -216,7 +214,6 @@ export async function executeIntegrationPlan(options: ExecuteOptions): Promise<E
   }
 
   // ========== INSTALL PACKAGES ==========
-  const targetKey = targetPlatform === "mobile" ? "mobile" : "frontend";
   const frontendPackages = getAllowedPackages(manifest, "frontend");
   const backendPackages = getAllowedPackages(manifest, "backend");
   const mobilePackages = targetPlatform === "mobile" ? getAllowedPackages(manifest, "mobile") : {};

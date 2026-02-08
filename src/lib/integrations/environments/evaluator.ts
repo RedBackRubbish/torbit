@@ -18,7 +18,6 @@ import type {
   EnvironmentProfile,
   EnvironmentViolation,
   EnvironmentEvaluation,
-  EnvironmentViolationType,
 } from './types'
 import { getActiveProfile, getActiveEnvironment } from './loader'
 import type { IntegrationManifest, IntegrationCategory } from '../types'
@@ -90,7 +89,6 @@ export async function wouldBeAllowedIn(
   context: EnvironmentContext
 ): Promise<boolean> {
   // Dynamically import to avoid circular dependency
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const loader = await import('./loader')
   const profile = loader.getProfile(env)
   

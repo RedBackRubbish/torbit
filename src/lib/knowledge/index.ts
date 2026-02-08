@@ -229,7 +229,6 @@ import { validateFacts, validatePolicyCompliance } from './validator'
 import { 
   generateSuggestions, 
   shouldShowSuggestions,
-  MAX_SUGGESTIONS,
 } from './advisor'
 import { 
   createContextCreatedEvent,

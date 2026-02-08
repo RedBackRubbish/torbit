@@ -9,7 +9,6 @@
  * - Why decisions were made
  */
 
-import type { LedgerEntry, LedgerEventType } from '../integrations/ledger'
 import type { TrendFact, Suggestion, KnowledgeContext } from './types'
 
 // ============================================

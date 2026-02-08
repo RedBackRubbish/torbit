@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { NervousSystem, type PainSignal, type ErrorType } from './nervous-system'
+import { NervousSystem, type PainSignal } from './nervous-system'
 
 describe('NervousSystem', () => {
   beforeEach(() => {

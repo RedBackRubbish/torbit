@@ -9,6 +9,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { useBilling } from '@/hooks/useBilling'
@@ -163,9 +164,12 @@ function SettingsPageContent() {
                     <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                       <div className="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center">
                         {profile?.avatar_url ? (
-                          <img 
+                          <Image
                             src={profile.avatar_url} 
-                            alt="" 
+                            alt={profile.full_name ? `${profile.full_name} avatar` : 'User avatar'}
+                            width={64}
+                            height={64}
+                            unoptimized
                             className="w-full h-full rounded-full object-cover"
                           />
                         ) : (

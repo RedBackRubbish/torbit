@@ -17,7 +17,6 @@ import type {
   IntegrationLedger,
   LedgerQueryOptions,
   LedgerExport,
-  LedgerWriteResult,
   GovernanceSnapshot,
   ConsentRecord,
   PackageRecord,
@@ -31,7 +30,6 @@ import type {
 // ============================================
 
 const LEDGER_VERSION = '1.0.0' as const
-const LEDGER_PATH = '.integrations/ledger.json'
 
 // ============================================
 // UUID GENERATION

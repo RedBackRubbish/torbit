@@ -25,7 +25,6 @@ export function createAgentTools(
 ) {
   const agentToolDefs = AGENT_TOOLS[agentId] as Record<string, ToolDef>
   
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const aiSdkTools: Record<string, ReturnType<typeof tool<any, any>>> = {}
   
   for (const [toolName, toolDef] of Object.entries(agentToolDefs)) {

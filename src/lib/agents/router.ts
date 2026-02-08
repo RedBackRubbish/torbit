@@ -234,8 +234,6 @@ Context:
     prompt: string,
     context?: { hasImages?: boolean }
   ): RoutingDecision | null {
-    const lower = prompt.toLowerCase()
-
     // Vision tasks
     if (context?.hasImages || /screenshot|image|design|figma|mockup|ui\s*\/\s*ux/i.test(prompt)) {
       return {
@@ -265,7 +263,7 @@ Context:
     }
 
     // Testing tasks
-    if (/\b(test|spec|e2e|unit test|playwright|vitest|jest)\b/i.test(prompt)) {
+    if (/\b(tests?|specs?|e2e|unit tests?|playwright|vitest|jest)\b/i.test(prompt)) {
       return {
         targetAgent: 'qa',
         modelTier: 'sonnet',
@@ -328,8 +326,6 @@ Context:
    * Fallback decision when routing fails
    */
   private fallbackDecision(prompt: string): RoutingDecision {
-    const lower = prompt.toLowerCase()
-
     // Basic keyword matching for fallback
     let targetAgent: AgentId = 'architect'
     let category: TaskCategory = 'code-generation'

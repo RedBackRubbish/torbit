@@ -34,13 +34,6 @@ function getAdminClient() {
   })
 }
 
-// Disable body parsing - we need raw body for signature verification
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     // 1. Get raw body for signature verification

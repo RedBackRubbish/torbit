@@ -11,7 +11,7 @@
  */
 
 import type { TrendFact, Suggestion, KnowledgeContext } from './types'
-import { getSource, isApprovedSource } from './sources'
+import { isApprovedSource } from './sources'
 
 // ============================================
 // VALIDATION RESULTS

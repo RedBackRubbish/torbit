@@ -3,14 +3,29 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { KimiRouter, CONFIDENCE_THRESHOLDS, CRITICAL_PATH_PATTERNS, isCriticalPath, type RoutingDecision } from '../router'
+import { KimiRouter, CONFIDENCE_THRESHOLDS, CRITICAL_PATH_PATTERNS, isCriticalPath } from '../router'
 
 // Mock the Kimi provider
 vi.mock('../../providers/kimi', () => ({
   createKimiClient: vi.fn(() => ({
     chat: {
       completions: {
-        create: vi.fn(),
+        create: vi.fn(async () => ({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                targetAgent: 'architect',
+                modelTier: 'sonnet',
+                complexity: 'moderate',
+                category: 'code-generation',
+                requiresVision: false,
+                useThinking: false,
+                reasoning: 'Mocked router response',
+                confidence: 0.8,
+              }),
+            },
+          }],
+        })),
       },
     },
   })),

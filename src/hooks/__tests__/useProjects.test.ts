@@ -78,6 +78,15 @@ vi.mock('@/lib/supabase/client', () => ({
 }))
 
 describe('useProjects Hook', () => {
+  async function renderSettledUseProjects() {
+    const { useProjects } = await import('../useProjects')
+    const rendered = renderHook(() => useProjects())
+    await waitFor(() => {
+      expect(rendered.result.current.loading).toBe(false)
+    })
+    return rendered
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -88,6 +97,11 @@ describe('useProjects Hook', () => {
       const { result } = renderHook(() => useProjects())
       
       expect(result.current.loading).toBe(true)
+
+      // Let async bootstrap settle to avoid act warnings
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false)
+      })
     })
 
     it('should have empty projects initially', async () => {
@@ -95,6 +109,11 @@ describe('useProjects Hook', () => {
       const { result } = renderHook(() => useProjects())
       
       expect(result.current.projects).toEqual([])
+
+      // Let async bootstrap settle to avoid act warnings
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false)
+      })
     })
   })
 
@@ -111,8 +130,7 @@ describe('useProjects Hook', () => {
     })
 
     it('should order projects by updated_at descending', async () => {
-      const { useProjects } = await import('../useProjects')
-      renderHook(() => useProjects())
+      await renderSettledUseProjects()
       
       await waitFor(() => {
         expect(mockSupabase.from).toHaveBeenCalledWith('projects')
@@ -120,8 +138,7 @@ describe('useProjects Hook', () => {
     })
 
     it('should subscribe to realtime project changes', async () => {
-      const { useProjects } = await import('../useProjects')
-      renderHook(() => useProjects())
+      await renderSettledUseProjects()
 
       await waitFor(() => {
         expect(mockSupabase.channel).toHaveBeenCalled()
@@ -131,36 +148,31 @@ describe('useProjects Hook', () => {
 
   describe('CRUD Operations', () => {
     it('should expose createProject method', async () => {
-      const { useProjects } = await import('../useProjects')
-      const { result } = renderHook(() => useProjects())
+      const { result } = await renderSettledUseProjects()
       
       expect(typeof result.current.createProject).toBe('function')
     })
 
     it('should expose updateProject method', async () => {
-      const { useProjects } = await import('../useProjects')
-      const { result } = renderHook(() => useProjects())
+      const { result } = await renderSettledUseProjects()
       
       expect(typeof result.current.updateProject).toBe('function')
     })
 
     it('should expose deleteProject method', async () => {
-      const { useProjects } = await import('../useProjects')
-      const { result } = renderHook(() => useProjects())
+      const { result } = await renderSettledUseProjects()
       
       expect(typeof result.current.deleteProject).toBe('function')
     })
 
     it('should expose saveFiles method', async () => {
-      const { useProjects } = await import('../useProjects')
-      const { result } = renderHook(() => useProjects())
+      const { result } = await renderSettledUseProjects()
       
       expect(typeof result.current.saveFiles).toBe('function')
     })
 
     it('should expose fetchProjects method', async () => {
-      const { useProjects } = await import('../useProjects')
-      const { result } = renderHook(() => useProjects())
+      const { result } = await renderSettledUseProjects()
       
       expect(typeof result.current.fetchProjects).toBe('function')
     })

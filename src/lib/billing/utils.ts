@@ -259,7 +259,6 @@ export async function getBillingStatus(userId: string) {
   let nextRefillAt: Date | null = null
   if (tier === 'free' && fuelBalance?.lastDailyRefillAt) {
     // Next midnight in user's timezone
-    const userTz = fuelBalance.userTimezone || 'UTC'
     const lastRefill = new Date(fuelBalance.lastDailyRefillAt)
     nextRefillAt = new Date(lastRefill)
     nextRefillAt.setDate(nextRefillAt.getDate() + 1)

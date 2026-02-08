@@ -2,7 +2,7 @@
  * Tests for Kimi K2.5 Provider
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   KIMI_MODEL_CAPABILITIES,
   modelSupports,

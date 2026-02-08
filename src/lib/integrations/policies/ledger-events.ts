@@ -8,7 +8,7 @@
 import type { LedgerEntry } from '../ledger/types'
 import { createEntry } from '../ledger/service'
 import type { PolicyEvaluation } from './types'
-import type { PolicyLedgerEvent, EnforcementResult } from './enforcement'
+import type { EnforcementResult } from './enforcement'
 import type { OperationType } from './evaluator'
 
 // ============================================

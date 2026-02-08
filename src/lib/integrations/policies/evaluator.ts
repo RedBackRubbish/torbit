@@ -11,7 +11,6 @@ import type {
   OrganizationPolicy,
   PolicyViolation,
   PolicyEvaluation,
-  PolicyViolationType,
 } from './types'
 import { getPolicy } from './loader'
 import type { IntegrationManifest, IntegrationCategory } from '../types'

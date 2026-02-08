@@ -790,7 +790,7 @@ The best designs don't look fancy. They look OBVIOUS.
 // when we detect a user's style intent, we recommend a DaisyUI theme name
 // rather than injecting raw hex colors that conflict with DaisyUI's theme system.
 
-const DAISYUI_THEME_MAP: Record<keyof typeof DESIGN_PRESETS, { theme: string; alt: string }> = {
+export const DAISYUI_THEME_MAP: Record<keyof typeof DESIGN_PRESETS, { theme: string; alt: string }> = {
   premiumDark: { theme: 'dark', alt: 'business' },
   cleanLight: { theme: 'light', alt: 'corporate' },
   saasProf: { theme: 'corporate', alt: 'light' },
