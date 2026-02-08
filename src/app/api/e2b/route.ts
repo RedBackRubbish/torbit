@@ -83,8 +83,11 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.E2B_API_KEY
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'E2B_API_KEY not configured' },
-        { status: 500 }
+        {
+          error: 'E2B_API_KEY not configured',
+          code: 'E2B_NOT_CONFIGURED',
+        },
+        { status: 503 }
       )
     }
 

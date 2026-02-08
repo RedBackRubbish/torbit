@@ -46,11 +46,24 @@ interface RuntimeCheckpoint {
 }
 
 const STATE_VERSION = 1
+let persistenceWriteDisabled = false
+let hasLoggedPersistenceWarning = false
+
+function logPersistenceWarning(error: unknown): void {
+  if (hasLoggedPersistenceWarning) return
+  hasLoggedPersistenceWarning = true
+  const message = error instanceof Error ? error.message : 'Unknown persistence error'
+  console.warn(`[ProjectState] Persistence writes disabled: ${message}`)
+}
 
 function getDataRoot(): string {
   const configured = process.env.TORBIT_DATA_DIR
   if (configured && configured.trim().length > 0) {
     return path.resolve(configured)
+  }
+  // Serverless runtimes often mount process.cwd() as read-only.
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.join('/tmp', 'torbit-data')
   }
   return path.join(process.cwd(), '.torbit-data')
 }
@@ -102,29 +115,43 @@ function readProjectState(projectId: string): PersistedProjectState {
 }
 
 function atomicWriteProjectState(projectId: string, state: PersistedProjectState): void {
+  if (persistenceWriteDisabled) return
+
   const filePath = getProjectStateFile(projectId)
-  ensureProjectDirectory(filePath)
+  try {
+    ensureProjectDirectory(filePath)
 
-  const finalState: PersistedProjectState = {
-    version: STATE_VERSION,
-    updatedAt: new Date().toISOString(),
-    knowledge: state.knowledge,
-    memoryEvents: state.memoryEvents || [],
-    checkpoints: state.checkpoints || {},
+    const finalState: PersistedProjectState = {
+      version: STATE_VERSION,
+      updatedAt: new Date().toISOString(),
+      knowledge: state.knowledge,
+      memoryEvents: state.memoryEvents || [],
+      checkpoints: state.checkpoints || {},
+    }
+
+    const tempPath = `${filePath}.tmp`
+    fs.writeFileSync(tempPath, `${JSON.stringify(finalState, null, 2)}\n`, 'utf8')
+    fs.renameSync(tempPath, filePath)
+  } catch (error) {
+    persistenceWriteDisabled = true
+    logPersistenceWarning(error)
   }
-
-  const tempPath = `${filePath}.tmp`
-  fs.writeFileSync(tempPath, `${JSON.stringify(finalState, null, 2)}\n`, 'utf8')
-  fs.renameSync(tempPath, filePath)
 }
 
 function withProjectState(
   projectId: string,
   updater: (current: PersistedProjectState) => PersistedProjectState
 ): void {
-  const current = readProjectState(projectId)
-  const updated = updater(current)
-  atomicWriteProjectState(projectId, updated)
+  if (persistenceWriteDisabled) return
+
+  try {
+    const current = readProjectState(projectId)
+    const updated = updater(current)
+    atomicWriteProjectState(projectId, updated)
+  } catch (error) {
+    persistenceWriteDisabled = true
+    logPersistenceWarning(error)
+  }
 }
 
 function toRecord(files: Map<string, string>): Record<string, string> {

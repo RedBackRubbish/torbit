@@ -56,6 +56,18 @@ const E2BContext = createContext<E2BContextValue | null>(null)
 // Module-level flag to prevent duplicate boot logs in Strict Mode
 let hasLoggedBoot = false
 
+class E2BApiError extends Error {
+  code?: string
+  status: number
+
+  constructor(message: string, status: number, code?: string) {
+    super(message)
+    this.name = 'E2BApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
 // Simple hash generator for verification (deterministic)
 function generateHash(input: string): string {
   let hash = 0
@@ -93,8 +105,18 @@ async function e2bApi(action: string, params: Record<string, unknown> = {}) {
   })
   
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'E2B API error')
+    let message = 'E2B API error'
+    let code: string | undefined
+
+    try {
+      const error = await response.json() as { error?: string; code?: string }
+      message = error.error || message
+      code = error.code
+    } catch {
+      // Response body may be empty/non-JSON
+    }
+
+    throw new E2BApiError(message, response.status, code)
   }
   
   return response.json()
@@ -171,6 +193,16 @@ export function E2BProvider({ children }: E2BProviderProps) {
       } catch (err) {
         if (!mounted) return
         const msg = err instanceof Error ? err.message : 'Unknown error'
+        const errorCode = err instanceof E2BApiError ? err.code : undefined
+
+        if (errorCode === 'E2B_NOT_CONFIGURED') {
+          addLog('ℹ️ Live preview disabled: E2B_API_KEY is not configured', 'warning')
+          setError('Live preview is disabled for this deployment.')
+          setIsBooting(false)
+          setIsReady(false)
+          return
+        }
+
         console.error('❌ E2B boot failed:', msg)
         addLog(`❌ E2B boot failed: ${msg}`, 'error')
         setError(msg)

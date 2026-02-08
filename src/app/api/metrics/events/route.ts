@@ -17,6 +17,22 @@ const MetricsBatchSchema = z.object({
   events: z.array(MetricEventSchema).min(1).max(50),
 })
 
+function isMissingProductEventsTableError(error: {
+  code?: string
+  message?: string
+  details?: string
+  hint?: string
+} | null): boolean {
+  if (!error) return false
+  if (error.code === '42P01' || error.code === 'PGRST205') return true
+
+  const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase()
+  return (
+    text.includes('product_events') &&
+    (text.includes('does not exist') || text.includes('schema cache') || text.includes('not found'))
+  )
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -53,6 +69,14 @@ export async function POST(request: NextRequest) {
       .insert(rows)
 
     if (error) {
+      if (isMissingProductEventsTableError(error)) {
+        return NextResponse.json({
+          success: true,
+          count: 0,
+          disabled: true,
+          reason: 'product_events table missing',
+        })
+      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 

@@ -418,9 +418,13 @@ export default function ChatPanel() {
         }
       }
       
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 75000)
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers,
+        signal: controller.signal,
         body: JSON.stringify({
           messages: [...messages, { role: 'user', content: messageContent }]
             .filter(m => m.content && m.content.trim().length > 0)
@@ -431,9 +435,19 @@ export default function ChatPanel() {
           capabilities,
           persistedInvariants,
         }),
-      })
+      }).finally(() => clearTimeout(timeoutId))
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      if (!response.ok) {
+        let serverMessage = ''
+        try {
+          const payload = await response.json() as { error?: string }
+          serverMessage = payload.error || ''
+        } catch {
+          // Ignore non-JSON body
+        }
+        const message = serverMessage || `HTTP ${response.status}: ${response.statusText}`
+        throw new Error(message)
+      }
 
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No response body')
@@ -486,9 +500,12 @@ export default function ChatPanel() {
       setAgentStatus(agentId, 'error', 'Failed')
       // 🔊 Error sound
       generationSound.onError()
+      const errorMessage = error instanceof Error && error.name === 'AbortError'
+        ? 'Request timed out. Please try again.'
+        : (error instanceof Error ? error.message : 'Unknown error')
       setMessages(prev => prev.map(m => 
         m.id === assistantId 
-          ? { ...m, content: '', error: { type: 'network', message: error instanceof Error ? error.message : 'Unknown error', retryable: true }}
+          ? { ...m, content: '', error: { type: 'network', message: errorMessage, retryable: true }}
           : m
       ))
     } finally {

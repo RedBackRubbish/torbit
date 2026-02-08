@@ -421,28 +421,29 @@ ${assumptionPreview ? `- Assumptions:\n${assumptionPreview}` : '- Assumptions: n
         // Retry wrapper for transient errors
         const executeWithRetry = async (attempt = 1): Promise<void> => {
           const sentToolCalls = new Set<string>()
-          const orchestrator = createOrchestrator({
-            projectId,
-            userId,
-            enableKimiRouter: true,
-            fastRouting: true,
-          })
-
-          if (attempt === 1) {
-            const replayedCheckpointId = orchestrator.getContext().lastReplayedCheckpointId
-            const replayedScopes = orchestrator.getContext().lastReplayedCheckpointScopes
-            if (replayedCheckpointId) {
-              const scopeSuffix = replayedScopes && replayedScopes.length > 0
-                ? ` (${replayedScopes.join(', ')})`
-                : ''
-              sendChunk({
-                type: 'proof',
-                proof: [{ label: `Resumed from checkpoint ${replayedCheckpointId}${scopeSuffix}`, status: 'verified' }],
-              })
-            }
-          }
 
           try {
+            const orchestrator = createOrchestrator({
+              projectId,
+              userId,
+              enableKimiRouter: true,
+              fastRouting: true,
+            })
+
+            if (attempt === 1) {
+              const replayedCheckpointId = orchestrator.getContext().lastReplayedCheckpointId
+              const replayedScopes = orchestrator.getContext().lastReplayedCheckpointScopes
+              if (replayedCheckpointId) {
+                const scopeSuffix = replayedScopes && replayedScopes.length > 0
+                  ? ` (${replayedScopes.join(', ')})`
+                  : ''
+                sendChunk({
+                  type: 'proof',
+                  proof: [{ label: `Resumed from checkpoint ${replayedCheckpointId}${scopeSuffix}`, status: 'verified' }],
+                })
+              }
+            }
+
             const result = await orchestrator.executeAgent(
               agentId,
               messages[messages.length - 1]?.content || '',

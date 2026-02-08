@@ -116,7 +116,7 @@ function BuilderPageContent() {
   }, [projectId, upsertPresence])
 
   useEffect(() => {
-    void flushQueuedTelemetryEvents()
+    void flushQueuedTelemetryEvents().catch(() => {})
   }, [])
 
   useEffect(() => {

@@ -8,14 +8,36 @@ export interface PresenceMember extends ProjectPresence {
   isCurrentUser: boolean
 }
 
+function isMissingPresenceTableError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+
+  const error = err as {
+    code?: string
+    message?: string
+    details?: string
+    hint?: string
+  }
+
+  if (error.code === '42P01' || error.code === 'PGRST205') {
+    return true
+  }
+
+  const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase()
+  return (
+    text.includes('project_presence') &&
+    (text.includes('does not exist') || text.includes('schema cache') || text.includes('not found'))
+  )
+}
+
 export function useProjectPresence(projectId: string | null) {
   const [presence, setPresence] = useState<ProjectPresence[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const [presenceSupported, setPresenceSupported] = useState(true)
 
   const fetchPresence = useCallback(async () => {
-    if (!projectId) {
+    if (!projectId || !presenceSupported) {
       setPresence([])
       return
     }
@@ -46,14 +68,20 @@ export function useProjectPresence(projectId: string | null) {
 
       setPresence(data || [])
     } catch (err) {
+      if (isMissingPresenceTableError(err)) {
+        setPresence([])
+        setError(null)
+        setPresenceSupported(false)
+        return
+      }
       setError(err instanceof Error ? err : new Error('Failed to fetch project presence.'))
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [presenceSupported, projectId])
 
   useEffect(() => {
-    if (!projectId) {
+    if (!projectId || !presenceSupported) {
       setPresence([])
       return
     }
@@ -99,13 +127,13 @@ export function useProjectPresence(projectId: string | null) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [fetchPresence, projectId])
+  }, [fetchPresence, presenceSupported, projectId])
 
   const upsertPresence = useCallback(async (
     status: ProjectPresence['status'] = 'online',
     cursor?: Json | null
   ) => {
-    if (!projectId) return
+    if (!projectId || !presenceSupported) return
 
     const supabase = getSupabase()
     if (!supabase) return
@@ -134,9 +162,13 @@ export function useProjectPresence(projectId: string | null) {
       })
 
     if (upsertError) {
+      if (isMissingPresenceTableError(upsertError)) {
+        setPresenceSupported(false)
+        return
+      }
       throw upsertError
     }
-  }, [currentUserId, projectId])
+  }, [currentUserId, presenceSupported, projectId])
 
   const members = useMemo<PresenceMember[]>(() => (
     presence.map((member) => ({

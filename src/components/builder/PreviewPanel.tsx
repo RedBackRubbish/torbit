@@ -373,6 +373,20 @@ function PreviewContent({
   }
 
   if (error) {
+    const isE2BDisabled =
+      error.includes('E2B_API_KEY not configured') ||
+      error.includes('Live preview is disabled')
+
+    if (isE2BDisabled) {
+      return (
+        <StatusCard
+          icon="empty"
+          title="Live preview unavailable"
+          subtitle="Set E2B_API_KEY to enable runtime preview. Code generation still works."
+        />
+      )
+    }
+
     return (
       <StatusCard 
         icon="error" 
