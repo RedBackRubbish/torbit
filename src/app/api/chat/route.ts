@@ -134,7 +134,7 @@ function classifyError(error: unknown): TorbitError {
   if (msg.includes('credit balance') || msg.includes('billing') || msg.includes('purchase credits')) {
     return {
       type: 'auth',
-      message: 'API credits exhausted. The system is falling back to Gemini.',
+      message: 'API credits exhausted for the current provider. Add credits or configure a backup provider key.',
       retryable: false,
     }
   }

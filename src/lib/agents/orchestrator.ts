@@ -112,12 +112,13 @@ const GOOGLE_PRO_MODEL = 'gemini-2.5-pro'
 const GOOGLE_FLASH_MODEL = 'gemini-2.0-flash'
 let codexFallbackWarningShown = false
 
-/**
- * Select model based on task complexity (legacy fallback)
- * Primary: Kimi K2.5 for all building (via models.ts)
- * Governance: Claude for oversight (different brain principle)
- */
-function selectModel(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: ModelTier) {
+type ModelCandidate = {
+  provider: 'anthropic' | 'openai' | 'google'
+  label: string
+  model: ReturnType<typeof anthropic> | ReturnType<typeof openai> | ReturnType<typeof google>
+}
+
+function getModelCandidates(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: ModelTier): ModelCandidate[] {
   const tier: ModelTier = preferredTier ?? (
     taskComplexity === 'high' ? 'opus' : taskComplexity === 'medium' ? 'sonnet' : 'flash'
   )
@@ -125,9 +126,74 @@ function selectModel(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: 
   const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY)
   const hasGoogle = Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY)
   const hasOpenAI = Boolean(process.env.OPENAI_API_KEY)
+  const candidates: ModelCandidate[] = []
+  const seen = new Set<string>()
 
-  if (USE_CODEX_PRIMARY && hasOpenAI) {
-    return tier === 'flash' ? openai(CODEX_FAST_MODEL) : openai(CODEX_PRIMARY_MODEL)
+  const addCandidate = (candidate: ModelCandidate) => {
+    const key = `${candidate.provider}:${candidate.label}`
+    if (seen.has(key)) return
+    seen.add(key)
+    candidates.push(candidate)
+  }
+
+  if (tier === 'flash') {
+    if (hasGoogle) {
+      addCandidate({
+        provider: 'google',
+        label: GOOGLE_FLASH_MODEL,
+        model: google(GOOGLE_FLASH_MODEL),
+      })
+    }
+    if (hasOpenAI) {
+      const fastModel = USE_CODEX_PRIMARY ? CODEX_FAST_MODEL : OPENAI_FALLBACK_MODEL
+      addCandidate({
+        provider: 'openai',
+        label: fastModel,
+        model: openai(fastModel),
+      })
+    }
+    if (hasAnthropic) {
+      addCandidate({
+        provider: 'anthropic',
+        label: ANTHROPIC_SONNET_MODEL,
+        model: anthropic(ANTHROPIC_SONNET_MODEL),
+      })
+    }
+  } else {
+    if (USE_CODEX_PRIMARY && hasOpenAI) {
+      addCandidate({
+        provider: 'openai',
+        label: CODEX_PRIMARY_MODEL,
+        model: openai(CODEX_PRIMARY_MODEL),
+      })
+    }
+
+    if (hasAnthropic) {
+      const anthropicModel = tier === 'opus' ? ANTHROPIC_OPUS_MODEL : ANTHROPIC_SONNET_MODEL
+      addCandidate({
+        provider: 'anthropic',
+        label: anthropicModel,
+        model: anthropic(anthropicModel),
+      })
+    }
+
+    if (hasOpenAI) {
+      const openaiModel = OPENAI_FALLBACK_MODEL
+      addCandidate({
+        provider: 'openai',
+        label: openaiModel,
+        model: openai(openaiModel),
+      })
+    }
+
+    if (hasGoogle) {
+      const googleModel = tier === 'opus' ? GOOGLE_PRO_MODEL : GOOGLE_FLASH_MODEL
+      addCandidate({
+        provider: 'google',
+        label: googleModel,
+        model: google(googleModel),
+      })
+    }
   }
 
   if (USE_CODEX_PRIMARY && !hasOpenAI && !codexFallbackWarningShown) {
@@ -135,18 +201,33 @@ function selectModel(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: 
     console.warn('[Orchestrator] TORBIT_USE_CODEX_PRIMARY=true but OPENAI_API_KEY is missing. Falling back to available providers.')
   }
 
-  if (tier === 'flash') {
-    if (hasGoogle) return google(GOOGLE_FLASH_MODEL)
-    if (hasOpenAI) return openai(CODEX_FAST_MODEL)
-    if (hasAnthropic) return anthropic(ANTHROPIC_SONNET_MODEL)
-  } else {
-    if (hasAnthropic) return anthropic(tier === 'opus' ? ANTHROPIC_OPUS_MODEL : ANTHROPIC_SONNET_MODEL)
-    if (hasOpenAI) return openai(OPENAI_FALLBACK_MODEL)
-    if (hasGoogle) return google(tier === 'opus' ? GOOGLE_PRO_MODEL : GOOGLE_FLASH_MODEL)
+  if (candidates.length === 0) {
+    throw new Error(
+      'No AI provider configured. Set at least one of OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY.'
+    )
   }
 
-  throw new Error(
-    'No AI provider configured. Set at least one of OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY.'
+  return candidates
+}
+
+function shouldFallbackToNextModel(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const msg = error.message.toLowerCase()
+  return (
+    msg.includes('credit balance') ||
+    msg.includes('purchase credits') ||
+    msg.includes('billing') ||
+    msg.includes('api key') ||
+    msg.includes('authentication') ||
+    msg.includes('unauthorized') ||
+    msg.includes('forbidden') ||
+    msg.includes('status code: 401') ||
+    msg.includes('status code: 403') ||
+    msg.includes('status code: 429') ||
+    msg.includes('too many requests') ||
+    msg.includes('rate limit') ||
+    msg.includes('model_not_found') ||
+    msg.includes('does not exist or you do not have access')
   )
 }
 
@@ -326,13 +407,6 @@ export class TorbitOrchestrator {
     }
   ): Promise<AgentResult> {
     const start = Date.now()
-    const toolCalls: AgentResult['toolCalls'] = []
-    
-    // Track which tool calls we've seen to avoid duplicates
-    const seenToolCalls = new Set<string>()
-    // Map tool call IDs to start times for duration tracking
-    const toolStartTimes = new Map<string, number>()
-    const toolCallArgs = new Map<string, Record<string, unknown>>()
     
     // Check circuit breaker before execution
     const circuitCheck = checkCircuitBreaker(
@@ -350,7 +424,7 @@ export class TorbitOrchestrator {
       }
     }
     
-    const model = selectModel('medium', options?.modelTier)
+    const modelCandidates = getModelCandidates('medium', options?.modelTier)
     const tools = getToolsForAgent(agentId, this.context)
     const systemPrompt = options?.systemPrompt ?? AGENT_PROMPTS[agentId]
     const sanitizedMessages = options?.messages
@@ -360,110 +434,138 @@ export class TorbitOrchestrator {
     // Map model tier to fuel model tier for cost calculation
     const fuelModelTier: FuelModelTier = options?.modelTier === 'opus' ? 'opus' :
                                           options?.modelTier === 'sonnet' ? 'sonnet' : 'flash'
-    
-    try {
-      const requestBody = sanitizedMessages && sanitizedMessages.length > 0
-        ? { messages: sanitizedMessages }
-        : { prompt }
+    const requestBody = sanitizedMessages && sanitizedMessages.length > 0
+      ? { messages: sanitizedMessages }
+      : { prompt }
+    const fallbackErrors: string[] = []
+    let lastError: unknown = null
+    let lastToolCalls: AgentResult['toolCalls'] = []
 
-      const result = await streamText({
-        model,
-        system: systemPrompt,
-        ...requestBody,
-        tools,
-        ...(options?.maxTokens ? { maxTokens: options.maxTokens } : {}),
-        stopWhen: stepCountIs(options?.maxSteps ?? 10),
-      })
-      
-      // Use fullStream to get tool calls IMMEDIATELY as they happen
-      // This enables real-time file visibility before execution completes
-      let output = ''
-      for await (const part of result.fullStream) {
-        if (part.type === 'text-delta') {
-          output += part.text
-          options?.onTextDelta?.(part.text)
-        } else if (part.type === 'error') {
-          const streamError = (part as { error?: unknown }).error
-          if (streamError instanceof Error) {
-            throw streamError
-          }
-          if (typeof streamError === 'string') {
-            throw new Error(streamError)
-          }
-          throw new Error(streamError ? JSON.stringify(streamError) : 'Model streaming failed')
-        } else if (part.type === 'tool-call') {
-          // Stream tool call immediately when it starts (with complete args)
-          // AI SDK v6 uses 'input' not 'args' for tool parameters
-          const tc = part as { toolCallId?: string; toolName: string; input?: unknown; args?: unknown }
-          const toolCallId = tc.toolCallId ?? tc.toolName
-          const args = (tc.input ?? tc.args ?? {}) as Record<string, unknown>
-          
-          if (!seenToolCalls.has(toolCallId)) {
-            seenToolCalls.add(toolCallId)
-            toolStartTimes.set(toolCallId, Date.now())
-            toolCallArgs.set(toolCallId, args)
+    for (let i = 0; i < modelCandidates.length; i += 1) {
+      const candidate = modelCandidates[i]
+      const toolCalls: AgentResult['toolCalls'] = []
+      const seenToolCalls = new Set<string>()
+      const toolStartTimes = new Map<string, number>()
+      const toolCallArgs = new Map<string, Record<string, unknown>>()
+
+      try {
+        const result = await streamText({
+          model: candidate.model,
+          system: systemPrompt,
+          ...requestBody,
+          tools,
+          ...(options?.maxTokens ? { maxTokens: options.maxTokens } : {}),
+          stopWhen: stepCountIs(options?.maxSteps ?? 10),
+        })
+        
+        // Use fullStream to get tool calls IMMEDIATELY as they happen
+        // This enables real-time file visibility before execution completes
+        let output = ''
+        for await (const part of result.fullStream) {
+          if (part.type === 'text-delta') {
+            output += part.text
+            options?.onTextDelta?.(part.text)
+          } else if (part.type === 'error') {
+            const streamError = (part as { error?: unknown }).error
+            if (streamError instanceof Error) {
+              throw streamError
+            }
+            if (typeof streamError === 'string') {
+              throw new Error(streamError)
+            }
+            throw new Error(streamError ? JSON.stringify(streamError) : 'Model streaming failed')
+          } else if (part.type === 'tool-call') {
+            // Stream tool call immediately when it starts (with complete args)
+            // AI SDK v6 uses 'input' not 'args' for tool parameters
+            const tc = part as { toolCallId?: string; toolName: string; input?: unknown; args?: unknown }
+            const toolCallId = tc.toolCallId ?? tc.toolName
+            const args = (tc.input ?? tc.args ?? {}) as Record<string, unknown>
             
-            // Notify caller immediately - this is the key fix!
-            // Files will appear in sidebar as soon as the model decides to create them,
-            // not after the entire step completes
-            options?.onToolCall?.({
+            if (!seenToolCalls.has(toolCallId)) {
+              seenToolCalls.add(toolCallId)
+              toolStartTimes.set(toolCallId, Date.now())
+              toolCallArgs.set(toolCallId, args)
+              
+              // Notify caller immediately - this is the key fix!
+              // Files will appear in sidebar as soon as the model decides to create them,
+              // not after the entire step completes
+              options?.onToolCall?.({
+                id: toolCallId,
+                name: tc.toolName,
+                args,
+              })
+            }
+          } else if (part.type === 'tool-result') {
+            const tr = part as {
+              toolCallId?: string
+              toolName?: string
+              output?: unknown
+              result?: unknown
+            }
+
+            const toolCallId = tr.toolCallId ?? tr.toolName ?? `tool-${Date.now()}`
+            const toolName = tr.toolName ?? 'unknown'
+            const rawResult = tr.output ?? tr.result ?? null
+            const duration = Date.now() - (toolStartTimes.get(toolCallId) ?? Date.now())
+
+            // Track fuel cost per tool call with model tier multiplier
+            const baseFuelCost = 1
+            const adjustedCost = calculateFuelCost(baseFuelCost, fuelModelTier)
+            this.sessionFuelSpent += adjustedCost
+
+            toolCalls.push({
+              name: toolName,
+              args: toolCallArgs.get(toolCallId) ?? {},
+              result: rawResult,
+              duration,
+            })
+
+            options?.onToolResult?.({
               id: toolCallId,
-              name: tc.toolName,
-              args,
+              name: toolName,
+              result: rawResult,
+              duration,
             })
           }
-        } else if (part.type === 'tool-result') {
-          const tr = part as {
-            toolCallId?: string
-            toolName?: string
-            output?: unknown
-            result?: unknown
-          }
-
-          const toolCallId = tr.toolCallId ?? tr.toolName ?? `tool-${Date.now()}`
-          const toolName = tr.toolName ?? 'unknown'
-          const rawResult = tr.output ?? tr.result ?? null
-          const duration = Date.now() - (toolStartTimes.get(toolCallId) ?? Date.now())
-
-          // Track fuel cost per tool call with model tier multiplier
-          const baseFuelCost = 1
-          const adjustedCost = calculateFuelCost(baseFuelCost, fuelModelTier)
-          this.sessionFuelSpent += adjustedCost
-
-          toolCalls.push({
-            name: toolName,
-            args: toolCallArgs.get(toolCallId) ?? {},
-            result: rawResult,
-            duration,
-          })
-
-          options?.onToolResult?.({
-            id: toolCallId,
-            name: toolName,
-            result: rawResult,
-            duration,
-          })
         }
+        
+        return {
+          agentId,
+          success: true,
+          output,
+          toolCalls,
+          duration: Date.now() - start,
+        }
+      } catch (error) {
+        this.sessionRetries++
+        lastError = error
+        lastToolCalls = toolCalls
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        fallbackErrors.push(`${candidate.provider}:${candidate.label} -> ${errorMessage}`)
+
+        const nextCandidate = modelCandidates[i + 1]
+        if (nextCandidate && shouldFallbackToNextModel(error)) {
+          console.warn(
+            `[Orchestrator] Model ${candidate.provider}:${candidate.label} failed. Falling back to ${nextCandidate.provider}:${nextCandidate.label}.`,
+            error
+          )
+          continue
+        }
+
+        break
       }
-      
-      return {
-        agentId,
-        success: true,
-        output,
-        toolCalls,
-        duration: Date.now() - start,
-      }
-    } catch (error) {
-      // Track retry count for circuit breaker
-      this.sessionRetries++
-      
-      return {
-        agentId,
-        success: false,
-        output: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        toolCalls,
-        duration: Date.now() - start,
-      }
+    }
+
+    if (fallbackErrors.length > 1) {
+      console.error('[Orchestrator] All fallback model attempts failed', fallbackErrors)
+    }
+
+    return {
+      agentId,
+      success: false,
+      output: `Error: ${lastError instanceof Error ? lastError.message : 'Unknown error'}`,
+      toolCalls: lastToolCalls,
+      duration: Date.now() - start,
     }
   }
   
