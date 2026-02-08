@@ -260,7 +260,7 @@ export async function POST(req: Request) {
   // RATE LIMITING - Protect against abuse
   // ========================================================================
   const clientIP = getClientIP(req)
-  const rateLimitResult = chatRateLimiter.check(clientIP)
+  const rateLimitResult = await chatRateLimiter.check(clientIP)
 
   if (!rateLimitResult.success) {
     return rateLimitResponse(rateLimitResult)

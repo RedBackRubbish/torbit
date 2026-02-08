@@ -33,6 +33,18 @@ interface PricingTier {
   icon: typeof Zap
 }
 
+const FUEL_REFERENCE = [
+  { label: 'Small patch', range: '50-150 fuel', output: 'Bug fix + validation pass' },
+  { label: 'Feature slice', range: '300-900 fuel', output: '1 scoped feature with tests' },
+  { label: 'MVP sprint', range: '2,500-8,000 fuel', output: 'Core app flows and export prep' },
+]
+
+const ROI_EXAMPLES = [
+  { scenario: 'Landing + auth scaffold', saved: '8-12 engineering hours' },
+  { scenario: 'Billing + webhook wiring', saved: '12-20 engineering hours' },
+  { scenario: 'Audit-ready release package', saved: '6-10 QA/compliance hours' },
+]
+
 const TIERS: PricingTier[] = [
   {
     id: 'free',
@@ -327,7 +339,32 @@ export default function PricingSection() {
         </div>
 
         {/* Bottom Note */}
-        <div className="mt-16 text-center">
+        <div className="mt-16 text-center space-y-10">
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-4">Fuel reference</h3>
+            <div className="grid md:grid-cols-3 gap-3 text-left">
+              {FUEL_REFERENCE.map((item) => (
+                <div key={item.label} className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+                  <p className="text-sm text-white font-medium mb-1">{item.label}</p>
+                  <p className="text-xs text-amber-400 mb-2">{item.range}</p>
+                  <p className="text-xs text-neutral-400">{item.output}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-4">Typical ROI snapshots</h3>
+            <div className="grid md:grid-cols-3 gap-3 text-left">
+              {ROI_EXAMPLES.map((item) => (
+                <div key={item.scenario} className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+                  <p className="text-sm text-white font-medium mb-1">{item.scenario}</p>
+                  <p className="text-xs text-emerald-400">{item.saved}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <p className="text-sm text-neutral-500 max-w-xl mx-auto">
             All plans include the full audit ledger, verification proofs, and export bundles. 
             Fuel packs can be purchased anytime on Pro and Team plans.

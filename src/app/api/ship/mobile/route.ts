@@ -13,7 +13,7 @@ export const maxDuration = 300
 
 export async function GET(request: NextRequest) {
   const clientIP = getClientIP(request)
-  const rateLimitResult = strictRateLimiter.check(clientIP)
+  const rateLimitResult = await strictRateLimiter.check(clientIP)
 
   if (!rateLimitResult.success) {
     return rateLimitResponse(rateLimitResult)
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const clientIP = getClientIP(request)
-  const rateLimitResult = strictRateLimiter.check(clientIP)
+  const rateLimitResult = await strictRateLimiter.check(clientIP)
 
   if (!rateLimitResult.success) {
     return rateLimitResponse(rateLimitResult)

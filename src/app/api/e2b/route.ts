@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   // RATE LIMITING
   // ========================================================================
   const clientIP = getClientIP(request)
-  const rateLimitResult = strictRateLimiter.check(clientIP)
+  const rateLimitResult = await strictRateLimiter.check(clientIP)
 
   if (!rateLimitResult.success) {
     return rateLimitResponse(rateLimitResult)

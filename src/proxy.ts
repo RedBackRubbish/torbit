@@ -11,6 +11,9 @@
 
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
+import {
+  isE2EAuthenticatedRequest,
+} from '@/lib/e2e-auth'
 
 // Routes that require authentication
 const protectedRoutes = ['/builder', '/dashboard']
@@ -30,9 +33,11 @@ export async function proxy(request: NextRequest) {
   const isAuthRoute = matchesRoute(pathname, authRoutes)
 
   // Check if user has any Supabase auth cookies
-  const hasAuthCookies = request.cookies.getAll().some((c) =>
+  const hasSupabaseAuthCookies = request.cookies.getAll().some((c) =>
     c.name.startsWith('sb-') && c.name.includes('-auth-token')
   )
+  const hasE2EAuthCookie = isE2EAuthenticatedRequest(request)
+  const hasAuthCookies = hasSupabaseAuthCookies || hasE2EAuthCookie
 
   // Enforce auth on protected routes
   if (isProtectedRoute && !hasAuthCookies) {
@@ -44,7 +49,7 @@ export async function proxy(request: NextRequest) {
   // Only refresh session if auth cookies exist (reduces auth traffic)
   let response = NextResponse.next({ request })
 
-  if (hasAuthCookies) {
+  if (hasSupabaseAuthCookies) {
     response = await updateSession(request)
   }
 

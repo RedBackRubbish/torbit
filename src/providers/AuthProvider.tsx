@@ -11,6 +11,11 @@ import { createBrowserClient } from '@supabase/ssr'
 import type { User, Session, SupabaseClient } from '@supabase/supabase-js'
 import type { Profile, Database } from '@/lib/supabase/types'
 import { isSupabaseConfigured } from '@/lib/supabase/client'
+import {
+  createE2EProfile,
+  createE2EUser,
+  hasE2EAuthCookieClient,
+} from '@/lib/e2e-auth'
 
 interface AuthContextType {
   user: User | null
@@ -82,6 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!mounted) return
+
+    if (hasE2EAuthCookieClient()) {
+      setUser(createE2EUser())
+      setProfile(createE2EProfile())
+      setSession(null)
+      setLoading(false)
+      return
+    }
     
     const supabase = getClient()
     if (!supabase) {

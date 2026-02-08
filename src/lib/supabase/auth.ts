@@ -1,5 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import { createClient } from './server'
+import { createE2EUser, isE2EAuthenticatedRequest } from '@/lib/e2e-auth'
 
 function extractBearerToken(req: Request): string | null {
   const authHeader = req.headers.get('authorization') ?? req.headers.get('Authorization')
@@ -12,6 +13,10 @@ function extractBearerToken(req: Request): string | null {
 }
 
 export async function getAuthenticatedUser(req: Request): Promise<User | null> {
+  if (isE2EAuthenticatedRequest(req)) {
+    return createE2EUser()
+  }
+
   const supabase = await createClient()
 
   // First try cookie-based session (default SSR path)

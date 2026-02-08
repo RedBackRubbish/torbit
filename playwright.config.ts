@@ -15,7 +15,7 @@ export default defineConfig({
     ['list']
   ],
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://127.0.0.1:3100',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -26,9 +26,14 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run start',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    command: 'npm run start -- --port 3100',
+    url: 'http://127.0.0.1:3100',
+    // Always use the project server to avoid false positives from unrelated local apps.
+    reuseExistingServer: false,
     timeout: 120 * 1000,
+    env: {
+      TORBIT_E2E_AUTH: 'true',
+      NEXT_PUBLIC_E2E_AUTH: 'true',
+    },
   },
 });

@@ -21,6 +21,7 @@ import { createEmptyProjectKnowledge } from './types'
 import { getAllFacts } from '../cache'
 import { STABLE_DEFAULTS } from '../charter'
 import { loadPersistedKnowledge, savePersistedKnowledge } from '@/lib/persistence/project-state'
+import { createHash } from 'node:crypto'
 
 // ============================================
 // SNAPSHOT STORAGE (in-memory for now)
@@ -184,39 +185,43 @@ function getConsultedSources(
   return Array.from(sourceIds)
 }
 
+function canonicalize(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value)
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalize).join(',')}]`
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, nested]) => `${JSON.stringify(key)}:${canonicalize(nested)}`)
+
+  return `{${entries.join(',')}}`
+}
+
 /**
  * Generate hash for snapshot integrity
  */
 function generateSnapshotHash(snapshot: KnowledgeSnapshot): string {
-  const content = JSON.stringify({
+  const content = canonicalize({
     projectId: snapshot.projectId,
     frameworks: snapshot.frameworks,
     assumptions: snapshot.assumptions.map(a => a.assumption),
     confidence: snapshot.confidence,
   })
-  
-  // Simple hash for now (would use crypto in production)
-  let hash = 0
-  for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
-  }
-  
-  return `snap-${Math.abs(hash).toString(16)}`
+
+  const hash = createHash('sha256').update(content).digest('hex')
+  return `snap-sha256-${hash}`
 }
 
 /**
  * Generate approval hash
  */
 function generateApprovalHash(assumption: string): string {
-  let hash = 0
-  for (let i = 0; i < assumption.length; i++) {
-    const char = assumption.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
-  }
-  return `apr-${Math.abs(hash).toString(16)}`
+  const hash = createHash('sha256').update(assumption).digest('hex')
+  return `apr-sha256-${hash}`
 }
 
 // ============================================
@@ -290,10 +295,6 @@ export function getSnapshotForEvidence(projectId: string): KnowledgeSnapshot | n
 export function verifySnapshotIntegrity(snapshot: KnowledgeSnapshot): boolean {
   const storedHash = snapshot.snapshotHash
   const computedHash = generateSnapshotHash({ ...snapshot, snapshotHash: '' })
-  
-  // Remove the prefix for comparison (snap-)
-  const storedValue = storedHash.replace('snap-', '')
-  const computedValue = computedHash.replace('snap-', '')
-  
-  return storedValue === computedValue
+
+  return storedHash === computedHash
 }

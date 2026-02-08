@@ -53,6 +53,7 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask a follow-up..."
+            aria-label="Describe what you want Torbit to produce"
             disabled={isLoading}
             rows={1}
             className="w-full px-4 py-3 pr-12 bg-transparent text-[14px] text-[#ffffff] placeholder:text-[#404040] resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"

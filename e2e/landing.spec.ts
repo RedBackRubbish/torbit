@@ -1,18 +1,5 @@
-import { test, expect, Page } from '@playwright/test';
-
-async function enableTestAuth(page: Page) {
-  await page.context().addCookies([
-    {
-      name: 'sb-test-auth-token',
-      value: 'test-value',
-      domain: 'localhost',
-      path: '/',
-      httpOnly: false,
-      secure: false,
-      sameSite: 'Lax',
-    },
-  ]);
-}
+import { test, expect } from '@playwright/test';
+import { enableTestAuth } from './helpers/auth';
 
 test.describe('Landing Page', () => {
   test.beforeEach(async ({ page }) => {

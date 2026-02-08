@@ -149,4 +149,22 @@ describe('Middleware', () => {
       }
     })
   })
+
+  describe('E2E Auth Cookie', () => {
+    it('should allow protected routes with e2e auth cookie when enabled', async () => {
+      process.env.TORBIT_E2E_AUTH = 'true'
+      try {
+        const request = new NextRequest('http://localhost:3000/builder', {
+          headers: { cookie: 'torbit_e2e_auth=1' },
+        })
+
+        const { proxy } = await import('../proxy')
+        const response = await proxy(request)
+
+        expect(response.status).not.toBe(307)
+      } finally {
+        delete process.env.TORBIT_E2E_AUTH
+      }
+    })
+  })
 })

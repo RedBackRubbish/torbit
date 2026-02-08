@@ -153,9 +153,9 @@ function BuilderPageContent() {
       {/* Preview Panel - Right side with header */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Preview Header */}
-        <header className="h-11 bg-[#0a0a0a] border-b border-[#1f1f1f] flex items-center justify-between px-2 sm:px-4 gap-2">
+        <header className="h-11 bg-[#0a0a0a] border-b border-[#1f1f1f] flex items-center justify-between px-2 sm:px-4 gap-2 overflow-hidden">
           {/* Left: Title + Tabs */}
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <div className="relative z-10 flex items-center gap-2 sm:gap-4 min-w-0 shrink-0">
             <span className="hidden lg:block text-[13px] font-medium text-[#fafafa]">App Preview</span>
             <div className="flex items-center bg-[#141414] rounded-lg p-0.5 border border-[#1f1f1f]">
               <TabButton
@@ -181,7 +181,7 @@ function BuilderPageContent() {
           </div>
           
           {/* Right: Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="relative z-0 ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
             {/* Home button */}
             <Link
               href="/dashboard"
@@ -206,7 +206,7 @@ function BuilderPageContent() {
               </span>
             </div>
 
-            <div className="hidden md:flex items-center gap-1.5 px-2 border-r border-[#1f1f1f]">
+            <div className="hidden xl:flex items-center gap-1.5 px-2 border-r border-[#1f1f1f]">
               <span className={`w-1.5 h-1.5 rounded-full ${onlineCollaboratorCount > 0 ? 'bg-emerald-500' : 'bg-[#333]'}`} />
               <span className="text-[11px] text-[#525252]">
                 {onlineCollaboratorCount > 0

@@ -10,6 +10,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { getSupabase } from '@/lib/supabase/client'
 import type { User, Session } from '@supabase/supabase-js'
 import type { Profile } from '@/lib/supabase/types'
+import {
+  createE2EProfile,
+  createE2EUser,
+  hasE2EAuthCookieClient,
+} from '@/lib/e2e-auth'
 
 interface AuthState {
   user: User | null
@@ -31,6 +36,17 @@ export function useAuth() {
   const [state, setState] = useState<AuthState>(initialState)
 
   useEffect(() => {
+    if (hasE2EAuthCookieClient()) {
+      setState({
+        user: createE2EUser(),
+        profile: createE2EProfile(),
+        session: null,
+        loading: false,
+        error: null,
+      })
+      return
+    }
+
     const supabase = getSupabase()
     if (!supabase) {
       // Supabase not configured -- skip auth, just mark as loaded

@@ -313,7 +313,7 @@ async function createOrFindPullRequest(params: {
 
 export async function POST(request: NextRequest) {
   const clientIP = getClientIP(request)
-  const rateLimitResult = strictRateLimiter.check(clientIP)
+  const rateLimitResult = await strictRateLimiter.check(clientIP)
 
   if (!rateLimitResult.success) {
     return rateLimitResponse(rateLimitResult)

@@ -113,6 +113,8 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 - `TORBIT_DATA_DIR` (default: `./.torbit-data`)
 - `TORBIT_WORKER_TOKEN` (worker token for `/api/background-runs/dispatch` and `/api/background-runs/worker`)
 - `CRON_SECRET` (optional Vercel Cron bearer token; supported by `/api/background-runs/worker`)
+- `UPSTASH_REDIS_REST_URL` (optional distributed rate limiting backend)
+- `UPSTASH_REDIS_REST_TOKEN` (optional distributed rate limiting backend token)
 
 ## 3. Database Migration
 
