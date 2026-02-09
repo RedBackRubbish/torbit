@@ -14,6 +14,26 @@ import { TorbitLogo, TorbitSpinner } from '@/components/ui/TorbitLogo'
 
 type AuthMode = 'login' | 'signup'
 
+const SUPABASE_AUTH_COOKIE_PATTERNS = [
+  /^(?:__Host-|__Secure-)?sb-.+-auth-token$/,
+  /^(?:__Host-|__Secure-)?sb-.+-auth-token\.\d+$/,
+  /^supabase-auth-token$/,
+  /^supabase-auth-token\.\d+$/,
+]
+
+function hasServerVisibleAuthCookie(): boolean {
+  if (typeof document === 'undefined') return false
+
+  const cookieNames = document.cookie
+    .split(';')
+    .map((cookie) => cookie.trim().split('=')[0] || '')
+    .filter(Boolean)
+
+  return cookieNames.some((name) =>
+    SUPABASE_AUTH_COOKIE_PATTERNS.some((pattern) => pattern.test(name))
+  ) || cookieNames.includes('torbit_e2e_auth')
+}
+
 export function LoginForm() {
   const router = useRouter()
   const { signIn, signUp, signInWithOAuth, user } = useAuthContext()
@@ -26,6 +46,7 @@ export function LoginForm() {
 
   useEffect(() => {
     if (!user) return
+    let cancelled = false
 
     const nextPath = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('next')
@@ -34,7 +55,25 @@ export function LoginForm() {
       ? nextPath
       : '/dashboard'
 
-    router.replace(safeRedirect)
+    const waitForCookieAndRedirect = async () => {
+      const timeoutAt = Date.now() + 2500
+
+      while (!hasServerVisibleAuthCookie() && Date.now() < timeoutAt) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+
+      if (cancelled) return
+      if (!hasServerVisibleAuthCookie()) return
+
+      router.replace(safeRedirect)
+      router.refresh()
+    }
+
+    void waitForCookieAndRedirect()
+
+    return () => {
+      cancelled = true
+    }
   }, [user, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
