@@ -2549,20 +2549,20 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
       }
     }
     
-    let tunnel: Record<string, unknown>
+    let tunnel: { url?: string; port?: number; createdAt?: number }
     try {
-      tunnel = JSON.parse(tunnelData.content) as Record<string, unknown>
+      tunnel = JSON.parse(tunnelData.content) as { url?: string; port?: number; createdAt?: number }
     } catch {
       return { success: false, output: '', error: `Invalid tunnel data for: ${tunnelId}` }
     }
     ctx.contextCache.delete(`tunnel:${tunnelId}`)
-    
+
     return {
       success: true,
       output: `🔌 Tunnel Closed\n` +
         `   URL: ${tunnel.url}\n` +
         `   Port: ${tunnel.port}\n` +
-        `   Uptime: ${Math.floor((Date.now() - tunnel.createdAt) / 1000)}s`,
+        `   Uptime: ${Math.floor((Date.now() - (tunnel.createdAt ?? 0)) / 1000)}s`,
       data: { tunnelId, url: tunnel.url },
       duration: Date.now() - start,
     }
