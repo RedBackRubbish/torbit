@@ -103,6 +103,22 @@ function generateHash(input: string): string {
   return Math.abs(hash).toString(16).padStart(16, '0')
 }
 
+export function normalizeRuntimePath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+/, '')
+}
+
+export function createFilesFingerprint(files: Array<{ path: string; content: string }>): string {
+  if (files.length === 0) {
+    return ''
+  }
+
+  const entries = files
+    .map((file) => `${normalizeRuntimePath(file.path)}:${generateHash(file.content)}`)
+    .sort()
+
+  return generateHash(entries.join('|'))
+}
+
 export function resolveRuntimeProfile(files: Array<{ path: string; content: string }>): RuntimeProfile {
   const packageFile = files.find((file) => file.path === 'package.json' || file.path === '/package.json')
   if (!packageFile) {
@@ -305,10 +321,13 @@ export function E2BProvider({ children }: E2BProviderProps) {
   
   const { addLog, addCommand, setRunning, setExitCode } = useTerminalStore()
   const { files, isGenerating } = useBuilderStore()
+  const filesFingerprint = createFilesFingerprint(files)
   
   // Track build state across renders
-  const hasStartedBuildRef = useRef(false)
-  const lastFilesHashRef = useRef<string>('')
+  const fullBuildInFlightRef = useRef(false)
+  const liveSyncInFlightRef = useRef(false)
+  const lastBuildAttemptHashRef = useRef<string>('')
+  const lastSyncedHashRef = useRef<string>('')
   const wasGeneratingRef = useRef(false)
   const autoRecoveryAttemptedRef = useRef(false)
   
@@ -316,9 +335,11 @@ export function E2BProvider({ children }: E2BProviderProps) {
   useEffect(() => {
     if (isGenerating && !wasGeneratingRef.current) {
       // New generation starting - reset build state
-      hasStartedBuildRef.current = false
+      fullBuildInFlightRef.current = false
+      liveSyncInFlightRef.current = false
       autoRecoveryAttemptedRef.current = false
-      lastFilesHashRef.current = ''
+      lastBuildAttemptHashRef.current = ''
+      lastSyncedHashRef.current = ''
       setServerUrl(null)
       setError(null)
       setBuildFailure(null)
@@ -571,19 +592,17 @@ export function E2BProvider({ children }: E2BProviderProps) {
   }, [addLog])
   
   // ==========================================================================
-  // Auto-build when files change (after generation completes)
+  // Auto-build when files change and preview runtime is not live yet.
   // ==========================================================================
   useEffect(() => {
     if (!sandboxId || !isReady || isGenerating) return
     if (files.length === 0) return
-    if (hasStartedBuildRef.current) return
-    
-    // Calculate files hash to detect actual changes
-    const filesHash = files.map(f => `${f.path}:${f.content.length}`).join('|')
-    if (filesHash === lastFilesHashRef.current) return
-    lastFilesHashRef.current = filesHash
-    
-    hasStartedBuildRef.current = true
+    if (serverUrl) return
+    if (fullBuildInFlightRef.current) return
+    if (filesFingerprint === lastBuildAttemptHashRef.current) return
+
+    lastBuildAttemptHashRef.current = filesFingerprint
+    fullBuildInFlightRef.current = true
     
     // Run build process
     ;(async () => {
@@ -711,6 +730,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
           setServerUrl(host)
           setError(null)
           setBuildFailure(null)
+          lastSyncedHashRef.current = filesFingerprint
           addLog(`✅ Preview ready: ${host}`, 'success')
           return
         }
@@ -747,8 +767,8 @@ export function E2BProvider({ children }: E2BProviderProps) {
             )
 
             // Trigger a clean rerun for the same files with the new sandbox.
-            hasStartedBuildRef.current = false
-            lastFilesHashRef.current = ''
+            lastBuildAttemptHashRef.current = ''
+            lastSyncedHashRef.current = ''
             return
           } catch (recoveryErr) {
             const recoveryMsg = recoveryErr instanceof Error ? recoveryErr.message : 'Sandbox recreation failed'
@@ -801,9 +821,50 @@ export function E2BProvider({ children }: E2BProviderProps) {
           context: 'E2BProvider build',
           timestamp: Date.now(),
         })
+      } finally {
+        fullBuildInFlightRef.current = false
       }
     })()
-  }, [sandboxId, sandboxAccessToken, isReady, isGenerating, files, syncFilesToSandbox, runCommand, addLog, recreateSandbox])
+  }, [sandboxId, sandboxAccessToken, isReady, isGenerating, files, filesFingerprint, serverUrl, syncFilesToSandbox, runCommand, addLog, recreateSandbox])
+
+  // ==========================================================================
+  // Hot-sync file mutations after preview is already live.
+  // ==========================================================================
+  useEffect(() => {
+    if (!sandboxId || !isReady || isGenerating || !serverUrl) return
+    if (files.length === 0) return
+    if (fullBuildInFlightRef.current || liveSyncInFlightRef.current) return
+    if (filesFingerprint === lastSyncedHashRef.current) return
+
+    liveSyncInFlightRef.current = true
+
+    ;(async () => {
+      try {
+        addLog('♻️ Syncing updated files to live preview...', 'info')
+        await syncFilesToSandbox()
+        lastSyncedHashRef.current = filesFingerprint
+        setError(null)
+        setBuildFailure(null)
+        addLog('✅ Live preview updated', 'success')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Sync failed'
+        const exactLogLine = `Live sync failed: ${msg}`
+        const failure = classifyBuildFailure({
+          message: msg,
+          stage: 'sync',
+          command: 'syncFilesToSandbox',
+          exactLogLine,
+          autoRecoveryAttempted: autoRecoveryAttemptedRef.current,
+          autoRecoverySucceeded: autoRecoveryAttemptedRef.current ? false : null,
+        })
+        addLog(`❌ ${failure.exactLogLine}`, 'error')
+        setBuildFailure(failure)
+        setError(failure.message)
+      } finally {
+        liveSyncInFlightRef.current = false
+      }
+    })()
+  }, [sandboxId, isReady, isGenerating, serverUrl, files, filesFingerprint, syncFilesToSandbox, addLog])
   
   // ==========================================================================
   // Context Value
@@ -834,7 +895,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
 // Framework Baseline Files
 // ============================================================================
 function normalizePath(value: string): string {
-  return value.replace(/^\/+/, '')
+  return normalizeRuntimePath(value)
 }
 
 function hasFile(files: Array<{ path: string; content: string }>, targetPath: string): boolean {

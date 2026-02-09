@@ -29,6 +29,7 @@ describe('God Prompt', () => {
     expect(GOD_PROMPT).toContain('Next.js 16 App Router')
     expect(GOD_PROMPT).toContain('React 19 + TypeScript')
     expect(GOD_PROMPT).toContain('src/app/api')
+    expect(GOD_PROMPT).toContain('Never create root-level app router files')
   })
 
   it('lists the core mutation tools', () => {

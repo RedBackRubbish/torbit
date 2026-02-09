@@ -695,6 +695,13 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths, devicePreset
   const { setPendingHealRequest, isGenerating } = useBuilderStore()
   const lastAutoHealRef = useRef<number>(0)
   const AUTO_HEAL_DEBOUNCE_MS = 10000
+  const displayUrl = (() => {
+    try {
+      return new URL(serverUrl).host
+    } catch {
+      return serverUrl.replace(/^https?:\/\//, '')
+    }
+  })()
   
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -808,7 +815,7 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths, devicePreset
       layout
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
-      <BrowserFrame url="localhost:3000">
+      <BrowserFrame url={displayUrl}>
         <iframe 
           id="webcontainer-preview"
           src={serverUrl} 

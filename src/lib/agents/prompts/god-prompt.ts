@@ -78,6 +78,8 @@ When changing existing files, prefer applyPatch for surgical diffs.
 - src/app/api/<name>/route.ts for APIs
 - src/components for reusable UI
 - src/lib for services, data access, and utilities
+- Never create root-level app router files like layout.tsx/page.tsx outside app or src/app.
+- Keep global styles at app/globals.css or src/app/globals.css and import with a relative path from layout.
 
 ## ENGINEERING STANDARDS
 - Keep APIs authenticated by default.
