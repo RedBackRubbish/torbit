@@ -367,14 +367,37 @@ export async function POST(request: NextRequest) {
             finalCommand = `/usr/local/bin/node ${command.slice(5)}`
           }
         }
+        
+        // Force deterministic command responses, even for non-zero exits.
+        // E2B can throw generic "exit status 1" errors that drop stderr/stdout.
+        const exitMarkerPrefix = '__TORBIT_EXIT_CODE__::'
+        const encodedCommand = Buffer.from(finalCommand, 'utf8').toString('base64')
+        const wrappedCommand = [
+          "bash -lc 'set +e",
+          `cmd_b64=\"${encodedCommand}\"`,
+          "cmd=\"$(printf \"%s\" \"$cmd_b64\" | base64 -d)\"",
+          "eval \"$cmd\"",
+          "status=$?",
+          `echo \"${exitMarkerPrefix}$status\"'`,
+        ].join('; ')
 
-        const result = await sandbox.commands.run(finalCommand, {
+        const result = await sandbox.commands.run(wrappedCommand, {
           timeoutMs: params.timeoutMs || 120000,
         })
 
+        let exitCode = result.exitCode
+        let stdout = result.stdout || ''
+        const markerRegex = new RegExp(`${exitMarkerPrefix}(\\d+)\\s*$`)
+        const markerMatch = stdout.match(markerRegex)
+
+        if (markerMatch) {
+          exitCode = Number.parseInt(markerMatch[1] || '1', 10)
+          stdout = stdout.replace(markerRegex, '').trimEnd()
+        }
+
         return NextResponse.json({
-          exitCode: result.exitCode,
-          stdout: result.stdout,
+          exitCode,
+          stdout,
           stderr: result.stderr,
           success: true,
         })
