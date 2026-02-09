@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyBuildFailure,
   formatBuildFailureSummary,
+  isRateLimitFailure,
   isSandboxOwnershipFailure,
 } from './build-diagnostics'
 
@@ -36,6 +37,19 @@ describe('build diagnostics', () => {
     expect(failure.category).toBe('infra')
     expect(failure.autoRecoveryAttempted).toBe(true)
     expect(failure.autoRecoverySucceeded).toBe(false)
+  })
+
+  it('detects and classifies rate-limit failures as infra', () => {
+    expect(isRateLimitFailure('Build error: Rate limit exceeded')).toBe(true)
+
+    const failure = classifyBuildFailure({
+      message: 'Sync error: Too many requests. Please slow down.',
+      stage: 'sync',
+      command: 'syncFilesToSandbox',
+    })
+
+    expect(failure.category).toBe('infra')
+    expect(failure.actionableFix).toContain('backoff')
   })
 
   it('formats a structured failure summary for chat output', () => {

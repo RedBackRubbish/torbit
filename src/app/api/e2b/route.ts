@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'node:fs'
 import path from 'node:path'
 import { Sandbox } from 'e2b'
-import { strictRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
+import {
+  strictRateLimiter,
+  e2bSyncRateLimiter,
+  getClientIP,
+  rateLimitResponse,
+} from '@/lib/rate-limit'
 import { getAuthenticatedUser } from '@/lib/supabase/auth'
 import {
   createSandboxAccessToken,
@@ -25,6 +30,15 @@ const nodeInstalledSandboxes = new Set<string>()
 const persistedSandboxOwners = new Map<string, string>()
 
 let persistedOwnersLoaded = false
+
+const HIGH_THROUGHPUT_ACTIONS = new Set(['writeFile', 'readFile', 'makeDir', 'getHost'])
+
+function resolveRateLimiterForAction(action: string) {
+  if (HIGH_THROUGHPUT_ACTIONS.has(action)) {
+    return e2bSyncRateLimiter
+  }
+  return strictRateLimiter
+}
 
 function getDataRoot(): string {
   const configured = process.env.TORBIT_DATA_DIR
@@ -187,11 +201,25 @@ async function getOwnedSandbox(
 }
 
 export async function POST(request: NextRequest) {
+  let body: Record<string, unknown>
+
+  try {
+    body = await request.json() as Record<string, unknown>
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid JSON body', code: 'INVALID_JSON_BODY' },
+      { status: 400 }
+    )
+  }
+
+  const action = typeof body.action === 'string' ? body.action : ''
+
   // ========================================================================
   // RATE LIMITING
   // ========================================================================
   const clientIP = getClientIP(request)
-  const rateLimitResult = await strictRateLimiter.check(clientIP)
+  const rateLimiter = resolveRateLimiterForAction(action)
+  const rateLimitResult = await rateLimiter.check(`${clientIP}:${action || 'unknown'}`)
 
   if (!rateLimitResult.success) {
     return rateLimitResponse(rateLimitResult)
@@ -209,8 +237,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json()
-    const { action, sandboxId, ...params } = body
+    const { action: _ignoredAction, sandboxId, ...rawParams } = body
+    const params = rawParams as Record<string, any>
     const sandboxAccessToken = typeof params.sandboxAccessToken === 'string'
       ? params.sandboxAccessToken
       : undefined

@@ -63,6 +63,12 @@ const E2BContext = createContext<E2BContextValue | null>(null)
 // Module-level flag to prevent duplicate boot logs in Strict Mode
 let hasLoggedBoot = false
 const RUNTIME_STARTUP_TIMEOUT_MS = 45000
+const E2B_RETRY_BUDGET: Record<string, number> = {
+  makeDir: 5,
+  writeFile: 5,
+  readFile: 3,
+  getHost: 8,
+}
 
 interface RuntimeProfile {
   framework: 'nextjs' | 'vite'
@@ -149,6 +155,48 @@ export function useE2BContext() {
   return context
 }
 
+interface E2BErrorPayload {
+  error?: string
+  message?: string
+  code?: string
+  retryAfter?: number
+}
+
+function shouldRetryE2BRequest(action: string, status: number, message: string): boolean {
+  if (!(action in E2B_RETRY_BUDGET)) {
+    return false
+  }
+
+  if (status === 429) {
+    return true
+  }
+
+  if (status === 502 || status === 503 || status === 504) {
+    return true
+  }
+
+  const normalized = message.toLowerCase()
+  return normalized.includes('rate limit') || normalized.includes('too many requests')
+}
+
+function resolveRetryDelayMs(
+  attempt: number,
+  retryAfterSecondsFromPayload: number | null,
+  retryAfterHeader: string | null
+): number {
+  const retryAfterHeaderSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN
+  const retryAfterSeconds = Number.isFinite(retryAfterHeaderSeconds) && retryAfterHeaderSeconds > 0
+    ? retryAfterHeaderSeconds
+    : retryAfterSecondsFromPayload
+
+  const baseDelayMs = retryAfterSeconds && retryAfterSeconds > 0
+    ? retryAfterSeconds * 1000
+    : Math.min(4000, 250 * (2 ** attempt))
+
+  const jitterMs = Math.floor(Math.random() * 150)
+  return baseDelayMs + jitterMs
+}
+
 // API helper for E2B operations
 async function e2bApi(action: string, params: Record<string, unknown> = {}) {
   const headers: HeadersInit = { 'Content-Type': 'application/json' }
@@ -160,28 +208,49 @@ async function e2bApi(action: string, params: Record<string, unknown> = {}) {
     }
   }
 
-  const response = await fetch('/api/e2b', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ action, ...params }),
-  })
-  
-  if (!response.ok) {
-    let message = 'E2B API error'
-    let code: string | undefined
+  const maxRetries = E2B_RETRY_BUDGET[action] ?? 0
 
-    try {
-      const error = await response.json() as { error?: string; code?: string }
-      message = error.error || message
-      code = error.code
-    } catch {
-      // Response body may be empty/non-JSON
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch('/api/e2b', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action, ...params }),
+    })
+
+    if (response.ok) {
+      return response.json()
     }
 
-    throw new E2BApiError(message, response.status, code)
+    let message = 'E2B API error'
+    let code: string | undefined
+    let retryAfterFromPayload: number | null = null
+
+    try {
+      const error = await response.json() as E2BErrorPayload
+      message = error.error || error.message || message
+      code = error.code
+      if (typeof error.retryAfter === 'number' && Number.isFinite(error.retryAfter)) {
+        retryAfterFromPayload = error.retryAfter
+      }
+    } catch {
+      // Response body may be empty/non-JSON.
+    }
+
+    const canRetry = attempt < maxRetries && shouldRetryE2BRequest(action, response.status, message)
+    if (!canRetry) {
+      throw new E2BApiError(message, response.status, code)
+    }
+
+    const delayMs = resolveRetryDelayMs(
+      attempt,
+      retryAfterFromPayload,
+      response.headers.get('Retry-After')
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
   }
-  
-  return response.json()
+
+  throw new E2BApiError('E2B API retries exhausted', 500)
 }
 
 interface E2BProviderProps {

@@ -216,6 +216,14 @@ export const strictRateLimiter = new RateLimiter({
   refillInterval: 12000,
 })
 
+// Higher-throughput limiter for authenticated, bursty sandbox file sync and host probes.
+export const e2bSyncRateLimiter = new RateLimiter({
+  name: 'e2b-sync',
+  maxTokens: 300,
+  refillRate: 30,
+  refillInterval: 1000,
+})
+
 export function getClientIP(request: Request): string {
   const candidates = [
     request.headers.get('x-forwarded-for'),

@@ -40,6 +40,16 @@ export function isSandboxOwnershipFailure(message: string): boolean {
   ])
 }
 
+export function isRateLimitFailure(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return containsAny(normalized, [
+    'rate limit exceeded',
+    'too many requests',
+    'status code: 429',
+    'retry-after',
+  ])
+}
+
 export function classifyBuildFailure({
   message,
   stage = 'unknown',
@@ -52,6 +62,7 @@ export function classifyBuildFailure({
 
   let category: BuildFailureCategory = 'unknown'
   if (
+    isRateLimitFailure(message) ||
     isSandboxOwnershipFailure(message) ||
     containsAny(normalized, ['forbidden', 'sandbox not found', 'e2b api error'])
   ) {
@@ -82,6 +93,8 @@ export function classifyBuildFailure({
   const actionableFix = category === 'infra'
     ? (isSandboxOwnershipFailure(message)
       ? 'Recreate the sandbox and retry once. If it repeats, start a fresh build session.'
+      : isRateLimitFailure(message)
+        ? 'Retry after a short backoff. If it repeats, reduce sync burst size or increase server rate-limit capacity.'
       : 'Retry runtime setup with a fresh sandbox.')
     : category === 'dependency'
       ? 'Fix dependency issues in package.json/lockfile, then rerun `npm install`.'

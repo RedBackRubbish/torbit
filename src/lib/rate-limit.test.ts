@@ -40,6 +40,15 @@ describe('rate-limit', () => {
     expect(result.remaining).toBe(29)
   })
 
+  it('exposes a higher-throughput limiter for E2B sync operations', async () => {
+    const module = await import('./rate-limit')
+    const result = await module.e2bSyncRateLimiter.check('127.0.0.1:writeFile')
+
+    expect(result.success).toBe(true)
+    expect(result.limit).toBe(300)
+    expect(result.remaining).toBe(299)
+  })
+
   it('uses Upstash pipeline when configured', async () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://example.upstash.io'
     process.env.UPSTASH_REDIS_REST_TOKEN = 'token'
