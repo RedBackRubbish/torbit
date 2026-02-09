@@ -61,16 +61,29 @@ export const adminOps = {
   async refundFuel(userId: string, projectId: string, amount: number, reason: string) {
     const admin = getAdminClient()
     
-    // Use RPC for atomicity
-    const { data, error } = await admin.rpc('refund_fuel', {
+    // Prefer modern billing ledger refund path.
+    const { data, error } = await admin.rpc('refund_fuel_v2', {
+      p_user_id: userId,
+      p_project_id: projectId,
+      p_amount: amount,
+      p_description: `REFUND: ${reason}`,
+      p_original_transaction_id: null,
+    })
+
+    if (!error) {
+      return data
+    }
+
+    // Backward compatibility for environments without refund_fuel_v2.
+    const { data: legacyData, error: legacyError } = await admin.rpc('refund_fuel', {
       p_user_id: userId,
       p_project_id: projectId,
       p_amount: amount,
       p_description: `REFUND: ${reason}`,
     })
 
-    if (error) throw error
-    return data
+    if (legacyError) throw legacyError
+    return legacyData
   },
 
   /**
@@ -79,41 +92,18 @@ export const adminOps = {
   async grantBonus(userId: string, amount: number, reason: string) {
     const admin = getAdminClient()
 
-    // Record the bonus transaction
-    const { error } = await admin.from('fuel_transactions').insert({
-      user_id: userId,
-      amount,
-      type: 'bonus',
-      description: `BONUS: ${reason}`,
-    })
-
-    if (error) throw error
-
-    // Atomic increment to prevent race conditions on concurrent grants
-    const { error: rpcError } = await admin.rpc('add_fuel', {
+    const { data, error } = await admin.rpc('add_fuel', {
       p_user_id: userId,
       p_amount: amount,
       p_type: 'bonus',
       p_description: `BONUS: ${reason}`,
+      p_metadata: {
+        source: 'admin',
+      },
     })
 
-    // Fallback: direct update if RPC not available
-    if (rpcError) {
-      const { data: profile } = await admin
-        .from('profiles')
-        .select('fuel_balance')
-        .eq('id', userId)
-        .single()
-
-      if (profile) {
-        const { error: updateError } = await admin
-          .from('profiles')
-          .update({ fuel_balance: profile.fuel_balance + amount })
-          .eq('id', userId)
-
-        if (updateError) throw updateError
-      }
-    }
+    if (error) throw error
+    return data
   },
 
   /**

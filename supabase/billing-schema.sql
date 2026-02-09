@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS public.stripe_customers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_customers_user ON public.stripe_customers(user_id);
-CREATE INDEX idx_stripe_customers_stripe ON public.stripe_customers(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_stripe_customers_user ON public.stripe_customers(user_id);
+CREATE INDEX IF NOT EXISTS idx_stripe_customers_stripe ON public.stripe_customers(stripe_customer_id);
 
 -- ============================================
 -- SUBSCRIPTIONS
@@ -37,9 +37,9 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_subscriptions_user ON public.subscriptions(user_id);
-CREATE INDEX idx_subscriptions_stripe ON public.subscriptions(stripe_subscription_id);
-CREATE INDEX idx_subscriptions_status ON public.subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON public.subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe ON public.subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON public.subscriptions(status);
 
 -- ============================================
 -- FUEL BALANCES
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS public.fuel_balances (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_fuel_balances_user ON public.fuel_balances(user_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_balances_user ON public.fuel_balances(user_id);
 
 -- ============================================
 -- BILLING TRANSACTIONS
@@ -86,9 +86,36 @@ CREATE TABLE IF NOT EXISTS public.billing_transactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_billing_transactions_user ON public.billing_transactions(user_id);
-CREATE INDEX idx_billing_transactions_type ON public.billing_transactions(type);
-CREATE INDEX idx_billing_transactions_created ON public.billing_transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_billing_transactions_user ON public.billing_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_billing_transactions_type ON public.billing_transactions(type);
+CREATE INDEX IF NOT EXISTS idx_billing_transactions_created ON public.billing_transactions(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_transactions_stripe_payment_intent_unique
+  ON public.billing_transactions(stripe_payment_intent_id)
+  WHERE stripe_payment_intent_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_transactions_stripe_invoice_unique
+  ON public.billing_transactions(stripe_invoice_id)
+  WHERE stripe_invoice_id IS NOT NULL;
+
+-- ============================================
+-- STRIPE WEBHOOK EVENTS
+-- Tracks webhook idempotency and processing state
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.stripe_webhook_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_id TEXT UNIQUE NOT NULL,
+  event_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('processing', 'processed', 'failed')),
+  attempts INTEGER NOT NULL DEFAULT 1,
+  last_error TEXT,
+  processed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_status
+  ON public.stripe_webhook_events(status);
+CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_created
+  ON public.stripe_webhook_events(created_at DESC);
 
 -- ============================================
 -- RPC: Add Fuel (for purchases and refills)
@@ -104,8 +131,45 @@ CREATE OR REPLACE FUNCTION public.add_fuel(
 )
 RETURNS INTEGER AS $$
 DECLARE
+  existing_balance INTEGER;
   new_balance INTEGER;
 BEGIN
+  -- Lock balance row to serialize crediting operations for this user.
+  SELECT current_fuel INTO existing_balance
+  FROM public.fuel_balances
+  WHERE user_id = p_user_id
+  FOR UPDATE;
+
+  IF existing_balance IS NULL THEN
+    RAISE EXCEPTION 'No fuel balance record found for user %', p_user_id;
+  END IF;
+
+  -- Idempotency guard: Stripe payment intent has already been processed.
+  IF p_stripe_payment_intent_id IS NOT NULL THEN
+    SELECT balance_after INTO new_balance
+    FROM public.billing_transactions
+    WHERE stripe_payment_intent_id = p_stripe_payment_intent_id
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    IF new_balance IS NOT NULL THEN
+      RETURN new_balance;
+    END IF;
+  END IF;
+
+  -- Idempotency guard: Stripe invoice has already been processed.
+  IF p_stripe_invoice_id IS NOT NULL THEN
+    SELECT balance_after INTO new_balance
+    FROM public.billing_transactions
+    WHERE stripe_invoice_id = p_stripe_invoice_id
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    IF new_balance IS NOT NULL THEN
+      RETURN new_balance;
+    END IF;
+  END IF;
+
   -- Update fuel balance
   UPDATE public.fuel_balances
   SET 
@@ -311,23 +375,28 @@ ALTER TABLE public.stripe_customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fuel_balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.billing_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stripe_webhook_events ENABLE ROW LEVEL SECURITY;
 
 -- Stripe customers: Users can only view their own
+DROP POLICY IF EXISTS "Users can view own stripe customer" ON public.stripe_customers;
 CREATE POLICY "Users can view own stripe customer"
   ON public.stripe_customers FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Subscriptions: Users can only view their own
+DROP POLICY IF EXISTS "Users can view own subscription" ON public.subscriptions;
 CREATE POLICY "Users can view own subscription"
   ON public.subscriptions FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Fuel balances: Users can only view their own
+DROP POLICY IF EXISTS "Users can view own fuel balance" ON public.fuel_balances;
 CREATE POLICY "Users can view own fuel balance"
   ON public.fuel_balances FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Billing transactions: Users can only view their own
+DROP POLICY IF EXISTS "Users can view own billing transactions" ON public.billing_transactions;
 CREATE POLICY "Users can view own billing transactions"
   ON public.billing_transactions FOR SELECT
   USING (auth.uid() = user_id);
@@ -355,6 +424,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger after user signup
+DROP TRIGGER IF EXISTS on_auth_user_created_billing ON auth.users;
 CREATE TRIGGER on_auth_user_created_billing
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_billing();
@@ -362,12 +432,19 @@ CREATE TRIGGER on_auth_user_created_billing
 -- ============================================
 -- UPDATED_AT TRIGGERS
 -- ============================================
+DROP TRIGGER IF EXISTS update_subscriptions_updated_at ON public.subscriptions;
 CREATE TRIGGER update_subscriptions_updated_at
   BEFORE UPDATE ON public.subscriptions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
+DROP TRIGGER IF EXISTS update_fuel_balances_updated_at ON public.fuel_balances;
 CREATE TRIGGER update_fuel_balances_updated_at
   BEFORE UPDATE ON public.fuel_balances
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+DROP TRIGGER IF EXISTS update_stripe_webhook_events_updated_at ON public.stripe_webhook_events;
+CREATE TRIGGER update_stripe_webhook_events_updated_at
+  BEFORE UPDATE ON public.stripe_webhook_events
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
 -- ============================================

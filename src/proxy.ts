@@ -18,10 +18,26 @@ import {
 // Routes that require authentication
 const protectedRoutes = ['/builder', '/dashboard']
 
+// Supabase auth cookie name patterns:
+// - sb-<project-ref>-auth-token
+// - sb-<project-ref>-auth-token.<chunk-index> (chunked values)
+// - optional secure prefixes for some deployments
+// Excludes helper cookies like `-auth-token-code-verifier`.
+const SUPABASE_AUTH_COOKIE_PATTERNS = [
+  /^(?:__Host-|__Secure-)?sb-.+-auth-token$/,
+  /^(?:__Host-|__Secure-)?sb-.+-auth-token\.\d+$/,
+  /^supabase-auth-token$/,
+  /^supabase-auth-token\.\d+$/,
+]
+
 function matchesRoute(pathname: string, routes: string[]): boolean {
   return routes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   )
+}
+
+function isSupabaseAuthCookieName(name: string): boolean {
+  return SUPABASE_AUTH_COOKIE_PATTERNS.some((pattern) => pattern.test(name))
 }
 
 export async function proxy(request: NextRequest) {
@@ -29,9 +45,9 @@ export async function proxy(request: NextRequest) {
   const isProtectedRoute = matchesRoute(pathname, protectedRoutes)
 
   // Check if user has any Supabase auth cookies
-  const hasSupabaseAuthCookies = request.cookies.getAll().some((c) =>
-    c.name.startsWith('sb-') && c.name.includes('-auth-token')
-  )
+  const hasSupabaseAuthCookies = request.cookies
+    .getAll()
+    .some((cookie) => isSupabaseAuthCookieName(cookie.name))
   const hasE2EAuthCookie = isE2EAuthenticatedRequest(request)
   const hasAuthCookies = hasSupabaseAuthCookies || hasE2EAuthCookie
 

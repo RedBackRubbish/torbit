@@ -11,6 +11,14 @@ const ShipFileSchema = z.object({
   content: z.string(),
 })
 
+const DeployCredentialsSchema = z.object({
+  vercelToken: z.string().min(1).optional(),
+  vercelTeamId: z.string().optional(),
+  vercelTeamSlug: z.string().optional(),
+  netlifyToken: z.string().min(1).optional(),
+  netlifySiteId: z.string().optional(),
+})
+
 const DeployRequestSchema = z.object({
   provider: z.enum(['vercel', 'netlify', 'railway']).default('vercel'),
   projectName: z.string().optional(),
@@ -34,6 +42,7 @@ const DeployRequestSchema = z.object({
       }
       return filtered
     }),
+  credentials: DeployCredentialsSchema.optional(),
   files: z.array(ShipFileSchema).min(1),
 })
 
@@ -311,6 +320,7 @@ export async function POST(request: NextRequest) {
       content: file.content,
     }))
     const projectName = payload.projectName?.trim() || 'Torbit Project'
+    const credentials = payload.credentials
 
     if (payload.provider === 'railway') {
       return NextResponse.json(
@@ -320,18 +330,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (payload.provider === 'vercel') {
-      const vercelToken = process.env.VERCEL_TOKEN
+      const vercelToken = credentials?.vercelToken?.trim()
       if (!vercelToken) {
         return NextResponse.json(
-          { error: 'VERCEL_TOKEN is not configured on the server.' },
-          { status: 500 }
+          { error: 'Missing Vercel access token for this request.' },
+          { status: 400 }
         )
       }
 
       const deployment = await deployToVercel({
         token: vercelToken,
-        teamId: process.env.VERCEL_TEAM_ID,
-        teamSlug: process.env.VERCEL_TEAM_SLUG,
+        teamId: credentials?.vercelTeamId?.trim() || undefined,
+        teamSlug: credentials?.vercelTeamSlug?.trim() || undefined,
         projectName,
         framework: payload.framework,
         buildCommand: payload.buildCommand,
@@ -350,17 +360,17 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const netlifyToken = process.env.NETLIFY_TOKEN
+    const netlifyToken = credentials?.netlifyToken?.trim()
     if (!netlifyToken) {
       return NextResponse.json(
-        { error: 'NETLIFY_TOKEN is not configured on the server.' },
-        { status: 500 }
+        { error: 'Missing Netlify access token for this request.' },
+        { status: 400 }
       )
     }
 
     const netlifyDeployment = await deployToNetlify({
       token: netlifyToken,
-      siteId: process.env.NETLIFY_SITE_ID,
+      siteId: credentials?.netlifySiteId?.trim() || undefined,
       projectName,
       files: normalizedFiles,
     })

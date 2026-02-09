@@ -144,6 +144,42 @@ describe('Middleware', () => {
         expect(response.status).not.toBe(307)
       }
     })
+
+    it('should not treat code-verifier cookies as authenticated session cookies', async () => {
+      const request = new NextRequest('http://localhost:3000/builder', {
+        headers: {
+          cookie: 'sb-project-auth-token-code-verifier=pkce-value',
+        },
+      })
+
+      const { proxy } = await import('../proxy')
+      const response = await proxy(request)
+
+      // No real auth cookie present, so protected route should redirect to login.
+      expect(response.status).toBe(307)
+      expect(response.headers.get('location')).toContain('/login')
+    })
+
+    it('should detect chunked and prefixed auth token cookies', async () => {
+      const cookieVariants = [
+        'sb-project-auth-token.0=value',
+        '__Secure-sb-project-auth-token=value',
+        '__Host-sb-project-auth-token.1=value',
+      ]
+
+      for (const cookie of cookieVariants) {
+        vi.resetModules()
+
+        const request = new NextRequest('http://localhost:3000/builder', {
+          headers: { cookie },
+        })
+
+        const { proxy } = await import('../proxy')
+        const response = await proxy(request)
+
+        expect(response.status).not.toBe(307)
+      }
+    })
   })
 
   describe('E2E Auth Cookie', () => {

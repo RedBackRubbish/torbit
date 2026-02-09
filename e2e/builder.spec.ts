@@ -84,22 +84,23 @@ test.describe('Builder End-to-End Flow', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/builder');
 
-    await expect(page.getByRole('tab', { name: 'Chat' })).toBeVisible({ timeout: 20000 });
-    await expect(page.getByRole('tab', { name: 'Preview' }).first()).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
+    const mainTabs = page.getByLabel('Builder main tabs')
+    await expect(mainTabs.getByRole('tab', { name: 'Chat' })).toBeVisible({ timeout: 20000 });
+    await expect(mainTabs.getByRole('tab', { name: 'Preview' })).toBeVisible();
+    await expect(mainTabs.getByRole('tab', { name: 'Files' })).toBeVisible();
 
-    await page.getByRole('tab', { name: 'Files' }).click();
-    await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
+    await mainTabs.getByRole('tab', { name: 'Files' }).click();
+    await expect(mainTabs.getByRole('tab', { name: 'Files' })).toBeVisible();
   });
 });
 
 // ============================================================================
-// REGRESSION TESTS: WebContainer + TypeScript Compatibility
+// REGRESSION TESTS: Runtime + TypeScript Compatibility
 // ============================================================================
 // These tests ensure TypeScript structure does not regress during generation.
 // They are opt-in because they require a full generation cycle.
 
-test.describe('WebContainer TypeScript Enforcement', () => {
+test.describe('Runtime TypeScript Enforcement', () => {
   test.skip('generated project uses TypeScript files', async ({ page }) => {
     // This test requires a full generation cycle - skip in CI unless explicitly enabled
     // To run: ENABLE_GENERATION_TESTS=1 pnpm test:e2e
@@ -146,7 +147,7 @@ test.describe('WebContainer TypeScript Enforcement', () => {
     expect(packageContent).toContain('"next"');
 
     // Assert: Preview loads without rebuild loop
-    await page.waitForSelector('iframe[src*="webcontainer"]', { timeout: 180000 });
+    await page.waitForSelector('iframe[src^="https://"]', { timeout: 180000 });
 
     // Wait 10 seconds and ensure it's still the same iframe (no rebuild)
     const initialSrc = await page.locator('iframe').first().getAttribute('src');

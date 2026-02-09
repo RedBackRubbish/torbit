@@ -95,6 +95,48 @@ export default function ShipMenu() {
     return match ? match[0] : null
   }
 
+  const getSessionToken = (key: string): string | null => {
+    if (typeof window === 'undefined') return null
+    const value = window.sessionStorage.getItem(key)
+    return value && value.trim().length > 0 ? value.trim() : null
+  }
+
+  const requestSessionToken = (key: string, promptLabel: string): string | null => {
+    const existing = getSessionToken(key)
+    if (existing) return existing
+    if (typeof window === 'undefined') return null
+
+    const entered = window.prompt(promptLabel)
+    const token = entered?.trim()
+    if (!token) return null
+
+    window.sessionStorage.setItem(key, token)
+    return token
+  }
+
+  const getDeployCredentials = (provider: 'vercel' | 'netlify') => {
+    if (provider === 'vercel') {
+      const token = requestSessionToken(
+        'torbit_vercel_token',
+        'Enter your Vercel access token (saved for this browser session only):'
+      )
+      return token ? { vercelToken: token } : null
+    }
+
+    const token = requestSessionToken(
+      'torbit_netlify_token',
+      'Enter your Netlify access token (saved for this browser session only):'
+    )
+    return token ? { netlifyToken: token } : null
+  }
+
+  const getGithubToken = (): string | null => (
+    requestSessionToken(
+      'torbit_github_token',
+      'Enter your GitHub personal access token (saved for this browser session only):'
+    )
+  )
+
   const canDeploy = () => {
     if (!hasFiles) {
       return { allowed: false, reason: 'Generate files before deploying.' }
@@ -148,10 +190,21 @@ export default function ShipMenu() {
         return
       }
 
+      const credentials = getDeployCredentials(provider)
+      if (!credentials) {
+        setFeedback({
+          tone: 'error',
+          title: 'Deploy blocked',
+          message: `A ${provider === 'vercel' ? 'Vercel' : 'Netlify'} token is required to deploy.`,
+        })
+        return
+      }
+
       const deployResult = await ExecutorService.executeTool('deployToProduction', {
         provider,
         projectName: projectName || 'Torbit Project',
         framework: 'auto',
+        credentials,
         files: files.map((file) => ({ path: file.path, content: file.content })),
       })
 
@@ -204,9 +257,20 @@ export default function ShipMenu() {
     }
 
     try {
+      const githubToken = getGithubToken()
+      if (!githubToken) {
+        setFeedback({
+          tone: 'error',
+          title: 'GitHub export blocked',
+          message: 'A GitHub token is required to create repositories and pull requests.',
+        })
+        return
+      }
+
       const exportBranch = `torbit-export-${Date.now().toString(36)}`
       const githubResult = await ExecutorService.executeTool('syncToGithub', {
         operation: 'pull-request',
+        token: githubToken,
         projectName: projectName || 'Torbit Project',
         repoName: (projectName || 'torbit-project').toLowerCase().replace(/[^a-z0-9-]/g, '-'),
         branch: exportBranch,

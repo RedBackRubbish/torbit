@@ -5,6 +5,11 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 });
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+const scriptSrc = isDevelopment
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net;"
+  : "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;";
+
 const nextConfig: NextConfig = {
   // ============================================================================
   // SECURITY HEADERS
@@ -20,10 +25,8 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
-          // Note: 'unsafe-eval' is required by Monaco editor (code editor web workers).
-          // 'unsafe-inline' is required by Next.js for inline scripts/styles.
-          // TODO: Migrate to nonce-based CSP to remove both unsafe directives.
-          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://openrouter.ai https://*.e2b.dev https://*.sentry.io; frame-src 'self' https://*.e2b.dev; worker-src 'self' blob:;" },
+          // Keep 'unsafe-inline' for Next.js inline scripts; restrict unsafe-eval to development only.
+          { key: 'Content-Security-Policy', value: `default-src 'self'; ${scriptSrc} style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://openrouter.ai https://*.e2b.dev https://*.sentry.io; frame-src 'self' https://*.e2b.dev; worker-src 'self' blob:;` },
         ],
       },
     ];

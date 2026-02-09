@@ -29,6 +29,7 @@ const TOOL_FUEL_COSTS: Record<string, number> = {
   createFile: 5,
   readFile: 2,
   editFile: 8,
+  applyPatch: 8,
   deleteFile: 3,
   listFiles: 2,
   
@@ -136,9 +137,38 @@ export class ExecutorService {
         }
 
         case 'editFile': {
-          const { path } = args as { path: string; content?: string; patch?: string }
+          const {
+            path,
+            content,
+            oldContent,
+            newContent,
+          } = args as {
+            path?: string
+            content?: string
+            oldContent?: string
+            newContent?: string
+          }
+          if (!path) {
+            throw new Error('editFile requires a path')
+          }
+          if (typeof content !== 'string' && (typeof oldContent !== 'string' || typeof newContent !== 'string')) {
+            throw new Error('editFile requires either full content or oldContent/newContent replacement values')
+          }
           terminal.addLog(`Updated: ${path}`, 'info')
           output = `SUCCESS: File updated at ${path}`
+          break
+        }
+
+        case 'applyPatch': {
+          const { path, patch } = args as { path?: string; patch?: string }
+          if (!path) {
+            throw new Error('applyPatch requires a path')
+          }
+          if (!patch || !patch.trim()) {
+            throw new Error('applyPatch requires a non-empty patch')
+          }
+          terminal.addLog(`Patched: ${path}`, 'info')
+          output = `SUCCESS: Patch applied at ${path}`
           break
         }
 
@@ -238,6 +268,7 @@ export class ExecutorService {
             buildCommand,
             outputDirectory,
             region,
+            credentials,
             files: providedFiles,
           } = args as {
             provider?: 'vercel' | 'netlify' | 'railway'
@@ -247,6 +278,13 @@ export class ExecutorService {
             buildCommand?: string
             outputDirectory?: string
             region?: string
+            credentials?: {
+              vercelToken?: string
+              vercelTeamId?: string
+              vercelTeamSlug?: string
+              netlifyToken?: string
+              netlifySiteId?: string
+            }
             files?: Array<{ path: string; content: string }>
           }
 
@@ -271,6 +309,7 @@ export class ExecutorService {
               buildCommand,
               outputDirectory,
               region,
+              credentials,
               files,
             }),
           })
@@ -319,6 +358,8 @@ export class ExecutorService {
         case 'syncToGithub': {
           const {
             operation = 'status',
+            token,
+            owner,
             repoName,
             projectName,
             private: isPrivate = true,
@@ -330,6 +371,8 @@ export class ExecutorService {
             files: providedFiles,
           } = args as {
             operation?: 'init' | 'push' | 'pull-request' | 'status'
+            token?: string
+            owner?: string
             repoName?: string
             projectName?: string
             private?: boolean
@@ -357,6 +400,8 @@ export class ExecutorService {
             },
             body: JSON.stringify({
               operation,
+              token,
+              owner,
               repoName,
               projectName,
               private: isPrivate,
@@ -466,7 +511,7 @@ export class ExecutorService {
         // ================================================
         
         default:
-          output = `ERROR: Unknown tool "${toolName}". Available: createFile, editFile, readFile, listFiles, deleteFile, runTerminal, installPackage, runTests, runE2eCycle, verifyDependencyGraph, deployPreview, checkDeployStatus, deployToProduction, syncToGithub`
+          output = `ERROR: Unknown tool "${toolName}". Available: createFile, editFile, applyPatch, readFile, listFiles, deleteFile, runTerminal, installPackage, runTests, runE2eCycle, verifyDependencyGraph, deployPreview, checkDeployStatus, deployToProduction, syncToGithub`
       }
 
       // 7. Consume fuel after successful execution
@@ -554,7 +599,7 @@ export class ExecutorService {
    */
   static isToolAvailable(toolName: string): boolean {
     const availableTools = [
-      'createFile', 'editFile', 'readFile', 'listFiles', 'deleteFile',
+      'createFile', 'editFile', 'applyPatch', 'readFile', 'listFiles', 'deleteFile',
       'runTerminal', 'runCommand', 'installPackage',
       'runTests', 'runE2eCycle', 'verifyDependencyGraph',
       'deployPreview', 'checkDeployStatus', 'deployToProduction', 'syncToGithub',

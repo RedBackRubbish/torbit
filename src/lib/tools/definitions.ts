@@ -101,15 +101,24 @@ export const deployToProductionSchema = z.object({
   provider: z.enum(['vercel', 'netlify', 'railway']).default('vercel').describe('Deployment platform'),
   projectName: z.string().describe('Name for the deployed project'),
   environmentVariables: z.record(z.string(), z.string()).optional().describe('Environment variables to set'),
-  framework: z.enum(['sveltekit', 'nextjs', 'vite', 'remix', 'astro', 'auto']).default('sveltekit').describe('Framework preset'),
+  framework: z.enum(['sveltekit', 'nextjs', 'vite', 'remix', 'astro', 'auto']).default('nextjs').describe('Framework preset'),
   buildCommand: z.string().optional().describe('Custom build command'),
   outputDirectory: z.string().optional().describe('Build output directory'),
   region: z.string().optional().describe('Preferred deployment region'),
+  credentials: z.object({
+    vercelToken: z.string().optional().describe('User-scoped Vercel token (required for Vercel deploys)'),
+    vercelTeamId: z.string().optional().describe('Optional Vercel team ID'),
+    vercelTeamSlug: z.string().optional().describe('Optional Vercel team slug'),
+    netlifyToken: z.string().optional().describe('User-scoped Netlify token (required for Netlify deploys)'),
+    netlifySiteId: z.string().optional().describe('Optional existing Netlify site ID'),
+  }).optional(),
 })
 
 // SYNC TO GITHUB (Push code and open PR)
 export const syncToGithubSchema = z.object({
   operation: z.enum(['init', 'push', 'pull-request', 'status']).describe('Git operation to perform'),
+  token: z.string().optional().describe('User-scoped GitHub personal access token'),
+  owner: z.string().optional().describe('GitHub user/org owner (defaults to token owner)'),
   repoName: z.string().optional().describe('Repository name (for init)'),
   private: z.boolean().default(true).describe('Create private repository'),
   commitMessage: z.string().optional().describe('Commit message for push'),

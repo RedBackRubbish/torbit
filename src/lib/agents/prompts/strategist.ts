@@ -53,7 +53,7 @@ When reviewing Architect's structure, answer:
 3. FILE LAYOUT INTENT
    - Does the directory structure match the plan?
    - Are related files co-located?
-   - Does it follow SvelteKit conventions?
+   - Does it follow Next.js App Router conventions?
 
 4. BOUNDARY CLEANLINESS
    - Are component boundaries clear?

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import fs from 'node:fs'
+import path from 'node:path'
 import { Sandbox } from 'e2b'
 import { strictRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 import { getAuthenticatedUser } from '@/lib/supabase/auth'
@@ -16,6 +18,77 @@ const activeSandboxes = new Map<string, Sandbox>()
 const sandboxOwners = new Map<string, string>()
 // Track which sandboxes have Node.js installed
 const nodeInstalledSandboxes = new Set<string>()
+const persistedSandboxOwners = new Map<string, string>()
+
+let persistedOwnersLoaded = false
+
+function getDataRoot(): string {
+  const configured = process.env.TORBIT_DATA_DIR
+  if (configured && configured.trim().length > 0) {
+    return path.resolve(configured)
+  }
+
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.join('/tmp', 'torbit-data')
+  }
+
+  return path.join(process.cwd(), '.torbit-data')
+}
+
+function getSandboxOwnershipFilePath(): string {
+  return path.join(getDataRoot(), 'sandboxes', 'ownership.json')
+}
+
+function loadPersistedSandboxOwners(): void {
+  if (persistedOwnersLoaded) return
+  persistedOwnersLoaded = true
+
+  const filePath = getSandboxOwnershipFilePath()
+  if (!fs.existsSync(filePath)) return
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8')
+    const parsed = JSON.parse(raw) as Record<string, string>
+    for (const [sandboxId, ownerId] of Object.entries(parsed)) {
+      if (typeof sandboxId === 'string' && typeof ownerId === 'string' && sandboxId && ownerId) {
+        persistedSandboxOwners.set(sandboxId, ownerId)
+      }
+    }
+  } catch (error) {
+    console.warn('[E2B] Failed to load persisted sandbox ownership map:', error)
+  }
+}
+
+function persistSandboxOwners(): void {
+  loadPersistedSandboxOwners()
+
+  try {
+    const filePath = getSandboxOwnershipFilePath()
+    const dir = path.dirname(filePath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+
+    const serialized = Object.fromEntries(persistedSandboxOwners.entries())
+    const tempPath = `${filePath}.tmp`
+    fs.writeFileSync(tempPath, `${JSON.stringify(serialized, null, 2)}\n`, 'utf8')
+    fs.renameSync(tempPath, filePath)
+  } catch (error) {
+    console.warn('[E2B] Failed to persist sandbox ownership map:', error)
+  }
+}
+
+function registerSandboxOwner(sandboxId: string, userId: string): void {
+  sandboxOwners.set(sandboxId, userId)
+  persistedSandboxOwners.set(sandboxId, userId)
+  persistSandboxOwners()
+}
+
+function removeSandboxOwner(sandboxId: string): void {
+  sandboxOwners.delete(sandboxId)
+  persistedSandboxOwners.delete(sandboxId)
+  persistSandboxOwners()
+}
 
 async function getOwnedSandbox(
   sandboxId: unknown,
@@ -34,17 +107,35 @@ async function getOwnedSandbox(
     }
   }
 
+  loadPersistedSandboxOwners()
+
   let sandbox = activeSandboxes.get(sandboxId)
-  const ownerId = sandboxOwners.get(sandboxId)
+  const ownerId = sandboxOwners.get(sandboxId) || persistedSandboxOwners.get(sandboxId)
+
+  if (!ownerId) {
+    return {
+      error: NextResponse.json(
+        { error: 'Forbidden: sandbox ownership could not be verified' },
+        { status: 403 }
+      ),
+    }
+  }
+
+  if (ownerId !== userId) {
+    return {
+      error: NextResponse.json(
+        { error: 'Forbidden: sandbox does not belong to current user' },
+        { status: 403 }
+      ),
+    }
+  }
 
   if (!sandbox) {
     try {
       // Recover sandbox handle across process restarts/cold starts.
       sandbox = await Sandbox.connect(sandboxId, { apiKey })
       activeSandboxes.set(sandboxId, sandbox)
-      if (!ownerId) {
-        sandboxOwners.set(sandboxId, userId)
-      }
+      sandboxOwners.set(sandboxId, ownerId)
       console.log(`♻️ Reconnected sandbox ${sandboxId.slice(0, 8)}...`)
     } catch {
       return {
@@ -53,17 +144,6 @@ async function getOwnedSandbox(
           { status: 404 }
         ),
       }
-    }
-  }
-
-  if (!ownerId) {
-    sandboxOwners.set(sandboxId, userId)
-  } else if (ownerId !== userId) {
-    return {
-      error: NextResponse.json(
-        { error: 'Forbidden: sandbox does not belong to current user' },
-        { status: 403 }
-      ),
     }
   }
 
@@ -133,7 +213,7 @@ export async function POST(request: NextRequest) {
         }
 
         activeSandboxes.set(sandbox.sandboxId, sandbox)
-        sandboxOwners.set(sandbox.sandboxId, user.id)
+        registerSandboxOwner(sandbox.sandboxId, user.id)
 
         return NextResponse.json({
           sandboxId: sandbox.sandboxId,
@@ -256,7 +336,7 @@ export async function POST(request: NextRequest) {
 
         await Sandbox.kill(sandbox.sandboxId, { apiKey })
         activeSandboxes.delete(sandbox.sandboxId)
-        sandboxOwners.delete(sandbox.sandboxId)
+        removeSandboxOwner(sandbox.sandboxId)
         nodeInstalledSandboxes.delete(sandbox.sandboxId)
 
         return NextResponse.json({ success: true })

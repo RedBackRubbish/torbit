@@ -13,6 +13,8 @@ const ShipFileSchema = z.object({
 
 const GitHubShipRequestSchema = z.object({
   operation: z.enum(['init', 'push', 'pull-request', 'status']).default('push'),
+  token: z.string().min(1),
+  owner: z.string().optional(),
   repoName: z.string().optional(),
   projectName: z.string().optional(),
   private: z.boolean().default(true),
@@ -73,6 +75,18 @@ function sanitizeBranchName(input: string): string {
     .replace(/\/{2,}/g, '/')
 
   return sanitized || 'main'
+}
+
+function sanitizeOwner(input: string): string {
+  const sanitized = input
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '')
+
+  if (!sanitized) {
+    throw new Error('Invalid GitHub owner name')
+  }
+
+  return sanitized
 }
 
 function normalizeFilePath(path: string): string {
@@ -329,14 +343,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const token = process.env.GITHUB_TOKEN
-  if (!token) {
-    return NextResponse.json(
-      { error: 'GITHUB_TOKEN is not configured on the server.' },
-      { status: 500 }
-    )
-  }
-
   try {
     const body = await request.json()
     const parseResult = GitHubShipRequestSchema.safeParse(body)
@@ -349,6 +355,14 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = parseResult.data
+    const token = payload.token.trim()
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Missing GitHub access token for this request.' },
+        { status: 400 }
+      )
+    }
+
     const repoName = sanitizeRepoName(
       payload.repoName ?? payload.projectName ?? 'torbit-project'
     )
@@ -369,7 +383,9 @@ export async function POST(request: NextRequest) {
     }
     const viewer = await viewerRes.json() as GitHubUser
 
-    const owner = (process.env.GITHUB_OWNER || viewer.login).trim()
+    const owner = payload.owner
+      ? sanitizeOwner(payload.owner)
+      : viewer.login
     const repository = await getOrCreateRepository({
       token,
       owner,

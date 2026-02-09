@@ -616,7 +616,7 @@ export interface Database {
           user_id: string
           stripe_subscription_id: string
           stripe_price_id: string
-          tier: 'free' | 'pro' | 'enterprise'
+          tier: 'free' | 'pro' | 'team' | 'enterprise'
           status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete'
           monthly_fuel_allowance: number
           current_period_start: string
@@ -631,7 +631,7 @@ export interface Database {
           user_id: string
           stripe_subscription_id: string
           stripe_price_id: string
-          tier?: 'free' | 'pro' | 'enterprise'
+          tier?: 'free' | 'pro' | 'team' | 'enterprise'
           status?: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete'
           monthly_fuel_allowance?: number
           current_period_start: string
@@ -645,7 +645,7 @@ export interface Database {
           user_id?: string
           stripe_subscription_id?: string
           stripe_price_id?: string
-          tier?: 'free' | 'pro' | 'enterprise'
+          tier?: 'free' | 'pro' | 'team' | 'enterprise'
           status?: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete'
           monthly_fuel_allowance?: number
           current_period_start?: string
@@ -673,7 +673,7 @@ export interface Database {
           id: string
           user_id: string
           project_id: string | null
-          type: 'purchase' | 'usage' | 'refund' | 'bonus' | 'subscription_refill'
+          type: 'subscription_refill' | 'daily_refill' | 'purchase' | 'usage' | 'refund' | 'bonus' | 'adjustment'
           amount: number
           balance_after: number
           description: string | null
@@ -686,7 +686,7 @@ export interface Database {
           id?: string
           user_id: string
           project_id?: string | null
-          type: 'purchase' | 'usage' | 'refund' | 'bonus' | 'subscription_refill'
+          type: 'subscription_refill' | 'daily_refill' | 'purchase' | 'usage' | 'refund' | 'bonus' | 'adjustment'
           amount: number
           balance_after: number
           description?: string | null
@@ -698,7 +698,7 @@ export interface Database {
         Update: {
           user_id?: string
           project_id?: string | null
-          type?: 'purchase' | 'usage' | 'refund' | 'bonus' | 'subscription_refill'
+          type?: 'subscription_refill' | 'daily_refill' | 'purchase' | 'usage' | 'refund' | 'bonus' | 'adjustment'
           amount?: number
           balance_after?: number
           description?: string | null
@@ -748,6 +748,16 @@ export interface Database {
         }
         Returns: boolean
       }
+      refund_fuel_v2: {
+        Args: {
+          p_user_id: string
+          p_project_id: string
+          p_amount: number
+          p_description: string
+          p_original_transaction_id?: string | null
+        }
+        Returns: number
+      }
       // RPC function to use fuel - returns array of result objects
       use_fuel: {
         Args: {
@@ -793,7 +803,7 @@ export interface Database {
       }
     }
     Enums: {
-      tier: 'free' | 'pro' | 'enterprise'
+      tier: 'free' | 'pro' | 'team' | 'enterprise'
       project_type: 'web' | 'mobile'
       message_role: 'user' | 'assistant' | 'system'
       transaction_type: 'purchase' | 'usage' | 'refund' | 'bonus'

@@ -21,7 +21,7 @@ const ChatRequestSchema = z.object({
     content: z.string(),
   })).min(1),
   agentId: z.string().optional(),
-  projectId: z.string().optional(),
+  projectId: z.string().max(200).optional(),
   userId: z.string().optional(), // Will be overwritten by auth
   projectType: z.enum(['web', 'mobile']).optional(),
   capabilities: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -48,6 +48,7 @@ import { getMobileSystemPrompt } from '@/lib/mobile/prompts'
 import { getDesignGuidance, getDaisyUIGuidance } from '@/lib/design/system'
 import type { MobileCapabilities, MobileProjectConfig } from '@/lib/mobile/types'
 import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
+import { resolveScopedProjectId } from '@/lib/projects/project-id'
 
 // Allow streaming responses up to 120 seconds for tool-heavy tasks
 export const runtime = 'nodejs'
@@ -295,7 +296,7 @@ export async function POST(req: Request) {
 
     // Use authenticated user ID, not the one from request
     const userId = user.id
-    const projectId = incomingProjectId?.trim() || `user-${userId}`
+    const projectId = resolveScopedProjectId(userId, incomingProjectId)
 
     // Filter out empty messages to prevent API errors
     const messages = rawMessages.filter((m) =>

@@ -799,7 +799,7 @@ export const DAISYUI_THEME_MAP: Record<keyof typeof DESIGN_PRESETS, { theme: str
 /**
  * Get DaisyUI theme guidance for generated apps.
  * This should be injected into agent prompts INSTEAD of raw design system hex values
- * when building SvelteKit + DaisyUI apps.
+ * when building DaisyUI-driven generated apps.
  */
 export function getDaisyUIGuidance(userPrompt: string): string {
   const lower = userPrompt.toLowerCase()

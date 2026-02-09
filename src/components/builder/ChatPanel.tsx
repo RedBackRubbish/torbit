@@ -91,6 +91,8 @@ export default function ChatPanel() {
     toggleChat, 
     setAgentStatus,
     addFile,
+    updateFile,
+    deleteFile,
     setIsGenerating,
     projectId,
     prompt,
@@ -102,6 +104,128 @@ export default function ChatPanel() {
     pendingHealRequest,
     setPendingHealRequest,
   } = useBuilderStore()
+
+  const normalizeBuilderPath = useCallback((value: string): string => (
+    value.replace(/^\/+/, '')
+  ), [])
+
+  const applyUnifiedPatch = useCallback((existingContent: string, patch: string): string | null => {
+    try {
+      const lines = existingContent.split('\n')
+      const patchLines = patch.split('\n')
+      const resultLines = [...lines]
+      let offset = 0
+
+      for (let i = 0; i < patchLines.length; i++) {
+        const line = patchLines[i]
+        const hunkMatch = line.match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/)
+        if (!hunkMatch) continue
+
+        const oldStart = parseInt(hunkMatch[1], 10) - 1
+        let lineIndex = oldStart + offset
+
+        i++
+        while (i < patchLines.length && !patchLines[i].startsWith('@@')) {
+          const patchLine = patchLines[i]
+
+          if (patchLine.startsWith('-')) {
+            resultLines.splice(lineIndex, 1)
+            offset--
+          } else if (patchLine.startsWith('+')) {
+            resultLines.splice(lineIndex, 0, patchLine.slice(1))
+            lineIndex++
+            offset++
+          } else if (patchLine.startsWith(' ')) {
+            lineIndex++
+          }
+
+          i++
+        }
+        i--
+      }
+
+      return resultLines.join('\n')
+    } catch {
+      return null
+    }
+  }, [])
+
+  const applyToolMutationToStore = useCallback((toolCall: ToolCall) => {
+    const pathValue = typeof toolCall.args.path === 'string' ? toolCall.args.path : null
+    const state = useBuilderStore.getState()
+
+    const findByPath = (path: string) => {
+      const normalizedPath = normalizeBuilderPath(path)
+      return state.files.find((file) => normalizeBuilderPath(file.path) === normalizedPath)
+    }
+
+    const upsertFileByPath = (path: string, content: string) => {
+      const normalizedPath = normalizeBuilderPath(path)
+      const existingFile = findByPath(normalizedPath)
+      if (existingFile) {
+        updateFile(existingFile.id, content)
+      } else {
+        addFile({
+          path: normalizedPath,
+          name: normalizedPath.split('/').pop() || 'untitled',
+          content,
+          language: normalizedPath.split('.').pop() || 'text',
+        })
+      }
+    }
+
+    if (toolCall.name === 'createFile') {
+      const content = typeof toolCall.args.content === 'string' ? toolCall.args.content : null
+      if (pathValue && content !== null) {
+        upsertFileByPath(pathValue, content)
+        fileSound.onCreate()
+      }
+      return
+    }
+
+    if (toolCall.name === 'editFile') {
+      if (!pathValue) return
+      const content = typeof toolCall.args.content === 'string' ? toolCall.args.content : null
+
+      if (content !== null) {
+        upsertFileByPath(pathValue, content)
+        fileSound.onEdit()
+        return
+      }
+
+      const existingFile = findByPath(pathValue)
+      const oldContent = typeof toolCall.args.oldContent === 'string' ? toolCall.args.oldContent : null
+      const newContent = typeof toolCall.args.newContent === 'string' ? toolCall.args.newContent : null
+      if (!existingFile || oldContent === null || newContent === null) return
+
+      if (existingFile.content.includes(oldContent)) {
+        updateFile(existingFile.id, existingFile.content.replace(oldContent, newContent))
+        fileSound.onEdit()
+      }
+      return
+    }
+
+    if (toolCall.name === 'applyPatch') {
+      const patch = typeof toolCall.args.patch === 'string' ? toolCall.args.patch : null
+      if (!pathValue || patch === null) return
+      const existingFile = findByPath(pathValue)
+      if (!existingFile) return
+
+      const nextContent = applyUnifiedPatch(existingFile.content, patch)
+      if (nextContent !== null) {
+        updateFile(existingFile.id, nextContent)
+        fileSound.onEdit()
+      }
+      return
+    }
+
+    if (toolCall.name === 'deleteFile' && pathValue) {
+      const existingFile = findByPath(pathValue)
+      if (existingFile) {
+        deleteFile(existingFile.id)
+      }
+    }
+  }, [addFile, applyUnifiedPatch, deleteFile, fileSound, normalizeBuilderPath, updateFile])
 
   // Parse SSE stream
   const parseSSEStream = useCallback(async (
@@ -186,28 +310,8 @@ export default function ChatPanel() {
                       existingTc.result = { success: result.success, output: result.output, duration: result.duration }
                       toolCalls.set(existingTc.id, existingTc)
                       
-                      const shouldAddFile = tc.name === 'createFile' && result.success && tc.args.path && tc.args.content
-                      console.log('[DEBUG] File add check:', { 
-                        shouldAddFile, 
-                        toolName: tc.name, 
-                        success: result.success, 
-                        hasPath: !!tc.args.path, 
-                        hasContent: !!tc.args.content 
-                      })
-                      if (shouldAddFile) {
-                        const path = tc.args.path as string
-                        console.log('[DEBUG] Calling addFile with path:', path)
-                        addFile({
-                          path,
-                          name: path.split('/').pop() || 'untitled',
-                          content: tc.args.content as string,
-                          language: path.split('.').pop() || 'text',
-                        })
-                        // 🔊 File created sound
-                        fileSound.onCreate()
-                      } else if (tc.name === 'editFile' && result.success) {
-                        // 🔊 File edited sound
-                        fileSound.onEdit()
+                      if (result.success) {
+                        applyToolMutationToStore(tc)
                       }
                       
                       setMessages(prev => prev.map(m => 
@@ -319,9 +423,10 @@ export default function ChatPanel() {
     const allToolCalls = Array.from(toolCalls.values())
     const createFileCalls = allToolCalls.filter(tc => tc.name === 'createFile')
     const editFileCalls = allToolCalls.filter(tc => tc.name === 'editFile')
+    const patchCalls = allToolCalls.filter(tc => tc.name === 'applyPatch')
     const testCalls = allToolCalls.filter(tc => tc.name === 'runTests' || tc.name === 'runE2eCycle')
     
-    if (createFileCalls.length > 0 || editFileCalls.length > 0) {
+    if (createFileCalls.length > 0 || editFileCalls.length > 0 || patchCalls.length > 0) {
       const proofLines: Array<{ label: string; status: 'verified' | 'warning' | 'failed' }> = []
       
       const successFiles = createFileCalls.filter(tc => tc.status === 'complete')
@@ -333,9 +438,10 @@ export default function ChatPanel() {
         proofLines.push({ label: `${failedFiles.length} file(s) failed to create`, status: 'failed' })
       }
       
-      if (editFileCalls.length > 0) {
-        const successEdits = editFileCalls.filter(tc => tc.status === 'complete')
-        if (successEdits.length === editFileCalls.length) {
+      if (editFileCalls.length > 0 || patchCalls.length > 0) {
+        const writeCalls = [...editFileCalls, ...patchCalls]
+        const successEdits = writeCalls.filter(tc => tc.status === 'complete')
+        if (successEdits.length === writeCalls.length) {
           proofLines.push({ label: `${successEdits.length} files updated`, status: 'verified' })
         }
       }
@@ -360,7 +466,7 @@ export default function ChatPanel() {
 
     setCurrentTask(null)
     return { content: fullContent, toolCalls: Array.from(toolCalls.values()) }
-  }, [setAgentStatus, addFile, fileSound])
+  }, [setAgentStatus, applyToolMutationToStore])
 
   // Generate initial acknowledgment - AI will stream the full response with plan
   const generateGreeting = useCallback((prompt: string): string => {
@@ -471,19 +577,20 @@ export default function ChatPanel() {
       setAgentStatus(agentId, 'complete', 'Done')
       
       // Generate completion summary if this was a build (not a heal request)
-      if (!isHealRequest && files.length > 0) {
+      const latestFiles = useBuilderStore.getState().files
+      if (!isHealRequest && latestFiles.length > 0) {
         // Get file paths for verification
-        const filePaths = files.map(f => f.path)
+        const filePaths = latestFiles.map(f => f.path)
         
         // Get component names
-        const componentNames = files
+        const componentNames = latestFiles
           .filter(f => f.path.includes('/components/'))
           .map(f => f.path.split('/').pop()?.replace(/\.(tsx|ts|jsx|js)$/, ''))
           .filter(Boolean)
           .slice(0, 5) // max 5
         
         // Get page names
-        const pageNames = files
+        const pageNames = latestFiles
           .filter(f => f.path.includes('page.'))
           .map(f => {
             const parts = f.path.split('/')
@@ -496,18 +603,18 @@ export default function ChatPanel() {
         setMessages(prev => [...prev, {
           id: `complete-${Date.now()}`,
           role: 'assistant',
-          content: `**${files.length} files generated.** Building preview...`,
+          content: `**${latestFiles.length} files generated.** Building preview...`,
           agentId,
           toolCalls: [],
         }])
         
         // Store pending verification data - supervisor will run when serverUrl is available
         setPendingVerification({
-          originalPrompt: prompt || messages.find(m => m.role === 'user')?.content || '',
+          originalPrompt: messageContent || prompt || '',
           filesCreated: filePaths,
           componentNames,
           pageNames,
-          fileCount: files.length,
+          fileCount: latestFiles.length,
         })
       }
     } catch (error) {
@@ -530,7 +637,7 @@ export default function ChatPanel() {
       // 🔊 Complete sound (if not error)
       if (!requestFailed) generationSound.onComplete()
     }
-  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectId, projectType, capabilities, files, generationSound, generateGreeting, prompt])
+  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectId, projectType, capabilities, generationSound, generateGreeting, prompt])
 
   // Auto-submit initial prompt
   useEffect(() => {

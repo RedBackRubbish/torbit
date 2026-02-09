@@ -17,9 +17,9 @@ import { getSupabase } from '@/lib/supabase/client'
 // - Persistent sessions up to 24 hours
 // - No browser security restrictions (SharedArrayBuffer, etc.)
 // - Faster npm installs via caching
-// - Works with SvelteKit, Next.js 15+, Qwik, etc.
+// - Works with Next.js, Vite, and SvelteKit templates.
 //
-// ⚠️ INVARIANT: All generated apps use SvelteKit 2.x + DaisyUI
+// ⚠️ INVARIANT: Runtime command and health port must match generated stack.
 // ============================================================================
 
 // Verification metadata for audit trail
@@ -57,6 +57,12 @@ const E2BContext = createContext<E2BContextValue | null>(null)
 let hasLoggedBoot = false
 const RUNTIME_STARTUP_TIMEOUT_MS = 45000
 
+interface RuntimeProfile {
+  framework: 'nextjs' | 'vite'
+  command: string
+  port: number
+}
+
 class E2BApiError extends Error {
   code?: string
   status: number
@@ -78,6 +84,54 @@ function generateHash(input: string): string {
     hash = hash & hash
   }
   return Math.abs(hash).toString(16).padStart(16, '0')
+}
+
+export function resolveRuntimeProfile(files: Array<{ path: string; content: string }>): RuntimeProfile {
+  const packageFile = files.find((file) => file.path === 'package.json' || file.path === '/package.json')
+  if (!packageFile) {
+    return {
+      framework: 'nextjs',
+      command: 'npm run dev -- --hostname 0.0.0.0 --port 3000',
+      port: 3000,
+    }
+  }
+
+  try {
+    const pkg = JSON.parse(packageFile.content) as {
+      scripts?: Record<string, string>
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+
+    const deps = {
+      ...(pkg.dependencies || {}),
+      ...(pkg.devDependencies || {}),
+    }
+
+    const devScript = (pkg.scripts?.dev || '').toLowerCase()
+    const hasNext = Boolean(deps.next) || devScript.includes('next')
+    const hasVite = Boolean(deps.vite) || devScript.includes('vite')
+
+    if (!hasNext && hasVite) {
+      return {
+        framework: 'vite',
+        command: 'npm run dev -- --host 0.0.0.0 --port 5173',
+        port: 5173,
+      }
+    }
+
+    return {
+      framework: 'nextjs',
+      command: 'npm run dev -- --hostname 0.0.0.0 --port 3000',
+      port: 3000,
+    }
+  } catch {
+    return {
+      framework: 'nextjs',
+      command: 'npm run dev -- --hostname 0.0.0.0 --port 3000',
+      port: 3000,
+    }
+  }
 }
 
 export function useE2BContext() {
@@ -328,8 +382,8 @@ export function E2BProvider({ children }: E2BProviderProps) {
         await e2bApi('writeFile', { sandboxId, path, content: file.content })
       }
       
-      // Ensure SvelteKit config files
-      await ensureSvelteKitFiles(sandboxId, files, addLog)
+      // Ensure baseline files for the detected framework.
+      await ensureFrameworkFiles(sandboxId, files, addLog)
       
       addLog('✅ Files synced', 'success')
       
@@ -381,6 +435,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
     ;(async () => {
       const buildStart = Date.now()
       try {
+        const runtimeProfile = resolveRuntimeProfile(files)
         setError(null)
         setServerUrl(null)
         addLog('🔄 Starting build process...', 'info')
@@ -416,12 +471,12 @@ export function E2BProvider({ children }: E2BProviderProps) {
         }
         
         // Start dev server
-        addLog('🚀 Starting Vite dev server...', 'info')
+        addLog(`🚀 Starting ${runtimeProfile.framework === 'nextjs' ? 'Next.js' : 'Vite'} dev server...`, 'info')
         
         // Run dev server in background and check for early failures
         const devServerPromise = e2bApi('runCommand', {
           sandboxId, 
-          command: 'npm run dev -- --host 0.0.0.0',
+          command: runtimeProfile.command,
           timeoutMs: 300000,
         })
 
@@ -448,7 +503,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
 
         while (!host && (Date.now() - buildStart) < RUNTIME_STARTUP_TIMEOUT_MS) {
           try {
-            const hostResult = await e2bApi('getHost', { sandboxId, port: 5173 })
+            const hostResult = await e2bApi('getHost', { sandboxId, port: runtimeProfile.port })
             if (hostResult.host) {
               host = hostResult.host as string
               break
@@ -515,9 +570,125 @@ export function E2BProvider({ children }: E2BProviderProps) {
 }
 
 // ============================================================================
-// Helper: Ensure essential SvelteKit files exist
+// Framework Baseline Files
 // ============================================================================
-async function ensureSvelteKitFiles(
+function normalizePath(value: string): string {
+  return value.replace(/^\/+/, '')
+}
+
+function hasFile(files: Array<{ path: string; content: string }>, targetPath: string): boolean {
+  const normalizedTarget = normalizePath(targetPath)
+  return files.some((file) => normalizePath(file.path) === normalizedTarget)
+}
+
+async function ensureFrameworkFiles(
+  sandboxId: string,
+  files: Array<{ path: string; content: string }>,
+  addLog: (message: string, type?: LogType) => void
+) {
+  const runtimeProfile = resolveRuntimeProfile(files)
+  if (runtimeProfile.framework === 'nextjs') {
+    await ensureNextJsFiles(sandboxId, files, addLog)
+    return
+  }
+
+  await ensureSvelteKitFallbackFiles(sandboxId, files, addLog)
+}
+
+async function ensureNextJsFiles(
+  sandboxId: string,
+  files: Array<{ path: string; content: string }>,
+  addLog: (message: string, type?: LogType) => void
+) {
+  const appRoot = hasFile(files, 'app/layout.tsx') || hasFile(files, 'app/page.tsx') ? 'app' : 'src/app'
+  const hasLayout = hasFile(files, `${appRoot}/layout.tsx`)
+  const hasPage = hasFile(files, `${appRoot}/page.tsx`)
+  const hasGlobals = hasFile(files, `${appRoot}/globals.css`)
+  const hasTailwindConfig = hasFile(files, 'tailwind.config.js') || hasFile(files, 'tailwind.config.ts')
+  const hasPostcss = hasFile(files, 'postcss.config.js') || hasFile(files, 'postcss.config.mjs')
+
+  await e2bApi('makeDir', { sandboxId, path: appRoot })
+
+  if (!hasGlobals) {
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: `${appRoot}/globals.css`,
+      content: `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+`,
+    })
+  }
+
+  if (!hasLayout) {
+    addLog('📄 Adding Next.js layout baseline...', 'info')
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: `${appRoot}/layout.tsx`,
+      content: `import './globals.css'
+import type { ReactNode } from 'react'
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}
+`,
+    })
+  }
+
+  if (!hasPage) {
+    addLog('📄 Adding Next.js page baseline...', 'info')
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: `${appRoot}/page.tsx`,
+      content: `export default function HomePage() {
+  return (
+    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+      <h1>Welcome to Torbit</h1>
+    </main>
+  )
+}
+`,
+    })
+  }
+
+  if (!hasTailwindConfig) {
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: 'tailwind.config.ts',
+      content: `/** @type {import('tailwindcss').Config} */
+const config = {
+  content: ['./app/**/*.{js,ts,jsx,tsx}', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+
+export default config
+`,
+    })
+  }
+
+  if (!hasPostcss) {
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: 'postcss.config.mjs',
+      content: `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+`,
+    })
+  }
+}
+
+async function ensureSvelteKitFallbackFiles(
   sandboxId: string,
   files: Array<{ path: string; content: string }>,
   addLog: (message: string, type?: LogType) => void
@@ -527,28 +698,28 @@ async function ensureSvelteKitFiles(
   const hasSvelteConfig = files.some(f => f.path.includes('svelte.config'))
   const hasViteConfig = files.some(f => f.path.includes('vite.config'))
   const hasTailwindConfig = files.some(f => f.path.includes('tailwind.config'))
-  
+
   await e2bApi('makeDir', { sandboxId, path: 'src/routes' })
-  
+
   if (!hasLayout) {
-    addLog('📄 Adding base layout...', 'info')
-    await e2bApi('writeFile', { 
-      sandboxId, 
-      path: 'src/routes/+layout.svelte', 
+    addLog('📄 Adding SvelteKit layout baseline...', 'info')
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: 'src/routes/+layout.svelte',
       content: `<script>
   import '../app.css';
 </script>
 
 <slot />
-` 
+`,
     })
   }
-  
+
   if (!hasPage) {
-    addLog('📄 Adding base page...', 'info')
-    await e2bApi('writeFile', { 
-      sandboxId, 
-      path: 'src/routes/+page.svelte', 
+    addLog('📄 Adding SvelteKit page baseline...', 'info')
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: 'src/routes/+page.svelte',
       content: `<script lang="ts">
   // SvelteKit + DaisyUI starter
 </script>
@@ -557,26 +728,25 @@ async function ensureSvelteKitFiles(
   <div class="text-center">
     <h1 class="text-5xl font-bold text-primary mb-4">Welcome to Torbit</h1>
     <p class="text-base-content/70">Your app is loading...</p>
-    <button class="btn btn-primary mt-8">Get Started</button>
   </div>
 </main>
-` 
+`,
     })
   }
-  
-  await e2bApi('writeFile', { 
-    sandboxId, 
-    path: 'src/app.css', 
+
+  await e2bApi('writeFile', {
+    sandboxId,
+    path: 'src/app.css',
     content: `@tailwind base;
 @tailwind components;
 @tailwind utilities;
-` 
+`,
   })
-  
+
   if (!hasSvelteConfig) {
-    await e2bApi('writeFile', { 
-      sandboxId, 
-      path: 'svelte.config.js', 
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: 'svelte.config.js',
       content: `import adapter from '@sveltejs/adapter-auto';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
@@ -589,101 +759,53 @@ const config = {
 };
 
 export default config;
-` 
+`,
     })
   }
-  
+
   if (!hasViteConfig) {
-    await e2bApi('writeFile', { 
-      sandboxId, 
-      path: 'vite.config.ts', 
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: 'vite.config.ts',
       content: `import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [sveltekit()]
 });
-` 
+`,
     })
   }
-  
+
   if (!hasTailwindConfig) {
-    await e2bApi('writeFile', { 
-      sandboxId, 
-      path: 'tailwind.config.js', 
-      content: `/** @type {import('tailwindcss').Config} */
-export default {
+    await e2bApi('writeFile', {
+      sandboxId,
+      path: 'tailwind.config.ts',
+      content: `import daisyui from 'daisyui'
+
+/** @type {import('tailwindcss').Config} */
+const config = {
   content: ['./src/**/*.{html,js,svelte,ts}'],
   theme: {
     extend: {},
   },
-  plugins: [require('daisyui')],
-  daisyui: {
-    themes: ['dark', 'light', 'cupcake', 'cyberpunk', 'synthwave'],
-    darkTheme: 'dark',
-  },
+  plugins: [daisyui],
 }
-` 
+
+export default config
+`,
     })
   }
-  
-  await e2bApi('writeFile', { 
-    sandboxId, 
-    path: 'postcss.config.js', 
+
+  await e2bApi('writeFile', {
+    sandboxId,
+    path: 'postcss.config.mjs',
     content: `export default {
   plugins: {
     tailwindcss: {},
     autoprefixer: {},
   },
 }
-` 
+`,
   })
-  
-  // Ensure package.json has correct dependencies
-  const pkgFile = files.find(f => f.path === 'package.json' || f.path === '/package.json')
-  if (pkgFile) {
-    try {
-      const pkg = JSON.parse(pkgFile.content)
-      let needsUpdate = false
-      
-      if (!pkg.dependencies) pkg.dependencies = {}
-      if (!pkg.devDependencies) pkg.devDependencies = {}
-      
-      const requiredDevDeps: Record<string, string> = {
-        '@sveltejs/kit': '^2.0.0',
-        '@sveltejs/adapter-auto': '^3.0.0',
-        svelte: '^4.2.0',
-        vite: '^5.0.0',
-        '@sveltejs/vite-plugin-svelte': '^3.0.0',
-        tailwindcss: '^3.4.0',
-        postcss: '^8.4.0',
-        autoprefixer: '^10.4.0',
-        daisyui: '^4.0.0',
-        typescript: '^5.0.0',
-      }
-      
-      for (const [dep, version] of Object.entries(requiredDevDeps)) {
-        if (!pkg.devDependencies[dep]) {
-          pkg.devDependencies[dep] = version
-          needsUpdate = true
-        }
-      }
-      
-      if (!pkg.scripts) pkg.scripts = {}
-      if (!pkg.scripts.dev) { pkg.scripts.dev = 'vite dev'; needsUpdate = true }
-      if (!pkg.scripts.build) { pkg.scripts.build = 'vite build'; needsUpdate = true }
-      if (!pkg.scripts.preview) { pkg.scripts.preview = 'vite preview'; needsUpdate = true }
-      
-      if (needsUpdate) {
-        await e2bApi('writeFile', { 
-          sandboxId, 
-          path: 'package.json', 
-          content: JSON.stringify(pkg, null, 2) 
-        })
-        addLog('📦 Updated package.json with SvelteKit + DaisyUI deps', 'info')
-      }
-    } catch (e) {
-      console.error('❌ Error parsing package.json:', e)
-    }
-  }
 }
