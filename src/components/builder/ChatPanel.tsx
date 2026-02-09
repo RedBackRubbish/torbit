@@ -113,6 +113,21 @@ export default function ChatPanel() {
     value.replace(/^\/+/, '')
   ), [])
 
+  const buildFileManifest = useCallback(() => {
+    const manifest = files
+      .slice(0, 300)
+      .map((file) => ({
+        path: normalizeBuilderPath(file.path),
+        bytes: file.content.length,
+      }))
+
+    return {
+      files: manifest,
+      truncated: files.length > manifest.length,
+      totalFiles: files.length,
+    }
+  }, [files, normalizeBuilderPath])
+
   const applyUnifiedPatch = useCallback((existingContent: string, patch: string): string | null => {
     try {
       const lines = existingContent.split('\n')
@@ -243,8 +258,18 @@ export default function ChatPanel() {
     // Start with initial content (greeting) so we don't lose it
     let fullContent = initialContent ? initialContent + '\n\n' : ''
     const toolCalls: Map<string, ToolCall> = new Map()
+    const appliedMutationIds = new Set<string>()
     // Track tool execution promises so we can wait for them before supervisor check
     const toolExecutionPromises: Promise<void>[] = []
+
+    const applyMutationFromToolCall = (toolCall: ToolCall) => {
+      if (!['createFile', 'editFile', 'applyPatch', 'deleteFile'].includes(toolCall.name)) {
+        return
+      }
+      if (appliedMutationIds.has(toolCall.id)) return
+      applyToolMutationToStore(toolCall)
+      appliedMutationIds.add(toolCall.id)
+    }
 
     while (true) {
       const { done, value } = await reader.read()
@@ -315,7 +340,7 @@ export default function ChatPanel() {
                       toolCalls.set(existingTc.id, existingTc)
                       
                       if (result.success) {
-                        applyToolMutationToStore(tc)
+                        applyMutationFromToolCall(existingTc)
                       }
                       
                       setMessages(prev => prev.map(m => 
@@ -343,15 +368,18 @@ export default function ChatPanel() {
               break
 
             case 'tool-result':
-              if (chunk.toolResult) {
-                const existing = toolCalls.get(chunk.toolResult.id)
-                if (existing) {
-                  existing.status = chunk.toolResult.success ? 'complete' : 'error'
-                  existing.result = chunk.toolResult
-                  toolCalls.set(existing.id, existing)
-                  setMessages(prev => prev.map(m => 
-                    m.id === assistantId 
-                      ? { ...m, toolCalls: Array.from(toolCalls.values()) }
+                if (chunk.toolResult) {
+                  const existing = toolCalls.get(chunk.toolResult.id)
+                  if (existing) {
+                    existing.status = chunk.toolResult.success ? 'complete' : 'error'
+                    existing.result = chunk.toolResult
+                    toolCalls.set(existing.id, existing)
+                    if (chunk.toolResult.success) {
+                      applyMutationFromToolCall(existing)
+                    }
+                    setMessages(prev => prev.map(m => 
+                      m.id === assistantId 
+                        ? { ...m, toolCalls: Array.from(toolCalls.values()) }
                       : m
                   ))
                 }
@@ -559,6 +587,7 @@ export default function ChatPanel() {
           projectType,
           capabilities,
           persistedInvariants,
+          fileManifest: buildFileManifest(),
         }),
       }).finally(() => clearTimeout(timeoutId))
 
@@ -607,25 +636,7 @@ export default function ChatPanel() {
         setMessages(prev => [...prev, {
           id: `complete-${Date.now()}`,
           role: 'assistant',
-          content: [
-            '**Goal**',
-            '- Build and verify the live preview runtime.',
-            '',
-            '**What changed**',
-            `- ${latestFiles.length} files were generated.`,
-            '',
-            '**What passed**',
-            '- Artifact generation completed.',
-            '',
-            '**What failed**',
-            '- None yet.',
-            '',
-            '**Auto-retry done?**',
-            '- No',
-            '',
-            '**Next action**',
-            '- Building preview runtime...',
-          ].join('\n'),
+          content: `Generated ${latestFiles.length} files. Verifying preview runtime now...`,
           agentId,
           toolCalls: [],
         }])
@@ -659,7 +670,7 @@ export default function ChatPanel() {
       // 🔊 Complete sound (if not error)
       if (!requestFailed) generationSound.onComplete()
     }
-  }, [isLoading, messages, setIsGenerating, setAgentStatus, parseSSEStream, projectId, projectType, capabilities, generationSound, generateGreeting, prompt])
+  }, [buildFileManifest, capabilities, generateGreeting, generationSound, isLoading, messages, parseSSEStream, projectId, projectType, prompt, setAgentStatus, setIsGenerating])
 
   // Auto-submit initial prompt
   useEffect(() => {

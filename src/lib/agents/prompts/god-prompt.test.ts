@@ -38,6 +38,10 @@ describe('God Prompt', () => {
     expect(GOD_PROMPT).toContain('runTests')
   })
 
+  it('forbids confirmation-gating implementation work', () => {
+    expect(GOD_PROMPT).toContain('NEVER ask the user to reply "go"')
+  })
+
   it('keeps compact prompt alias stable', () => {
     expect(GOD_PROMPT_COMPACT).toBe(GOD_PROMPT)
   })

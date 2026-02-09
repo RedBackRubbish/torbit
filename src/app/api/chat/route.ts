@@ -26,6 +26,14 @@ const ChatRequestSchema = z.object({
   projectType: z.enum(['web', 'mobile']).optional(),
   capabilities: z.record(z.string(), z.unknown()).nullable().optional(),
   persistedInvariants: z.string().nullable().optional(),
+  fileManifest: z.object({
+    files: z.array(z.object({
+      path: z.string().max(500),
+      bytes: z.number().int().nonnegative(),
+    })).max(300),
+    totalFiles: z.number().int().nonnegative(),
+    truncated: z.boolean().optional(),
+  }).optional(),
 })
 
 const VALID_AGENT_IDS = Object.keys(AGENT_TOOLS) as AgentId[]
@@ -292,6 +300,7 @@ export async function POST(req: Request) {
       projectType = 'web',
       capabilities = null,
       persistedInvariants = null,
+      fileManifest,
     } = parseResult.data
 
     // Use authenticated user ID, not the one from request
@@ -372,6 +381,21 @@ export async function POST(req: Request) {
 - Confidence: ${Math.round(snapshot.confidence * 100)}%
 - Frameworks: ${Object.entries(snapshot.frameworks).map(([name, version]) => `${name}@${version}`).join(', ') || 'none'}
 ${assumptionPreview ? `- Assumptions:\n${assumptionPreview}` : '- Assumptions: none'}`
+
+    if (fileManifest && fileManifest.files.length > 0) {
+      const fileList = fileManifest.files
+        .slice(0, 120)
+        .map((file) => `- ${file.path} (${file.bytes}b)`)
+        .join('\n')
+
+      systemPrompt = `${systemPrompt}
+
+## CURRENT WORKSPACE SNAPSHOT
+- Total files in current workspace: ${fileManifest.totalFiles}
+- Snapshot truncated: ${fileManifest.truncated ? 'yes' : 'no'}
+- File list (path + size):
+${fileList}`
+    }
 
     // Wrap user messages with XML delimiters to defend against prompt injection.
     // Sanitize the content by escaping XML-like closing tags that could break out

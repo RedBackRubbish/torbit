@@ -578,12 +578,6 @@ export function E2BProvider({ children }: E2BProviderProps) {
     if (files.length === 0) return
     if (hasStartedBuildRef.current) return
     
-    // Check if we have a package.json
-    const hasPackageJson = files.some(f => 
-      f.path === 'package.json' || f.path === '/package.json'
-    )
-    if (!hasPackageJson) return
-    
     // Calculate files hash to detect actual changes
     const filesHash = files.map(f => `${f.path}:${f.content.length}`).join('|')
     if (filesHash === lastFilesHashRef.current) return
@@ -870,11 +864,87 @@ async function ensureNextJsFiles(
   addLog: (message: string, type?: LogType) => void
 ) {
   const appRoot = hasFile(files, 'app/layout.tsx') || hasFile(files, 'app/page.tsx') ? 'app' : 'src/app'
+  const hasPackageJson = hasFile(files, 'package.json')
+  const hasTsConfig = hasFile(files, 'tsconfig.json')
+  const hasNextEnv = hasFile(files, 'next-env.d.ts')
   const hasLayout = hasFile(files, `${appRoot}/layout.tsx`)
   const hasPage = hasFile(files, `${appRoot}/page.tsx`)
   const hasGlobals = hasFile(files, `${appRoot}/globals.css`)
   const hasTailwindConfig = hasFile(files, 'tailwind.config.js') || hasFile(files, 'tailwind.config.ts')
   const hasPostcss = hasFile(files, 'postcss.config.js') || hasFile(files, 'postcss.config.mjs')
+
+  if (!hasPackageJson) {
+    addLog('📦 Adding Next.js package manifest baseline...', 'info')
+    await e2bApi('writeFile', {
+      sandboxId,
+      sandboxAccessToken,
+      path: 'package.json',
+      content: `{
+  "name": "torbit-generated-app",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5",
+    "tailwindcss": "^4",
+    "autoprefixer": "^10",
+    "postcss": "^8"
+  }
+}
+`,
+    })
+  }
+
+  if (!hasTsConfig) {
+    await e2bApi('writeFile', {
+      sandboxId,
+      sandboxAccessToken,
+      path: 'tsconfig.json',
+      content: `{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [{ "name": "next" }]
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+`,
+    })
+  }
+
+  if (!hasNextEnv) {
+    await e2bApi('writeFile', {
+      sandboxId,
+      sandboxAccessToken,
+      path: 'next-env.d.ts',
+      content: `/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+`,
+    })
+  }
 
   await e2bApi('makeDir', { sandboxId, sandboxAccessToken, path: appRoot })
 
