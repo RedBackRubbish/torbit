@@ -36,8 +36,8 @@ describe('rate-limit', () => {
     const result = await module.chatRateLimiter.check('127.0.0.1')
 
     expect(result.success).toBe(true)
-    expect(result.limit).toBe(20)
-    expect(result.remaining).toBe(19)
+    expect(result.limit).toBe(30)
+    expect(result.remaining).toBe(29)
   })
 
   it('uses Upstash pipeline when configured', async () => {

@@ -204,8 +204,8 @@ class RateLimiter {
 
 export const chatRateLimiter = new RateLimiter({
   name: 'chat',
-  maxTokens: 20,
-  refillRate: 1,
+  maxTokens: 30,
+  refillRate: 2,
   refillInterval: 3000,
 })
 
