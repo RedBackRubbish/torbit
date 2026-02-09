@@ -4,6 +4,10 @@ import path from 'node:path'
 import { Sandbox } from 'e2b'
 import { strictRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 import { getAuthenticatedUser } from '@/lib/supabase/auth'
+import {
+  createSandboxAccessToken,
+  verifySandboxAccessToken,
+} from '@/lib/e2b/sandbox-auth'
 
 // ============================================================================
 // E2B API Route - Server-side Sandbox Operations
@@ -93,7 +97,8 @@ function removeSandboxOwner(sandboxId: string): void {
 async function getOwnedSandbox(
   sandboxId: unknown,
   userId: string,
-  apiKey: string
+  apiKey: string,
+  sandboxAccessToken?: string
 ): Promise<{
   sandbox?: Sandbox
   error?: NextResponse
@@ -110,9 +115,16 @@ async function getOwnedSandbox(
   loadPersistedSandboxOwners()
 
   let sandbox = activeSandboxes.get(sandboxId)
-  const ownerId = sandboxOwners.get(sandboxId) || persistedSandboxOwners.get(sandboxId)
+  let ownerId = sandboxOwners.get(sandboxId) || persistedSandboxOwners.get(sandboxId)
+  const tokenPayload = sandboxAccessToken
+    ? verifySandboxAccessToken(sandboxAccessToken)
+    : null
 
-  if (!ownerId) {
+  const tokenMatches =
+    tokenPayload?.sandboxId === sandboxId &&
+    tokenPayload?.userId === userId
+
+  if (!ownerId && !tokenMatches) {
     return {
       error: NextResponse.json(
         {
@@ -124,7 +136,7 @@ async function getOwnedSandbox(
     }
   }
 
-  if (ownerId !== userId) {
+  if (ownerId && ownerId !== userId && !tokenMatches) {
     return {
       error: NextResponse.json(
         {
@@ -136,12 +148,21 @@ async function getOwnedSandbox(
     }
   }
 
+  // If ownership came from token (or owner map is stale), refresh in-memory/persisted map.
+  if (tokenMatches && ownerId !== userId) {
+    registerSandboxOwner(sandboxId, userId)
+    ownerId = userId
+  } else if (!ownerId && tokenMatches) {
+    registerSandboxOwner(sandboxId, userId)
+    ownerId = userId
+  }
+
   if (!sandbox) {
     try {
       // Recover sandbox handle across process restarts/cold starts.
       sandbox = await Sandbox.connect(sandboxId, { apiKey })
       activeSandboxes.set(sandboxId, sandbox)
-      sandboxOwners.set(sandboxId, ownerId)
+      sandboxOwners.set(sandboxId, ownerId || userId)
       console.log(`♻️ Reconnected sandbox ${sandboxId.slice(0, 8)}...`)
     } catch {
       return {
@@ -190,6 +211,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { action, sandboxId, ...params } = body
+    const sandboxAccessToken = typeof params.sandboxAccessToken === 'string'
+      ? params.sandboxAccessToken
+      : undefined
 
     const apiKey = process.env.E2B_API_KEY
     if (!apiKey) {
@@ -220,15 +244,17 @@ export async function POST(request: NextRequest) {
 
         activeSandboxes.set(sandbox.sandboxId, sandbox)
         registerSandboxOwner(sandbox.sandboxId, user.id)
+        const accessToken = createSandboxAccessToken(sandbox.sandboxId, user.id)
 
         return NextResponse.json({
           sandboxId: sandbox.sandboxId,
+          sandboxAccessToken: accessToken,
           success: true,
         })
       }
 
       case 'writeFile': {
-        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey, sandboxAccessToken)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -237,7 +263,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'readFile': {
-        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey, sandboxAccessToken)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -246,7 +272,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'makeDir': {
-        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey, sandboxAccessToken)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -255,7 +281,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'runCommand': {
-        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey, sandboxAccessToken)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -327,7 +353,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'getHost': {
-        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey, sandboxAccessToken)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 
@@ -336,7 +362,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'kill': {
-        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey)
+        const owned = await getOwnedSandbox(sandboxId, user.id, apiKey, sandboxAccessToken)
         if (owned.error) return owned.error
         const sandbox = owned.sandbox as Sandbox
 

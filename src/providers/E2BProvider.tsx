@@ -190,6 +190,7 @@ interface E2BProviderProps {
 
 export function E2BProvider({ children }: E2BProviderProps) {
   const [sandboxId, setSandboxId] = useState<string | null>(null)
+  const [sandboxAccessToken, setSandboxAccessToken] = useState<string | null>(null)
   const [isBooting, setIsBooting] = useState(true)
   const [isReady, setIsReady] = useState(false)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
@@ -247,6 +248,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
         if (!mounted) return
         
         setSandboxId(result.sandboxId)
+        setSandboxAccessToken(typeof result.sandboxAccessToken === 'string' ? result.sandboxAccessToken : null)
         setVerification(prev => ({
           ...prev,
           sandboxId: result.sandboxId,
@@ -307,15 +309,23 @@ export function E2BProvider({ children }: E2BProviderProps) {
 
   // Separate cleanup effect that tracks sandboxId via ref
   const sandboxIdRef = useRef<string | null>(null)
+  const sandboxAccessTokenRef = useRef<string | null>(null)
   useEffect(() => {
     sandboxIdRef.current = sandboxId
   }, [sandboxId])
 
   useEffect(() => {
+    sandboxAccessTokenRef.current = sandboxAccessToken
+  }, [sandboxAccessToken])
+
+  useEffect(() => {
     return () => {
       // Use ref to capture current sandboxId at cleanup time
       if (sandboxIdRef.current) {
-        e2bApi('kill', { sandboxId: sandboxIdRef.current }).catch(console.error)
+        e2bApi('kill', {
+          sandboxId: sandboxIdRef.current,
+          sandboxAccessToken: sandboxAccessTokenRef.current,
+        }).catch(console.error)
       }
     }
   }, [])
@@ -325,18 +335,18 @@ export function E2BProvider({ children }: E2BProviderProps) {
   // ==========================================================================
   const writeFile = useCallback(async (path: string, content: string) => {
     if (!sandboxId) throw new Error('Sandbox not ready')
-    await e2bApi('writeFile', { sandboxId, path, content })
-  }, [sandboxId])
+    await e2bApi('writeFile', { sandboxId, sandboxAccessToken, path, content })
+  }, [sandboxId, sandboxAccessToken])
   
   const readFile = useCallback(async (path: string): Promise<string | null> => {
     if (!sandboxId) return null
     try {
-      const result = await e2bApi('readFile', { sandboxId, path })
+      const result = await e2bApi('readFile', { sandboxId, sandboxAccessToken, path })
       return result.content
     } catch {
       return null
     }
-  }, [sandboxId])
+  }, [sandboxId, sandboxAccessToken])
   
   // ==========================================================================
   // Command Execution
@@ -355,6 +365,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
     try {
       const result = await e2bApi('runCommand', {
         sandboxId,
+        sandboxAccessToken,
         command: fullCommand,
         timeoutMs,
       })
@@ -373,7 +384,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
       addLog(msg, 'error')
       return { exitCode: 1, stdout: '', stderr: msg }
     }
-  }, [sandboxId, addCommand, addLog, setRunning, setExitCode])
+  }, [sandboxId, sandboxAccessToken, addCommand, addLog, setRunning, setExitCode])
   
   // ==========================================================================
   // Sync Files to Sandbox
@@ -395,18 +406,18 @@ export function E2BProvider({ children }: E2BProviderProps) {
       
       for (const dir of Array.from(dirs).sort()) {
         if (dir) {
-          await e2bApi('makeDir', { sandboxId, path: dir })
+          await e2bApi('makeDir', { sandboxId, sandboxAccessToken, path: dir })
         }
       }
       
       // Write all files
       for (const file of files) {
         const path = file.path.startsWith('/') ? file.path.slice(1) : file.path
-        await e2bApi('writeFile', { sandboxId, path, content: file.content })
+        await e2bApi('writeFile', { sandboxId, sandboxAccessToken, path, content: file.content })
       }
       
       // Ensure baseline files for the detected framework.
-      await ensureFrameworkFiles(sandboxId, files, addLog)
+      await ensureFrameworkFiles(sandboxId, sandboxAccessToken, files, addLog)
       
       addLog('✅ Files synced', 'success')
       
@@ -416,7 +427,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
       addLog(`❌ ${syncLogLine}`, 'error')
       throw new Error(syncLogLine)
     }
-  }, [sandboxId, files, addLog])
+  }, [sandboxId, sandboxAccessToken, files, addLog])
   
   // ==========================================================================
   // Kill Sandbox
@@ -424,15 +435,16 @@ export function E2BProvider({ children }: E2BProviderProps) {
   const killSandbox = useCallback(async () => {
     if (!sandboxId) return
     try {
-      await e2bApi('kill', { sandboxId })
+      await e2bApi('kill', { sandboxId, sandboxAccessToken })
       setSandboxId(null)
+      setSandboxAccessToken(null)
       setIsReady(false)
       setServerUrl(null)
       addLog('🛑 Sandbox killed', 'info')
     } catch (err) {
       console.error('Kill sandbox error:', err)
     }
-  }, [sandboxId, addLog])
+  }, [sandboxId, sandboxAccessToken, addLog])
 
   const recreateSandbox = useCallback(async (): Promise<string> => {
     setIsBooting(true)
@@ -441,8 +453,12 @@ export function E2BProvider({ children }: E2BProviderProps) {
 
     const result = await e2bApi('create')
     const nextSandboxId = result.sandboxId as string
+    const nextSandboxAccessToken = typeof result.sandboxAccessToken === 'string'
+      ? result.sandboxAccessToken
+      : null
 
     setSandboxId(nextSandboxId)
+    setSandboxAccessToken(nextSandboxAccessToken)
     setVerification(prev => ({
       ...prev,
       sandboxId: nextSandboxId,
@@ -535,6 +551,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
         // Run dev server in background and check for early failures
         const devServerPromise = e2bApi('runCommand', {
           sandboxId, 
+          sandboxAccessToken,
           command: runtimeProfile.command,
           timeoutMs: 300000,
         })
@@ -566,7 +583,11 @@ export function E2BProvider({ children }: E2BProviderProps) {
 
         while (!host && (Date.now() - buildStart) < RUNTIME_STARTUP_TIMEOUT_MS) {
           try {
-            const hostResult = await e2bApi('getHost', { sandboxId, port: runtimeProfile.port })
+            const hostResult = await e2bApi('getHost', {
+              sandboxId,
+              sandboxAccessToken,
+              port: runtimeProfile.port,
+            })
             if (hostResult.host) {
               host = hostResult.host as string
               break
@@ -674,7 +695,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
         })
       }
     })()
-  }, [sandboxId, isReady, isGenerating, files, syncFilesToSandbox, runCommand, addLog, recreateSandbox])
+  }, [sandboxId, sandboxAccessToken, isReady, isGenerating, files, syncFilesToSandbox, runCommand, addLog, recreateSandbox])
   
   // ==========================================================================
   // Context Value
@@ -715,20 +736,22 @@ function hasFile(files: Array<{ path: string; content: string }>, targetPath: st
 
 async function ensureFrameworkFiles(
   sandboxId: string,
+  sandboxAccessToken: string | null,
   files: Array<{ path: string; content: string }>,
   addLog: (message: string, type?: LogType) => void
 ) {
   const runtimeProfile = resolveRuntimeProfile(files)
   if (runtimeProfile.framework === 'nextjs') {
-    await ensureNextJsFiles(sandboxId, files, addLog)
+    await ensureNextJsFiles(sandboxId, sandboxAccessToken, files, addLog)
     return
   }
 
-  await ensureSvelteKitFallbackFiles(sandboxId, files, addLog)
+  await ensureSvelteKitFallbackFiles(sandboxId, sandboxAccessToken, files, addLog)
 }
 
 async function ensureNextJsFiles(
   sandboxId: string,
+  sandboxAccessToken: string | null,
   files: Array<{ path: string; content: string }>,
   addLog: (message: string, type?: LogType) => void
 ) {
@@ -739,11 +762,12 @@ async function ensureNextJsFiles(
   const hasTailwindConfig = hasFile(files, 'tailwind.config.js') || hasFile(files, 'tailwind.config.ts')
   const hasPostcss = hasFile(files, 'postcss.config.js') || hasFile(files, 'postcss.config.mjs')
 
-  await e2bApi('makeDir', { sandboxId, path: appRoot })
+  await e2bApi('makeDir', { sandboxId, sandboxAccessToken, path: appRoot })
 
   if (!hasGlobals) {
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: `${appRoot}/globals.css`,
       content: `@tailwind base;
 @tailwind components;
@@ -756,6 +780,7 @@ async function ensureNextJsFiles(
     addLog('📄 Adding Next.js layout baseline...', 'info')
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: `${appRoot}/layout.tsx`,
       content: `import './globals.css'
 import type { ReactNode } from 'react'
@@ -775,6 +800,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     addLog('📄 Adding Next.js page baseline...', 'info')
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: `${appRoot}/page.tsx`,
       content: `export default function HomePage() {
   return (
@@ -790,6 +816,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   if (!hasTailwindConfig) {
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: 'tailwind.config.ts',
       content: `/** @type {import('tailwindcss').Config} */
 const config = {
@@ -808,6 +835,7 @@ export default config
   if (!hasPostcss) {
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: 'postcss.config.mjs',
       content: `export default {
   plugins: {
@@ -822,6 +850,7 @@ export default config
 
 async function ensureSvelteKitFallbackFiles(
   sandboxId: string,
+  sandboxAccessToken: string | null,
   files: Array<{ path: string; content: string }>,
   addLog: (message: string, type?: LogType) => void
 ) {
@@ -831,12 +860,13 @@ async function ensureSvelteKitFallbackFiles(
   const hasViteConfig = files.some(f => f.path.includes('vite.config'))
   const hasTailwindConfig = files.some(f => f.path.includes('tailwind.config'))
 
-  await e2bApi('makeDir', { sandboxId, path: 'src/routes' })
+  await e2bApi('makeDir', { sandboxId, sandboxAccessToken, path: 'src/routes' })
 
   if (!hasLayout) {
     addLog('📄 Adding SvelteKit layout baseline...', 'info')
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: 'src/routes/+layout.svelte',
       content: `<script>
   import '../app.css';
@@ -851,6 +881,7 @@ async function ensureSvelteKitFallbackFiles(
     addLog('📄 Adding SvelteKit page baseline...', 'info')
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: 'src/routes/+page.svelte',
       content: `<script lang="ts">
   // SvelteKit + DaisyUI starter
@@ -868,6 +899,7 @@ async function ensureSvelteKitFallbackFiles(
 
   await e2bApi('writeFile', {
     sandboxId,
+    sandboxAccessToken,
     path: 'src/app.css',
     content: `@tailwind base;
 @tailwind components;
@@ -878,6 +910,7 @@ async function ensureSvelteKitFallbackFiles(
   if (!hasSvelteConfig) {
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: 'svelte.config.js',
       content: `import adapter from '@sveltejs/adapter-auto';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
@@ -898,6 +931,7 @@ export default config;
   if (!hasViteConfig) {
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: 'vite.config.ts',
       content: `import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
@@ -912,6 +946,7 @@ export default defineConfig({
   if (!hasTailwindConfig) {
     await e2bApi('writeFile', {
       sandboxId,
+      sandboxAccessToken,
       path: 'tailwind.config.ts',
       content: `import daisyui from 'daisyui'
 
@@ -931,6 +966,7 @@ export default config
 
   await e2bApi('writeFile', {
     sandboxId,
+    sandboxAccessToken,
     path: 'postcss.config.mjs',
     content: `export default {
   plugins: {
