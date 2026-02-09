@@ -76,6 +76,10 @@ interface RuntimeProfile {
   port: number
 }
 
+const INSTALL_COMMAND_PRIMARY = 'npm install'
+const INSTALL_COMMAND_LEGACY = 'npm install --legacy-peer-deps'
+const INSTALL_COMMAND_FORCE = 'npm install --force'
+
 class E2BApiError extends Error {
   code?: string
   status: number
@@ -145,6 +149,30 @@ export function resolveRuntimeProfile(files: Array<{ path: string; content: stri
       port: 3000,
     }
   }
+}
+
+export function isDependencyResolutionFailure(output: string): boolean {
+  const normalized = output.toLowerCase()
+  return normalized.includes('eresolve') ||
+    normalized.includes('unable to resolve dependency tree') ||
+    normalized.includes('conflicting peer dependency') ||
+    normalized.includes('peer dependency')
+}
+
+export function nextInstallRecoveryCommand(previousCommand: string, output: string): string | null {
+  if (!isDependencyResolutionFailure(output)) {
+    return null
+  }
+
+  if (previousCommand === INSTALL_COMMAND_PRIMARY) {
+    return INSTALL_COMMAND_LEGACY
+  }
+
+  if (previousCommand === INSTALL_COMMAND_LEGACY) {
+    return INSTALL_COMMAND_FORCE
+  }
+
+  return null
 }
 
 export function useE2BContext() {
@@ -582,16 +610,33 @@ export function E2BProvider({ children }: E2BProviderProps) {
         failingCommand = 'syncFilesToSandbox'
         await syncFilesToSandbox()
         
-        // Install dependencies
+        // Install dependencies with controlled recovery for peer-dependency conflicts.
         failedStage = 'install'
-        failingCommand = 'npm install'
-        addLog('📦 Installing dependencies (npm install)...', 'info')
-        const installResult = await runCommand('npm install', [], 90000)
-        
-        if (installResult.exitCode !== 0) {
-          const installError = installResult.stderr || installResult.stdout || 'npm install failed'
-          exactLogLine = `Dependency install failed: ${installError.slice(0, 300)}`
-          throw new Error(exactLogLine)
+        let installCommand = INSTALL_COMMAND_PRIMARY
+        let installResult: { exitCode: number; stdout: string; stderr: string } | null = null
+
+        while (true) {
+          failingCommand = installCommand
+          addLog(`📦 Installing dependencies (${installCommand})...`, 'info')
+          installResult = await runCommand(installCommand, [], installCommand === INSTALL_COMMAND_PRIMARY ? 90000 : 120000)
+
+          if (installResult.exitCode === 0) {
+            if (installCommand !== INSTALL_COMMAND_PRIMARY) {
+              addLog(`✅ Dependency install recovered with ${installCommand}`, 'success')
+            }
+            break
+          }
+
+          const installOutput = [installResult.stderr, installResult.stdout].filter(Boolean).join('\n')
+          const recoveryCommand = nextInstallRecoveryCommand(installCommand, installOutput)
+          if (!recoveryCommand) {
+            const installError = installResult.stderr || installResult.stdout || `${installCommand} failed`
+            exactLogLine = `Dependency install failed: ${installError.slice(0, 300)}`
+            throw new Error(exactLogLine)
+          }
+
+          addLog(`⚠️ Dependency resolution failed. Retrying with ${recoveryCommand}...`, 'warning')
+          installCommand = recoveryCommand
         }
         
         // Update verification
