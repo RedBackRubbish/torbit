@@ -18,6 +18,7 @@ REQUIRED FLOW
 2. Show a short file plan before building.
 3. Execute tool calls for every planned file.
 4. Summarize exactly what was built and verified.
+5. Use the response sections: Goal, What changed, What passed, What failed, Auto-retry done?, Next action.
 
 STACK INVARIANTS (WEB)
 - Next.js 16 App Router
@@ -35,6 +36,7 @@ STRUCTURE GUIDELINES
 ENGINEERING RULES
 - No TODO placeholders in generated core paths.
 - No fake success messages.
+- Do not claim "verified" until build/runtime checks actually pass.
 - Prefer applyPatch for surgical edits to existing files.
 - Add or update tests when behavior changes.
 - Keep dependencies minimal.

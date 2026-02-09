@@ -5,6 +5,12 @@ import { useTerminalStore, type LogType } from '@/store/terminal'
 import { useBuilderStore } from '@/store/builder'
 import { NervousSystem } from '@/lib/nervous-system'
 import { getSupabase } from '@/lib/supabase/client'
+import {
+  classifyBuildFailure,
+  isSandboxOwnershipFailure,
+  type BuildFailure,
+  type BuildFailureStage,
+} from '@/lib/runtime/build-diagnostics'
 
 // ============================================================================
 // E2B Sandbox Context (Client-Side)
@@ -39,6 +45,7 @@ interface E2BContextValue {
   isReady: boolean
   serverUrl: string | null
   error: string | null
+  buildFailure: BuildFailure | null
   
   // Verification metadata
   verification: VerificationMetadata
@@ -187,6 +194,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
   const [isReady, setIsReady] = useState(false)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [buildFailure, setBuildFailure] = useState<BuildFailure | null>(null)
   
   const [verification, setVerification] = useState<VerificationMetadata>({
     environmentVerifiedAt: null,
@@ -204,14 +212,18 @@ export function E2BProvider({ children }: E2BProviderProps) {
   const hasStartedBuildRef = useRef(false)
   const lastFilesHashRef = useRef<string>('')
   const wasGeneratingRef = useRef(false)
+  const autoRecoveryAttemptedRef = useRef(false)
   
   // Reset build state when new generation starts
   useEffect(() => {
     if (isGenerating && !wasGeneratingRef.current) {
       // New generation starting - reset build state
       hasStartedBuildRef.current = false
+      autoRecoveryAttemptedRef.current = false
+      lastFilesHashRef.current = ''
       setServerUrl(null)
       setError(null)
+      setBuildFailure(null)
     }
     wasGeneratingRef.current = isGenerating
   }, [isGenerating])
@@ -243,6 +255,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
         }))
         
         addLog(`✅ E2B sandbox ready: ${result.sandboxId.slice(0, 8)}...`, 'success')
+        setBuildFailure(null)
         setIsBooting(false)
         setIsReady(true)
         
@@ -254,14 +267,24 @@ export function E2BProvider({ children }: E2BProviderProps) {
         if (errorCode === 'E2B_NOT_CONFIGURED') {
           addLog('ℹ️ Live preview disabled: E2B_API_KEY is not configured', 'warning')
           setError('Live preview is disabled for this deployment.')
+          setBuildFailure(null)
           setIsBooting(false)
           setIsReady(false)
           return
         }
 
         console.error('❌ E2B boot failed:', msg)
-        addLog(`❌ E2B boot failed: ${msg}`, 'error')
-        setError(msg)
+        const exactLogLine = `E2B boot failed: ${msg}`
+        addLog(`❌ ${exactLogLine}`, 'error')
+        const failure = classifyBuildFailure({
+          message: msg,
+          stage: 'boot',
+          command: 'create sandbox',
+          exactLogLine,
+          autoRecoveryAttempted: false,
+        })
+        setBuildFailure(failure)
+        setError(failure.message)
         setIsBooting(false)
         
         NervousSystem.dispatchPain({
@@ -389,8 +412,9 @@ export function E2BProvider({ children }: E2BProviderProps) {
       
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sync failed'
-      addLog(`❌ Sync error: ${msg}`, 'error')
-      throw new Error(msg)
+      const syncLogLine = `Sync error: ${msg}`
+      addLog(`❌ ${syncLogLine}`, 'error')
+      throw new Error(syncLogLine)
     }
   }, [sandboxId, files, addLog])
   
@@ -409,6 +433,29 @@ export function E2BProvider({ children }: E2BProviderProps) {
       console.error('Kill sandbox error:', err)
     }
   }, [sandboxId, addLog])
+
+  const recreateSandbox = useCallback(async (): Promise<string> => {
+    setIsBooting(true)
+    setIsReady(false)
+    setServerUrl(null)
+
+    const result = await e2bApi('create')
+    const nextSandboxId = result.sandboxId as string
+
+    setSandboxId(nextSandboxId)
+    setVerification(prev => ({
+      ...prev,
+      sandboxId: nextSandboxId,
+      environmentVerifiedAt: Date.now(),
+      runtimeVersion: 'E2B Linux',
+    }))
+
+    setIsBooting(false)
+    setIsReady(true)
+    addLog(`✅ Recovery sandbox ready: ${nextSandboxId.slice(0, 8)}...`, 'success')
+
+    return nextSandboxId
+  }, [addLog])
   
   // ==========================================================================
   // Auto-build when files change (after generation completes)
@@ -434,22 +481,32 @@ export function E2BProvider({ children }: E2BProviderProps) {
     // Run build process
     ;(async () => {
       const buildStart = Date.now()
+      let failedStage: BuildFailureStage = 'unknown'
+      let failingCommand: string | null = null
+      let exactLogLine: string | undefined
+
       try {
         const runtimeProfile = resolveRuntimeProfile(files)
         setError(null)
+        setBuildFailure(null)
         setServerUrl(null)
         addLog('🔄 Starting build process...', 'info')
         
         // Sync files
+        failedStage = 'sync'
+        failingCommand = 'syncFilesToSandbox'
         await syncFilesToSandbox()
         
         // Install dependencies
+        failedStage = 'install'
+        failingCommand = 'npm install'
         addLog('📦 Installing dependencies (npm install)...', 'info')
         const installResult = await runCommand('npm install', [], 90000)
         
         if (installResult.exitCode !== 0) {
           const installError = installResult.stderr || installResult.stdout || 'npm install failed'
-          throw new Error(`Dependency install failed: ${installError.slice(0, 300)}`)
+          exactLogLine = `Dependency install failed: ${installError.slice(0, 300)}`
+          throw new Error(exactLogLine)
         }
         
         // Update verification
@@ -471,6 +528,8 @@ export function E2BProvider({ children }: E2BProviderProps) {
         }
         
         // Start dev server
+        failedStage = 'runtime_start'
+        failingCommand = runtimeProfile.command
         addLog(`🚀 Starting ${runtimeProfile.framework === 'nextjs' ? 'Next.js' : 'Vite'} dev server...`, 'info')
         
         // Run dev server in background and check for early failures
@@ -489,15 +548,19 @@ export function E2BProvider({ children }: E2BProviderProps) {
 
         if (earlyExit.state === 'exited') {
           const details = earlyExit.result.stderr || earlyExit.result.stdout || `exit code ${earlyExit.result.exitCode}`
-          throw new Error(`Dev server exited early: ${details.slice(0, 300)}`)
+          exactLogLine = `Dev server exited early: ${details.slice(0, 300)}`
+          throw new Error(exactLogLine)
         }
 
         if (earlyExit.state === 'failed') {
           const details = earlyExit.error instanceof Error ? earlyExit.error.message : 'unknown error'
-          throw new Error(`Dev server failed to start: ${details}`)
+          exactLogLine = `Dev server failed to start: ${details}`
+          throw new Error(exactLogLine)
         }
 
         // Poll for host availability
+        failedStage = 'host_probe'
+        failingCommand = `getHost:${runtimeProfile.port}`
         let host: string | null = null
         let hostError: string | null = null
 
@@ -517,33 +580,101 @@ export function E2BProvider({ children }: E2BProviderProps) {
 
         if (host) {
           setServerUrl(host)
+          setError(null)
+          setBuildFailure(null)
           addLog(`✅ Preview ready: ${host}`, 'success')
           return
         }
 
-        throw new Error(
-          hostError
-            ? `Preview host not ready: ${hostError}`
-            : 'Preview host did not become ready in time.'
-        )
+        exactLogLine = hostError
+          ? `Preview host not ready: ${hostError}`
+          : 'Preview host did not become ready in time.'
+        throw new Error(exactLogLine)
         
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Build failed'
-        addLog(`❌ Build error: ${msg}`, 'error')
-        setError(msg)
+        const msg = err instanceof E2BApiError && err.code
+          ? `${err.message} (${err.code})`
+          : err instanceof Error
+            ? err.message
+            : 'Build failed'
+        const normalizedLogLine = exactLogLine || `Build error: ${msg}`
+
+        if (isSandboxOwnershipFailure(msg) && !autoRecoveryAttemptedRef.current) {
+          autoRecoveryAttemptedRef.current = true
+          addLog('♻️ Auto-recovery: sandbox ownership check failed. Recreating sandbox and retrying once...', 'warning')
+
+          try {
+            await recreateSandbox()
+            setError(null)
+            setBuildFailure(
+              classifyBuildFailure({
+                message: msg,
+                stage: failedStage,
+                command: failingCommand,
+                exactLogLine: normalizedLogLine,
+                autoRecoveryAttempted: true,
+                autoRecoverySucceeded: null,
+              })
+            )
+
+            // Trigger a clean rerun for the same files with the new sandbox.
+            hasStartedBuildRef.current = false
+            lastFilesHashRef.current = ''
+            return
+          } catch (recoveryErr) {
+            const recoveryMsg = recoveryErr instanceof Error ? recoveryErr.message : 'Sandbox recreation failed'
+            const recoveryLogLine = `Auto-recovery failed: ${recoveryMsg}`
+            const failure = classifyBuildFailure({
+              message: recoveryMsg,
+              stage: 'boot',
+              command: 'create sandbox',
+              exactLogLine: recoveryLogLine,
+              autoRecoveryAttempted: true,
+              autoRecoverySucceeded: false,
+            })
+
+            addLog(`❌ ${recoveryLogLine}`, 'error')
+            setBuildFailure(failure)
+            setError(failure.message)
+            setServerUrl(null)
+
+            NervousSystem.dispatchPain({
+              id: `e2b-build-${Date.now()}`,
+              type: 'BUILD_ERROR',
+              severity: 'critical',
+              message: `Build failed: ${failure.exactLogLine}`,
+              context: 'E2BProvider build',
+              timestamp: Date.now(),
+            })
+            return
+          }
+        }
+
+        const failure = classifyBuildFailure({
+          message: msg,
+          stage: failedStage,
+          command: failingCommand,
+          exactLogLine: normalizedLogLine,
+          autoRecoveryAttempted: autoRecoveryAttemptedRef.current,
+          autoRecoverySucceeded: autoRecoveryAttemptedRef.current ? false : null,
+        })
+
+        addLog(`❌ ${failure.exactLogLine}`, 'error')
+        setBuildFailure(failure)
+        setError(failure.message)
         setServerUrl(null)
         
         NervousSystem.dispatchPain({
           id: `e2b-build-${Date.now()}`,
           type: 'BUILD_ERROR',
           severity: 'critical',
-          message: `Build failed: ${msg}`,
+          message: `Build failed: ${failure.exactLogLine}`,
           context: 'E2BProvider build',
           timestamp: Date.now(),
         })
       }
     })()
-  }, [sandboxId, isReady, isGenerating, files, syncFilesToSandbox, runCommand, addLog])
+  }, [sandboxId, isReady, isGenerating, files, syncFilesToSandbox, runCommand, addLog, recreateSandbox])
   
   // ==========================================================================
   // Context Value
@@ -554,6 +685,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
     isReady,
     serverUrl,
     error,
+    buildFailure,
     verification,
     writeFile,
     readFile,

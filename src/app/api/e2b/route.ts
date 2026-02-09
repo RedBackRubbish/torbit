@@ -115,7 +115,10 @@ async function getOwnedSandbox(
   if (!ownerId) {
     return {
       error: NextResponse.json(
-        { error: 'Forbidden: sandbox ownership could not be verified' },
+        {
+          error: 'Forbidden: sandbox ownership could not be verified',
+          code: 'SANDBOX_OWNERSHIP_UNVERIFIED',
+        },
         { status: 403 }
       ),
     }
@@ -124,7 +127,10 @@ async function getOwnedSandbox(
   if (ownerId !== userId) {
     return {
       error: NextResponse.json(
-        { error: 'Forbidden: sandbox does not belong to current user' },
+        {
+          error: 'Forbidden: sandbox does not belong to current user',
+          code: 'SANDBOX_ACCESS_DENIED',
+        },
         { status: 403 }
       ),
     }

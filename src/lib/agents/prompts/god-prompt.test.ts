@@ -16,6 +16,15 @@ describe('God Prompt', () => {
     expect(GOD_PROMPT).toContain('Step 5: Summary')
   })
 
+  it('requires structured status sections in replies', () => {
+    expect(GOD_PROMPT).toContain('Goal')
+    expect(GOD_PROMPT).toContain('What changed')
+    expect(GOD_PROMPT).toContain('What passed')
+    expect(GOD_PROMPT).toContain('What failed')
+    expect(GOD_PROMPT).toContain('Auto-retry done?')
+    expect(GOD_PROMPT).toContain('Next action')
+  })
+
   it('contains Next.js stack invariants', () => {
     expect(GOD_PROMPT).toContain('Next.js 16 App Router')
     expect(GOD_PROMPT).toContain('React 19 + TypeScript')

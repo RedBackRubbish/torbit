@@ -16,6 +16,7 @@ export interface UseE2BReturn {
   isReady: boolean
   serverUrl: string | null
   error: string | null
+  buildFailure: ReturnType<typeof useE2BContext>['buildFailure']
   
   // Verification metadata
   verification: ReturnType<typeof useE2BContext>['verification']
@@ -41,6 +42,7 @@ export function useE2B(): UseE2BReturn {
     isReady: context.isReady,
     serverUrl: context.serverUrl,
     error: context.error,
+    buildFailure: context.buildFailure,
     verification: context.verification,
     writeFile: context.writeFile,
     readFile: context.readFile,

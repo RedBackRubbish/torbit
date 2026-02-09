@@ -11,6 +11,7 @@ import { IPhoneFrame, BrowserFrame } from './DeviceFrame'
 import { DEVICE_PRESETS } from '@/lib/mobile/types'
 import { TorbitSpinner, TorbitLogo } from '@/components/ui/TorbitLogo'
 import { SafariFallback, SafariBanner } from './SafariFallback'
+import type { BuildFailure } from '@/lib/runtime/build-diagnostics'
 
 // ============================================================================
 // Device Preset Selector
@@ -108,7 +109,7 @@ const CodeEditor = dynamic(() => import('./CodeEditor'), {
  */
 export default function PreviewPanel() {
   const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, chatInput, isGenerating } = useBuilderStore()
-  const { isBooting, isReady, serverUrl, error } = useE2B()
+  const { isBooting, isReady, serverUrl, error, buildFailure } = useE2B()
   const isSupported = true // E2B is always supported (cloud-based)
   const terminalLines = useTerminalStore((s) => s.lines)
   const [showRuntimeLog, setShowRuntimeLog] = useState(false)
@@ -259,6 +260,7 @@ export default function PreviewPanel() {
                 isSupported={isSupported}
                 serverUrl={serverUrl}
                 error={error}
+                buildFailure={buildFailure}
                 previewDevice={previewDevice}
                 deviceWidths={deviceWidths}
                 files={files}
@@ -303,6 +305,7 @@ interface PreviewContentProps {
   isSupported: boolean
   serverUrl: string | null
   error: string | null
+  buildFailure: BuildFailure | null
   previewDevice: 'desktop' | 'tablet' | 'mobile'
   deviceWidths: Record<string, string>
   files: { path: string; content: string }[]
@@ -319,6 +322,7 @@ function PreviewContent({
   isSupported,
   serverUrl,
   error,
+  buildFailure,
   previewDevice,
   deviceWidths,
   files,
@@ -387,11 +391,27 @@ function PreviewContent({
       )
     }
 
+    const errorTitle = buildFailure
+      ? (
+        buildFailure.category === 'infra'
+          ? 'Infrastructure verification failed'
+          : buildFailure.category === 'dependency'
+            ? 'Dependency resolution failed'
+            : buildFailure.category === 'code'
+              ? 'Runtime build failed'
+              : 'Verification failed'
+      )
+      : 'Verification failed'
+
+    const errorSubtitle = buildFailure
+      ? `${buildFailure.command ? `Command: ${buildFailure.command}. ` : ''}${buildFailure.actionableFix}`
+      : 'Check runtime log for details'
+
     return (
       <StatusCard 
         icon="error" 
-        title="Verification failed" 
-        subtitle="Check runtime log for details"
+        title={errorTitle}
+        subtitle={errorSubtitle}
       />
     )
   }

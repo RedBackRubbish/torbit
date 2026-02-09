@@ -19,6 +19,10 @@ import { useGovernanceStore } from '@/store/governance'
 import { getSupabase } from '@/lib/supabase/client'
 import type { Message, ToolCall, StreamChunk, AgentId } from './chat/types'
 import { ChatHistorySkeleton } from '@/components/ui/skeletons'
+import {
+  formatBuildFailureSummary,
+  type BuildFailure,
+} from '@/lib/runtime/build-diagnostics'
 
 const InspectorView = dynamic(
   () => import('./governance/InspectorView').then((module) => module.InspectorView),
@@ -67,7 +71,7 @@ export default function ChatPanel() {
   
   const [isMounted, setIsMounted] = useState(false)
   
-  const { isBooting, isReady, serverUrl, error, verification } = useE2BContext()
+  const { isBooting, isReady, serverUrl, error, verification, buildFailure } = useE2BContext()
   
   // Sound effects
   const generationSound = useGenerationSound()
@@ -433,7 +437,7 @@ export default function ChatPanel() {
       const failedFiles = createFileCalls.filter(tc => tc.status === 'error')
       
       if (successFiles.length > 0 && failedFiles.length === 0) {
-        proofLines.push({ label: `${successFiles.length} files created successfully`, status: 'verified' })
+        proofLines.push({ label: `${successFiles.length} files generated (awaiting runtime verification)`, status: 'warning' })
       } else if (failedFiles.length > 0) {
         proofLines.push({ label: `${failedFiles.length} file(s) failed to create`, status: 'failed' })
       }
@@ -442,7 +446,7 @@ export default function ChatPanel() {
         const writeCalls = [...editFileCalls, ...patchCalls]
         const successEdits = writeCalls.filter(tc => tc.status === 'complete')
         if (successEdits.length === writeCalls.length) {
-          proofLines.push({ label: `${successEdits.length} files updated`, status: 'verified' })
+          proofLines.push({ label: `${successEdits.length} files updated (awaiting runtime verification)`, status: 'warning' })
         }
       }
       
@@ -603,7 +607,25 @@ export default function ChatPanel() {
         setMessages(prev => [...prev, {
           id: `complete-${Date.now()}`,
           role: 'assistant',
-          content: `**${latestFiles.length} files generated.** Building preview...`,
+          content: [
+            '**Goal**',
+            '- Build and verify the live preview runtime.',
+            '',
+            '**What changed**',
+            `- ${latestFiles.length} files were generated.`,
+            '',
+            '**What passed**',
+            '- Artifact generation completed.',
+            '',
+            '**What failed**',
+            '- None yet.',
+            '',
+            '**Auto-retry done?**',
+            '- No',
+            '',
+            '**Next action**',
+            '- Building preview runtime...',
+          ].join('\n'),
           agentId,
           toolCalls: [],
         }])
@@ -834,6 +856,39 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     handleSubmitMessage(fixPrompt, selectedAgent, true)
   }, [selectedAgent, handleSubmitMessage])
 
+  // If runtime build fails before preview goes live, replace the optimistic
+  // "Building preview..." message with a deterministic failure report.
+  useEffect(() => {
+    if (!error || !pendingVerification) return
+
+    const fallbackFailure: BuildFailure = {
+      category: 'unknown',
+      stage: 'unknown',
+      command: null,
+      message: error,
+      exactLogLine: error,
+      actionableFix: 'Open the runtime log, fix the first failing command, and retry the build.',
+      autoRecoveryAttempted: false,
+      autoRecoverySucceeded: null,
+    }
+
+    const failureSummary = formatBuildFailureSummary({
+      goal: 'Build and verify the live preview runtime',
+      fileCount: pendingVerification.fileCount,
+      failure: buildFailure || fallbackFailure,
+    })
+
+    setMessages((prev) => prev.map((message) =>
+      message.content?.includes('Building preview') || message.content?.includes('Supervisor is reviewing')
+        ? { ...message, content: failureSummary }
+        : message
+    ))
+
+    setSupervisorLoading(false)
+    setShowSupervisor(false)
+    setPendingVerification(null)
+  }, [error, pendingVerification, buildFailure])
+
   // Trigger supervisor verification when serverUrl becomes available AND we have pending verification
   // This ensures supervisor only approves after the build actually succeeds
   useEffect(() => {
@@ -842,7 +897,28 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     // Update message to show supervisor is now reviewing (build succeeded)
     setMessages(prev => prev.map(m =>
       m.content?.includes('Building preview')
-        ? { ...m, content: `**${pendingVerification.fileCount} files generated.** Supervisor is reviewing...` }
+        ? {
+          ...m,
+          content: [
+            '**Goal**',
+            '- Build and verify the live preview runtime.',
+            '',
+            '**What changed**',
+            `- ${pendingVerification.fileCount} files were generated.`,
+            '',
+            '**What passed**',
+            '- Preview runtime is live.',
+            '',
+            '**What failed**',
+            '- None yet.',
+            '',
+            '**Auto-retry done?**',
+            '- No',
+            '',
+            '**Next action**',
+            '- Supervisor is reviewing quality and completeness...',
+          ].join('\n'),
+        }
         : m
     ))
     
@@ -874,8 +950,17 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
           setSupervisorResult(result)
           
           if (result.status === 'APPROVED') {
-            // Build message with optional suggestions
-            let approvedMessage = `**${pendingVerification.fileCount} files generated.**\n\n✓ **Supervisor approved** — Build meets quality standards.`
+            let approvedMessage = [
+              '**Goal**',
+              '- Build and verify the live preview runtime.',
+              '',
+              '**What changed**',
+              `- ${pendingVerification.fileCount} files were generated.`,
+              '',
+              '**What passed**',
+              '- Preview runtime is live.',
+              '- Supervisor approved build quality.',
+            ].join('\n')
             
             if (result.suggestions && result.suggestions.length > 0) {
               approvedMessage += `\n\n**Suggestions for improvement:**\n`
@@ -884,7 +969,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
                 .join('\n')
             }
             
-            approvedMessage += `\n\nPreview is live. What would you like to iterate on?`
+            approvedMessage += `\n\n**What failed**\n- None.\n\n**Auto-retry done?**\n- No\n\n**Next action**\n- Preview is live. Tell me what to iterate next.`
             
             setMessages(prev => prev.map(m =>
               m.content?.includes('Supervisor is reviewing')
@@ -900,7 +985,28 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
 
             setMessages(prev => prev.map(m =>
               m.content?.includes('Supervisor is reviewing')
-                ? { ...m, content: `**${pendingVerification.fileCount} files generated.** Supervisor review:\n\n**Issues found:**\n${issueList}\n\nApplying fixes...` }
+                ? {
+                  ...m,
+                  content: [
+                    '**Goal**',
+                    '- Build and verify the live preview runtime.',
+                    '',
+                    '**What changed**',
+                    `- ${pendingVerification.fileCount} files were generated.`,
+                    '',
+                    '**What passed**',
+                    '- Preview runtime is live.',
+                    '',
+                    '**What failed**',
+                    `- Supervisor found issues:\n${issueList}`,
+                    '',
+                    '**Auto-retry done?**',
+                    '- No',
+                    '',
+                    '**Next action**',
+                    '- Applying fixes now...',
+                  ].join('\n'),
+                }
                 : m
             ))
             setTimeout(() => {
@@ -914,7 +1020,28 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
           setShowSupervisor(false)
           setMessages(prev => prev.map(m => 
             m.content?.includes('Supervisor is reviewing')
-              ? { ...m, content: `**${pendingVerification.fileCount} files generated.** Preview is live.\n\nWhat would you like to iterate on?` }
+              ? {
+                ...m,
+                content: [
+                  '**Goal**',
+                  '- Build and verify the live preview runtime.',
+                  '',
+                  '**What changed**',
+                  `- ${pendingVerification.fileCount} files were generated.`,
+                  '',
+                  '**What passed**',
+                  '- Preview runtime is live.',
+                  '',
+                  '**What failed**',
+                  '- Supervisor verification API failed.',
+                  '',
+                  '**Auto-retry done?**',
+                  '- No',
+                  '',
+                  '**Next action**',
+                  '- Review runtime logs and iterate on the feature set.',
+                ].join('\n'),
+              }
               : m
           ))
         }
@@ -924,7 +1051,28 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
         setShowSupervisor(false)
         setMessages(prev => prev.map(m => 
           m.content?.includes('Supervisor is reviewing')
-            ? { ...m, content: `**${pendingVerification.fileCount} files generated.** Preview is live.\n\nWhat would you like to iterate on?` }
+            ? {
+              ...m,
+              content: [
+                '**Goal**',
+                '- Build and verify the live preview runtime.',
+                '',
+                '**What changed**',
+                `- ${pendingVerification.fileCount} files were generated.`,
+                '',
+                '**What passed**',
+                '- Preview runtime is live.',
+                '',
+                '**What failed**',
+                '- Supervisor verification request failed.',
+                '',
+                '**Auto-retry done?**',
+                '- No',
+                '',
+                '**Next action**',
+                '- Continue iterating or rerun verification.',
+              ].join('\n'),
+            }
             : m
         ))
       } finally {
@@ -1106,6 +1254,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
               isReady={isReady}
               serverUrl={serverUrl}
               error={error}
+              buildFailure={buildFailure}
               isBuilding={isLoading}
               currentTask={currentTask}
               hasFiles={files.length > 0}
@@ -1265,6 +1414,7 @@ interface ExecutionStatusRailProps {
   isReady: boolean
   serverUrl: string | null
   error: string | null
+  buildFailure: BuildFailure | null
   isBuilding: boolean
   currentTask: string | null
   hasFiles: boolean
@@ -1276,6 +1426,7 @@ function ExecutionStatusRail({
   isReady,
   serverUrl,
   error,
+  buildFailure,
   isBuilding,
   currentTask,
   hasFiles,
@@ -1283,6 +1434,26 @@ function ExecutionStatusRail({
 }: ExecutionStatusRailProps) {
   // Derive status steps with error awareness
   const hasError = !!error
+  const runtimeErrorLabel = buildFailure
+    ? (
+      buildFailure.category === 'infra'
+        ? 'Infrastructure verification failed'
+        : buildFailure.category === 'dependency'
+          ? 'Dependency resolution failed'
+          : buildFailure.category === 'code'
+            ? 'Runtime build failed'
+            : 'Build failed'
+    )
+    : 'Build failed'
+  const recoveryActionLabel = buildFailure
+    ? (
+      buildFailure.category === 'infra'
+        ? 'Recreate sandbox'
+        : buildFailure.category === 'dependency'
+          ? 'Resolve dependencies'
+          : 'Retry build'
+    )
+    : 'Retry build'
   
   // Determine if we're fully complete (has files, not building, no errors, preview running)
   const isFullyComplete = hasFiles && !isBuilding && !hasError && serverUrl
@@ -1306,14 +1477,14 @@ function ExecutionStatusRail({
     {
       label: 'Dependencies pinned',
       status: hasError ? 'error' : serverUrl ? 'complete' : isReady && !serverUrl ? 'active' : 'pending',
-      errorMessage: hasError && isReady && !serverUrl ? 'Dependency resolution failed' : undefined,
-      recoveryAction: hasError && isReady && !serverUrl ? 'Resolve dependencies' : undefined,
+      errorMessage: hasError && isReady && !serverUrl ? runtimeErrorLabel : undefined,
+      recoveryAction: hasError && isReady && !serverUrl ? recoveryActionLabel : undefined,
     },
     {
       label: isBuilding ? (currentTask && currentTask !== 'Thinking...' ? currentTask : 'Building artifacts') : (hasFiles ? 'Artifacts ready' : 'Awaiting build'),
       status: hasError && isReady && serverUrl ? 'error' : isBuilding ? 'active' : hasFiles ? 'complete' : 'pending',
-      errorMessage: hasError && isReady && serverUrl ? 'Build failed' : undefined,
-      recoveryAction: hasError && isReady && serverUrl ? 'Retry build' : undefined,
+      errorMessage: hasError && isReady && serverUrl ? runtimeErrorLabel : undefined,
+      recoveryAction: hasError && isReady && serverUrl ? recoveryActionLabel : undefined,
     },
     {
       label: isFullyComplete ? 'Build verified' : (isBuilding ? 'Verification pending' : 'Awaiting verification'),
