@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import { recordMetric } from '@/lib/metrics/success'
+import { recordMetric, recordPromptToVerified } from '@/lib/metrics/success'
 
 // ============================================================================
 // ACTIVITY LEDGER STORE
@@ -97,6 +97,23 @@ function generateLedgerHash(input: string): string {
 }
 
 let entryCounter = 0
+const PROMPT_START_TS_KEY = 'torbit_prompt_start_ts'
+
+function storePromptStartTimestamp(timestamp: number): void {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(PROMPT_START_TS_KEY, String(timestamp))
+}
+
+function consumePromptStartTimestamp(): number | null {
+  if (typeof window === 'undefined') return null
+  const raw = window.sessionStorage.getItem(PROMPT_START_TS_KEY)
+  if (!raw) return null
+
+  window.sessionStorage.removeItem(PROMPT_START_TS_KEY)
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return null
+  return parsed
+}
 
 export const useLedger = create<LedgerState & LedgerActions>()(
   immer((set, get) => ({
@@ -115,6 +132,7 @@ export const useLedger = create<LedgerState & LedgerActions>()(
         
         // Record metric (Phase 6) - build starts when intent is recorded
         recordMetric('build_started')
+        storePromptStartTimestamp(Date.now())
         
         state.entries.push({
           id: `ledger-${++entryCounter}-${Date.now()}`,
@@ -157,6 +175,10 @@ export const useLedger = create<LedgerState & LedgerActions>()(
         
         // Record metric (Phase 6)
         recordMetric('build_verified')
+        const promptStart = consumePromptStartTimestamp()
+        if (promptStart) {
+          recordPromptToVerified(promptStart)
+        }
         
         state.entries.push({
           id: `ledger-${++entryCounter}-${Date.now()}`,
@@ -251,6 +273,9 @@ export const useLedger = create<LedgerState & LedgerActions>()(
       set((state) => {
         state.entries = []
         state.isExpanded = false
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.removeItem(PROMPT_START_TS_KEY)
+        }
       })
     },
   }))

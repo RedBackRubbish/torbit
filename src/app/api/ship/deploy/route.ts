@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { strictRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 import { createClient } from '@/lib/supabase/server'
+import {
+  appendTrustBundleArtifacts,
+  createShipTrustBundle,
+  resolveShipSigningSecret,
+  signShipTrustBundle,
+  type ShipGovernancePayload,
+} from '@/lib/ship/trust-bundle'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -26,6 +33,17 @@ const DeployRequestSchema = z.object({
   buildCommand: z.string().optional(),
   outputDirectory: z.string().optional(),
   region: z.string().optional(),
+  workflowMode: z.enum(['pr-first', 'direct']).default('direct'),
+  governance: z.object({
+    auditorPassed: z.boolean(),
+    previewVerified: z.boolean(),
+    runtimeProbePassed: z.boolean(),
+    runtimeHash: z.string().optional(),
+    dependencyLockHash: z.string().optional(),
+    rescueCount: z.number().int().nonnegative().optional(),
+    requiresHumanReview: z.boolean().optional(),
+    verifiedAt: z.string().optional(),
+  }).optional(),
   environmentVariables: z.record(z.string(), z.string())
     .optional()
     .transform(vars => {
@@ -321,6 +339,46 @@ export async function POST(request: NextRequest) {
     }))
     const projectName = payload.projectName?.trim() || 'Torbit Project'
     const credentials = payload.credentials
+    const governance: ShipGovernancePayload = payload.governance ?? {
+      auditorPassed: false,
+      previewVerified: false,
+      runtimeProbePassed: false,
+      rescueCount: 0,
+      requiresHumanReview: false,
+      runtimeHash: null,
+      dependencyLockHash: null,
+      verifiedAt: null,
+    }
+
+    const unsignedTrustBundle = createShipTrustBundle({
+      projectName,
+      target: 'deploy',
+      workflowMode: payload.workflowMode,
+      actorUserId: user.id,
+      governance,
+      files: normalizedFiles,
+    })
+
+    const signedTrustBundle = (() => {
+      const signingSecret = resolveShipSigningSecret()
+      if (!signingSecret) return unsignedTrustBundle
+      return signShipTrustBundle(unsignedTrustBundle, signingSecret)
+    })()
+
+    if (!signedTrustBundle.readiness.ready) {
+      return NextResponse.json(
+        {
+          error: 'Deploy blocked by trusted shipping gate.',
+          blockers: signedTrustBundle.readiness.blockers,
+          warnings: signedTrustBundle.readiness.warnings,
+          trustBundleHash: signedTrustBundle.bundleHash,
+          manualRescueRequired: signedTrustBundle.readiness.manualRescueRequired,
+        },
+        { status: 412 }
+      )
+    }
+
+    const deployFiles = appendTrustBundleArtifacts(normalizedFiles, signedTrustBundle)
 
     if (payload.provider === 'railway') {
       return NextResponse.json(
@@ -347,7 +405,7 @@ export async function POST(request: NextRequest) {
         buildCommand: payload.buildCommand,
         outputDirectory: payload.outputDirectory,
         environmentVariables: payload.environmentVariables,
-        files: normalizedFiles,
+        files: deployFiles,
       })
 
       return NextResponse.json({
@@ -357,6 +415,9 @@ export async function POST(request: NextRequest) {
         deploymentUrl: deployment.deploymentUrl,
         inspectorUrl: deployment.inspectorUrl,
         state: deployment.state,
+        trustBundleHash: signedTrustBundle.bundleHash,
+        trustSigned: Boolean(signedTrustBundle.signature),
+        manualRescueRequired: signedTrustBundle.readiness.manualRescueRequired,
       })
     }
 
@@ -372,7 +433,7 @@ export async function POST(request: NextRequest) {
       token: netlifyToken,
       siteId: credentials?.netlifySiteId?.trim() || undefined,
       projectName,
-      files: normalizedFiles,
+      files: deployFiles,
     })
 
     return NextResponse.json({
@@ -383,6 +444,9 @@ export async function POST(request: NextRequest) {
       dashboardUrl: netlifyDeployment.dashboardUrl,
       siteId: netlifyDeployment.siteId,
       state: netlifyDeployment.state,
+      trustBundleHash: signedTrustBundle.bundleHash,
+      trustSigned: Boolean(signedTrustBundle.signature),
+      manualRescueRequired: signedTrustBundle.readiness.manualRescueRequired,
     })
   } catch (error) {
     console.error('Deploy ship error:', error)

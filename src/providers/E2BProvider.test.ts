@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createRuntimeProbeCommand,
   createFilesFingerprint,
+  injectPreviewBridgeIntoNextLayout,
   isDependencyResolutionFailure,
   normalizeRuntimePath,
   nextInstallRecoveryCommand,
@@ -96,5 +98,55 @@ describe('normalizeRuntimePath', () => {
 
   it('normalizes windows separators', () => {
     expect(normalizeRuntimePath('src\\app\\page.tsx')).toBe('src/app/page.tsx')
+  })
+})
+
+describe('createRuntimeProbeCommand', () => {
+  it('embeds the requested port in a node probe command', () => {
+    const command = createRuntimeProbeCommand(5173)
+    expect(command).toContain('node -e')
+    expect(command).toContain('http://127.0.0.1:5173')
+  })
+
+  it('falls back to port 3000 for invalid values', () => {
+    const command = createRuntimeProbeCommand(Number.NaN)
+    expect(command).toContain('http://127.0.0.1:3000')
+  })
+})
+
+describe('injectPreviewBridgeIntoNextLayout', () => {
+  it('injects the bridge script before closing body once', () => {
+    const source = `export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}`
+
+    const injected = injectPreviewBridgeIntoNextLayout(source)
+    expect(injected).toContain('TORBIT_PREVIEW_BRIDGE')
+    expect(injected).toContain("TORBIT_INJECT_SPY")
+    expect(injected).toContain('</body>')
+  })
+
+  it('does not duplicate bridge injection', () => {
+    const source = `export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        {/* TORBIT_PREVIEW_BRIDGE: enables iframe-to-preview console diagnostics */}
+      </body>
+    </html>
+  )
+}`
+
+    expect(injectPreviewBridgeIntoNextLayout(source)).toBe(source)
+  })
+
+  it('returns source unchanged when body tag is absent', () => {
+    const source = `export default function Layout() { return <main /> }`
+    expect(injectPreviewBridgeIntoNextLayout(source)).toBe(source)
   })
 })

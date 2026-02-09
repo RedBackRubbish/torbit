@@ -52,6 +52,17 @@ describe('build diagnostics', () => {
     expect(failure.actionableFix).toContain('backoff')
   })
 
+  it('classifies runtime route probe failures as code errors', () => {
+    const failure = classifyBuildFailure({
+      message: 'Runtime route probe failed: ROUTE_PROBE_FAIL empty-runtime-html status=200',
+      stage: 'route_probe',
+      command: 'route-probe:3000',
+    })
+
+    expect(failure.category).toBe('code')
+    expect(failure.command).toBe('route-probe:3000')
+  })
+
   it('formats a structured failure summary for chat output', () => {
     const failure = classifyBuildFailure({
       message: 'Dev server exited early: next build failed',

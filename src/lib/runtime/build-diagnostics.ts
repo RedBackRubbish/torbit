@@ -1,5 +1,5 @@
 export type BuildFailureCategory = 'infra' | 'dependency' | 'code' | 'unknown'
-export type BuildFailureStage = 'boot' | 'sync' | 'install' | 'runtime_start' | 'host_probe' | 'unknown'
+export type BuildFailureStage = 'boot' | 'sync' | 'install' | 'runtime_start' | 'host_probe' | 'route_probe' | 'unknown'
 
 export interface BuildFailure {
   category: BuildFailureCategory
@@ -82,6 +82,9 @@ export function classifyBuildFailure({
       'dev server exited early',
       'dev server failed to start',
       'preview host not ready',
+      'runtime route probe failed',
+      'route_probe_fail',
+      'empty-runtime-html',
       'build failed',
       'typescript',
       'eslint',

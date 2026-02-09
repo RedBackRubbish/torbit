@@ -12,6 +12,8 @@ export interface MetricsSummary {
   rates: {
     buildCompletionRate: number
     buildVerificationRate: number
+    mergeablePRRate: number
+    promptToMergeablePRWithoutRescueRate: number
     exportOpenRate: number
     exportDeployRate: number
   }
@@ -74,6 +76,9 @@ export function buildMetricsSummary(events: ProductEventRecord[]): MetricsSummar
   const exportsDownloaded = eventCounts.export_downloaded || 0
   const exportsOpened = eventCounts.export_opened || 0
   const exportsDeployed = eventCounts.export_deployed || 0
+  const prCreated = eventCounts.pr_created || 0
+  const prMergeable = eventCounts.pr_mergeable || 0
+  const prMergeableWithoutRescue = eventCounts.pr_mergeable_without_rescue || 0
 
   return {
     totalEvents: events.length,
@@ -81,6 +86,8 @@ export function buildMetricsSummary(events: ProductEventRecord[]): MetricsSummar
     rates: {
       buildCompletionRate: ratio(buildsCompleted, buildsStarted),
       buildVerificationRate: ratio(buildsVerified, buildsStarted),
+      mergeablePRRate: ratio(prMergeable, prCreated),
+      promptToMergeablePRWithoutRescueRate: ratio(prMergeableWithoutRescue, buildsStarted),
       exportOpenRate: ratio(exportsOpened, exportsDownloaded),
       exportDeployRate: ratio(exportsDeployed, exportsOpened),
     },

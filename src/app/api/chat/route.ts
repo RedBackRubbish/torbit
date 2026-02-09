@@ -52,6 +52,7 @@ import { AUDITOR_SYSTEM_PROMPT } from '@/lib/agents/prompts/auditor'
 import { PLANNER_SYSTEM_PROMPT } from '@/lib/agents/prompts/planner'
 import { STRATEGIST_SYSTEM_PROMPT } from '@/lib/agents/prompts/strategist'
 import { GOD_PROMPT } from '@/lib/agents/prompts/god-prompt'
+import { getVerticalPlaybookGuidance } from '@/lib/agents/playbooks'
 import { getMobileSystemPrompt } from '@/lib/mobile/prompts'
 import { getDesignGuidance, getDaisyUIGuidance } from '@/lib/design/system'
 import type { MobileCapabilities, MobileProjectConfig } from '@/lib/mobile/types'
@@ -347,9 +348,10 @@ export async function POST(req: Request) {
       const userMessage = messages[messages.length - 1]?.content || ''
       const daisyGuidance = getDaisyUIGuidance(userMessage)
       const designGuidance = getDesignGuidance(userMessage)
+      const verticalGuidance = getVerticalPlaybookGuidance(userMessage)
 
       // Combine base prompt with DaisyUI theme guidance + design system
-      systemPrompt = `${basePrompt}\n\n${daisyGuidance}\n\n${designGuidance}`
+      systemPrompt = `${basePrompt}\n\n${daisyGuidance}\n\n${designGuidance}${verticalGuidance ? `\n\n${verticalGuidance}` : ''}`
     }
     
     // Inject persisted invariants from previous builds

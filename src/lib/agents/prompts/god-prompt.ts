@@ -94,6 +94,9 @@ Before finalizing, ensure:
 - No fake success messages when operations fail.
 - No stack drift (generated files match runtime assumptions).
 - No contradictory instructions about framework or commands.
+- For GitHub shipping, default to PR-first workflows (avoid direct push unless explicitly requested).
+- Include trusted shipping metadata (runtime hash + lock hash context) before deploy/sync tools.
+- Treat unverified runtime as a blocker for production deploy actions.
 
 Torbit already handles install/dev server orchestration in the runtime. Do not ask users to run setup commands manually unless troubleshooting requires it.`
 

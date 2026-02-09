@@ -23,6 +23,7 @@ import {
   formatBuildFailureSummary,
   type BuildFailure,
 } from '@/lib/runtime/build-diagnostics'
+import { recordMetric } from '@/lib/metrics/success'
 
 const InspectorView = dynamic(
   () => import('./governance/InspectorView').then((module) => module.InspectorView),
@@ -707,6 +708,16 @@ export default function ChatPanel() {
     
     // After 2 failed attempts, call supervisor
     if (attemptNum > MAX_HEAL_ATTEMPTS) {
+      recordMetric('manual_rescue_required', {
+        reason: 'auto_heal_escalation',
+        attempts: attemptNum,
+        error: pendingHealRequest.error,
+      })
+
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('torbit_manual_rescue_count', String(attemptNum))
+      }
+
       // Show message that we're escalating to supervisor
       setMessages(prev => [...prev, { 
         id: `escalate-${Date.now()}`, 
@@ -808,6 +819,9 @@ Analyze the error, identify the problematic file, and use editFile to fix it imm
   useEffect(() => {
     if (serverUrl) {
       healAttemptCountRef.current = 0
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem('torbit_manual_rescue_count')
+      }
     }
   }, [serverUrl])
 

@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { strictRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 import { createClient } from '@/lib/supabase/server'
+import {
+  appendTrustBundleArtifacts,
+  createShipTrustBundle,
+  resolveShipSigningSecret,
+  signShipTrustBundle,
+  type ShipGovernancePayload,
+} from '@/lib/ship/trust-bundle'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -12,7 +19,8 @@ const ShipFileSchema = z.object({
 })
 
 const GitHubShipRequestSchema = z.object({
-  operation: z.enum(['init', 'push', 'pull-request', 'status']).default('push'),
+  operation: z.enum(['init', 'push', 'pull-request', 'status']).default('pull-request'),
+  workflowMode: z.enum(['pr-first', 'direct']).default('pr-first'),
   token: z.string().min(1),
   owner: z.string().optional(),
   repoName: z.string().optional(),
@@ -23,6 +31,16 @@ const GitHubShipRequestSchema = z.object({
   prTitle: z.string().optional(),
   prDescription: z.string().optional(),
   baseBranch: z.string().optional(),
+  governance: z.object({
+    auditorPassed: z.boolean(),
+    previewVerified: z.boolean(),
+    runtimeProbePassed: z.boolean(),
+    runtimeHash: z.string().optional(),
+    dependencyLockHash: z.string().optional(),
+    rescueCount: z.number().int().nonnegative().optional(),
+    requiresHumanReview: z.boolean().optional(),
+    verifiedAt: z.string().optional(),
+  }).optional(),
   files: z.array(ShipFileSchema).default([]),
 })
 
@@ -52,6 +70,11 @@ interface GitHubContentResponse {
 interface GitHubPullRequest {
   html_url: string
   number: number
+}
+
+interface GitHubPullRequestDetails {
+  mergeable: boolean | null
+  mergeable_state?: string
 }
 
 function sanitizeRepoName(input: string): string {
@@ -325,6 +348,47 @@ async function createOrFindPullRequest(params: {
   throw new Error(await readGitHubError(createRes))
 }
 
+async function getPullRequestMergeability(params: {
+  token: string
+  owner: string
+  repo: string
+  prNumber: number
+}): Promise<{
+  mergeable: boolean | null
+  mergeableState: string | null
+}> {
+  const { token, owner, repo, prNumber } = params
+  const maxAttempts = 5
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const response = await githubRequest(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${prNumber}`,
+      token
+    )
+
+    if (!response.ok) {
+      throw new Error(await readGitHubError(response))
+    }
+
+    const details = await response.json() as GitHubPullRequestDetails
+    if (details.mergeable !== null) {
+      return {
+        mergeable: details.mergeable,
+        mergeableState: details.mergeable_state || null,
+      }
+    }
+
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 750))
+    }
+  }
+
+  return {
+    mergeable: null,
+    mergeableState: 'unknown',
+  }
+}
+
 export async function POST(request: NextRequest) {
   const clientIP = getClientIP(request)
   const rateLimitResult = await strictRateLimiter.check(clientIP)
@@ -366,13 +430,18 @@ export async function POST(request: NextRequest) {
     const repoName = sanitizeRepoName(
       payload.repoName ?? payload.projectName ?? 'torbit-project'
     )
+    const effectiveOperation = (
+      payload.operation === 'push' && payload.workflowMode === 'pr-first'
+        ? 'pull-request'
+        : payload.operation
+    )
 
     if (
-      (payload.operation === 'push' || payload.operation === 'pull-request') &&
+      (effectiveOperation === 'push' || effectiveOperation === 'pull-request') &&
       payload.files.length === 0
     ) {
       return NextResponse.json(
-        { error: `Operation "${payload.operation}" requires at least one file.` },
+        { error: `Operation "${effectiveOperation}" requires at least one file.` },
         { status: 400 }
       )
     }
@@ -400,6 +469,21 @@ export async function POST(request: NextRequest) {
     const requestedBranch = payload.branch
       ? sanitizeBranchName(payload.branch)
       : sanitizeBranchName(repository.default_branch || 'main')
+    const normalizedFiles = payload.files.map((file) => ({
+      path: normalizeFilePath(file.path),
+      content: file.content,
+    }))
+
+    const governance: ShipGovernancePayload = payload.governance ?? {
+      auditorPassed: false,
+      previewVerified: false,
+      runtimeProbePassed: false,
+      rescueCount: 0,
+      requiresHumanReview: false,
+      runtimeHash: null,
+      dependencyLockHash: null,
+      verifiedAt: null,
+    }
 
     if (payload.operation === 'init') {
       return NextResponse.json({
@@ -432,8 +516,39 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const unsignedTrustBundle = createShipTrustBundle({
+      projectName: payload.projectName || repository.name,
+      target: 'github',
+      workflowMode: payload.workflowMode,
+      actorUserId: user.id,
+      governance,
+      files: normalizedFiles,
+    })
+
+    const signedTrustBundle = (() => {
+      const signingSecret = resolveShipSigningSecret()
+      if (!signingSecret) return unsignedTrustBundle
+      return signShipTrustBundle(unsignedTrustBundle, signingSecret)
+    })()
+
+    if (effectiveOperation === 'push' && !signedTrustBundle.readiness.ready) {
+      return NextResponse.json(
+        {
+          error: 'Direct push blocked by trusted shipping gate.',
+          blockers: signedTrustBundle.readiness.blockers,
+          warnings: signedTrustBundle.readiness.warnings,
+          workflowMode: payload.workflowMode,
+          trustBundleHash: signedTrustBundle.bundleHash,
+          manualRescueRequired: signedTrustBundle.readiness.manualRescueRequired,
+        },
+        { status: 412 }
+      )
+    }
+
+    const shipFiles = appendTrustBundleArtifacts(normalizedFiles, signedTrustBundle)
+
     let branch = requestedBranch
-    if (payload.operation === 'pull-request' && branch === baseBranch) {
+    if (effectiveOperation === 'pull-request' && branch === baseBranch) {
       branch = sanitizeBranchName(`torbit-export-${Date.now().toString(36)}`)
     }
 
@@ -446,12 +561,8 @@ export async function POST(request: NextRequest) {
     })
 
     const commitMessage = payload.commitMessage?.trim() || 'chore: sync project from TORBIT'
-    const normalizedFiles = payload.files.map((file) => ({
-      path: normalizeFilePath(file.path),
-      content: file.content,
-    }))
 
-    for (const file of normalizedFiles) {
+    for (const file of shipFiles) {
       await upsertFile({
         token,
         owner,
@@ -463,7 +574,28 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (payload.operation === 'pull-request') {
+    if (effectiveOperation === 'pull-request') {
+      const readinessLines = [
+        '### TORBIT Trust Gate',
+        `- Ready for direct deploy: ${signedTrustBundle.readiness.ready ? 'Yes' : 'No'}`,
+        `- Manual rescue required: ${signedTrustBundle.readiness.manualRescueRequired ? 'Yes' : 'No'}`,
+        `- Bundle hash: \`${signedTrustBundle.bundleHash}\``,
+        ...(signedTrustBundle.readiness.blockers.length > 0
+          ? [
+            '',
+            '#### Blockers',
+            ...signedTrustBundle.readiness.blockers.map((item) => `- ${item}`),
+          ]
+          : []),
+        ...(signedTrustBundle.readiness.warnings.length > 0
+          ? [
+            '',
+            '#### Warnings',
+            ...signedTrustBundle.readiness.warnings.map((item) => `- ${item}`),
+          ]
+          : []),
+      ].join('\n')
+
       const pr = await createOrFindPullRequest({
         token,
         owner,
@@ -471,31 +603,58 @@ export async function POST(request: NextRequest) {
         headBranch: branch,
         baseBranch,
         title: payload.prTitle?.trim() || `TORBIT export for ${payload.projectName || repository.name}`,
-        body: payload.prDescription?.trim() || 'Automated project sync from TORBIT.',
+        body: `${payload.prDescription?.trim() || 'Automated project sync from TORBIT.'}\n\n${readinessLines}`,
       })
+      const mergeability = await getPullRequestMergeability({
+        token,
+        owner,
+        repo: repository.name,
+        prNumber: pr.number,
+      })
+      const mergeableWithoutRescue = (
+        mergeability.mergeable === true &&
+        !signedTrustBundle.readiness.manualRescueRequired
+      )
 
       return NextResponse.json({
         success: true,
         operation: 'pull-request',
+        requestedOperation: payload.operation,
+        workflowMode: payload.workflowMode,
         owner,
         repo: repository.name,
         branch,
         baseBranch,
-        filesSynced: normalizedFiles.length,
+        filesSynced: shipFiles.length,
         repoUrl: repository.html_url,
         prUrl: pr.html_url,
         prNumber: pr.number,
+        mergeable: mergeability.mergeable,
+        mergeableState: mergeability.mergeableState,
+        mergeableWithoutRescue,
+        manualRescueRequired: signedTrustBundle.readiness.manualRescueRequired,
+        trustBundleHash: signedTrustBundle.bundleHash,
+        trustSigned: Boolean(signedTrustBundle.signature),
+        blockers: signedTrustBundle.readiness.blockers,
+        warnings: signedTrustBundle.readiness.warnings,
       })
     }
 
     return NextResponse.json({
       success: true,
       operation: 'push',
+      requestedOperation: payload.operation,
+      workflowMode: payload.workflowMode,
       owner,
       repo: repository.name,
       branch,
-      filesSynced: normalizedFiles.length,
+      filesSynced: shipFiles.length,
       repoUrl: repository.html_url,
+      trustBundleHash: signedTrustBundle.bundleHash,
+      trustSigned: Boolean(signedTrustBundle.signature),
+      manualRescueRequired: signedTrustBundle.readiness.manualRescueRequired,
+      blockers: signedTrustBundle.readiness.blockers,
+      warnings: signedTrustBundle.readiness.warnings,
     })
   } catch (error) {
     console.error('GitHub ship error:', error)

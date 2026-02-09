@@ -79,6 +79,8 @@ interface RuntimeProfile {
 const INSTALL_COMMAND_PRIMARY = 'npm install'
 const INSTALL_COMMAND_LEGACY = 'npm install --legacy-peer-deps'
 const INSTALL_COMMAND_FORCE = 'npm install --force'
+const PREVIEW_BRIDGE_MARKER = 'TORBIT_PREVIEW_BRIDGE'
+const PREVIEW_BRIDGE_INLINE_SCRIPT = "window.addEventListener('message',function(event){const data=event&&event.data;if(!data||data.type!=='TORBIT_INJECT_SPY'||typeof data.script!=='string'){return;}try{(0,eval)(data.script);}catch(error){console.error('TORBIT_SPY_INJECT_FAILED',error);}});"
 
 class E2BApiError extends Error {
   code?: string
@@ -189,6 +191,78 @@ export function nextInstallRecoveryCommand(previousCommand: string, output: stri
   }
 
   return null
+}
+
+export function createRuntimeProbeCommand(port: number): string {
+  const normalizedPort = Number.isFinite(port) && port > 0 ? Math.floor(port) : 3000
+  const script = `
+const target = 'http://127.0.0.1:${normalizedPort}';
+const controller = new AbortController();
+const timeout = setTimeout(() => controller.abort(), 10000);
+
+(async () => {
+  try {
+    const response = await fetch(target, { signal: controller.signal, redirect: 'manual' });
+    const html = await response.text();
+    const normalizedHtml = html.replace(/\\s+/g, ' ').trim();
+    const bodyMatch = normalizedHtml.match(/<body[^>]*>([\\s\\S]*?)<\\/body>/i);
+    const bodyHtml = (bodyMatch ? bodyMatch[1] : normalizedHtml).trim();
+    const bodyWithoutScripts = bodyHtml
+      .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
+      .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')
+      .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, ' ')
+      .trim();
+    const textOnly = bodyWithoutScripts
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\\s+/g, ' ')
+      .trim();
+    const hasRenderableMarkup = /<(main|section|article|header|footer|nav|aside|h1|h2|h3|p|button|input|form|canvas|svg|img|ul|ol|table)[\\s>]/i.test(bodyWithoutScripts);
+
+    if (response.status >= 500) {
+      console.error('ROUTE_PROBE_FAIL status=' + response.status);
+      process.exit(1);
+      return;
+    }
+
+    if (!hasRenderableMarkup && textOnly.length === 0) {
+      console.error('ROUTE_PROBE_FAIL empty-runtime-html status=' + response.status);
+      process.exit(1);
+      return;
+    }
+
+    console.log('ROUTE_PROBE_OK status=' + response.status + ' text=' + textOnly.slice(0, 120));
+    process.exit(0);
+  } catch (error) {
+    console.error('ROUTE_PROBE_FAIL ' + (error instanceof Error ? error.message : String(error)));
+    process.exit(1);
+  } finally {
+    clearTimeout(timeout);
+  }
+})();
+`.trim()
+
+  return `node -e ${JSON.stringify(script)}`
+}
+
+export function injectPreviewBridgeIntoNextLayout(layoutContent: string): string {
+  if (!layoutContent || layoutContent.includes(PREVIEW_BRIDGE_MARKER)) {
+    return layoutContent
+  }
+
+  if (!layoutContent.includes('</body>')) {
+    return layoutContent
+  }
+
+  const bridgeScript = `
+      {/* ${PREVIEW_BRIDGE_MARKER}: enables iframe-to-preview console diagnostics */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: "${PREVIEW_BRIDGE_INLINE_SCRIPT}",
+        }}
+      />`
+
+  return layoutContent.replace('</body>', `${bridgeScript}
+      </body>`)
 }
 
 export function useE2BContext() {
@@ -727,6 +801,23 @@ export function E2BProvider({ children }: E2BProviderProps) {
         }
 
         if (host) {
+          failedStage = 'route_probe'
+          failingCommand = `route-probe:${runtimeProfile.port}`
+          addLog('🔎 Probing runtime route output...', 'info')
+          const probeResult = await e2bApi('runCommand', {
+            sandboxId,
+            sandboxAccessToken,
+            command: createRuntimeProbeCommand(runtimeProfile.port),
+            timeoutMs: 20000,
+          }) as { exitCode: number; stdout: string; stderr: string }
+
+          if (probeResult.exitCode !== 0) {
+            const probeDetails = probeResult.stderr || probeResult.stdout || 'Runtime route probe failed'
+            exactLogLine = `Runtime route probe failed: ${probeDetails.slice(0, 300)}`
+            throw new Error(exactLogLine)
+          }
+
+          addLog('✅ Runtime route probe passed', 'success')
           setServerUrl(host)
           setError(null)
           setBuildFailure(null)
@@ -903,6 +994,14 @@ function hasFile(files: Array<{ path: string; content: string }>, targetPath: st
   return files.some((file) => normalizePath(file.path) === normalizedTarget)
 }
 
+function getFileByPath(
+  files: Array<{ path: string; content: string }>,
+  targetPath: string
+): { path: string; content: string } | undefined {
+  const normalizedTarget = normalizePath(targetPath)
+  return files.find((file) => normalizePath(file.path) === normalizedTarget)
+}
+
 async function ensureFrameworkFiles(
   sandboxId: string,
   sandboxAccessToken: string | null,
@@ -925,10 +1024,11 @@ async function ensureNextJsFiles(
   addLog: (message: string, type?: LogType) => void
 ) {
   const appRoot = hasFile(files, 'app/layout.tsx') || hasFile(files, 'app/page.tsx') ? 'app' : 'src/app'
+  const layoutPath = `${appRoot}/layout.tsx`
   const hasPackageJson = hasFile(files, 'package.json')
   const hasTsConfig = hasFile(files, 'tsconfig.json')
   const hasNextEnv = hasFile(files, 'next-env.d.ts')
-  const hasLayout = hasFile(files, `${appRoot}/layout.tsx`)
+  const hasLayout = hasFile(files, layoutPath)
   const hasPage = hasFile(files, `${appRoot}/page.tsx`)
   const hasGlobals = hasFile(files, `${appRoot}/globals.css`)
   const hasTailwindConfig = hasFile(files, 'tailwind.config.js') || hasFile(files, 'tailwind.config.ts')
@@ -1023,11 +1123,7 @@ async function ensureNextJsFiles(
 
   if (!hasLayout) {
     addLog('📄 Adding Next.js layout baseline...', 'info')
-    await e2bApi('writeFile', {
-      sandboxId,
-      sandboxAccessToken,
-      path: `${appRoot}/layout.tsx`,
-      content: `import './globals.css'
+    const baselineLayout = injectPreviewBridgeIntoNextLayout(`import './globals.css'
 import type { ReactNode } from 'react'
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -1037,8 +1133,27 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     </html>
   )
 }
-`,
+`)
+    await e2bApi('writeFile', {
+      sandboxId,
+      sandboxAccessToken,
+      path: layoutPath,
+      content: baselineLayout,
     })
+  } else {
+    const existingLayout = getFileByPath(files, layoutPath)
+    if (existingLayout) {
+      const runtimeLayout = injectPreviewBridgeIntoNextLayout(existingLayout.content)
+      if (runtimeLayout !== existingLayout.content) {
+        addLog('🛰️ Injecting preview bridge into layout...', 'info')
+        await e2bApi('writeFile', {
+          sandboxId,
+          sandboxAccessToken,
+          path: layoutPath,
+          content: runtimeLayout,
+        })
+      }
+    }
   }
 
   if (!hasPage) {

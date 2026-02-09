@@ -90,6 +90,7 @@ export async function createWebExportZip(
   }
 
   const ledgerEntries = options.ledgerEntries ?? []
+  const verificationEntry = [...ledgerEntries].reverse().find((entry) => entry.phase === 'verify')
   const manifest = createManifest({
     projectName: options.projectName,
     target: options.target ?? 'zip',
@@ -101,6 +102,17 @@ export async function createWebExportZip(
   if (ledgerEntries.length > 0) {
     zip.file('.torbit/ACTIVITY_LEDGER.json', JSON.stringify(ledgerEntries, null, 2))
   }
+  zip.file(
+    '.torbit/TRUST_BASELINE.json',
+    JSON.stringify({
+      generatedAt: new Date().toISOString(),
+      target: options.target ?? 'zip',
+      verified: Boolean(verificationEntry),
+      auditorVerdict: verificationEntry?.proof?.auditorVerdict ?? null,
+      runtimeHash: verificationEntry?.proof?.runtimeHash ?? null,
+      dependencyLockHash: verificationEntry?.proof?.dependencyLockHash ?? null,
+    }, null, 2)
+  )
 
   return zip.generateAsync({
     type: 'blob',

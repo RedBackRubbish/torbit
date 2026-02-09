@@ -38,6 +38,8 @@ ENGINEERING RULES
 - No fake success messages.
 - Do not claim "verified" until build/runtime checks actually pass.
 - Prefer applyPatch for surgical edits to existing files.
+- Create a checkpoint before high-risk multi-file rewrites.
+- Prefer PR-first ship workflows; avoid direct push by default.
 - Add or update tests when behavior changes.
 - Keep dependencies minimal.
 

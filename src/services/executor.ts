@@ -2,6 +2,8 @@ import { useTerminalStore } from '@/store/terminal'
 import { useFuelStore } from '@/store/fuel'
 import { useTimeline, type AgentType } from '@/store/timeline'
 import { useBuilderStore } from '@/store/builder'
+import { useLedger } from '@/store/ledger'
+import { recordMetric } from '@/lib/metrics/success'
 
 // ============================================================================
 // EXECUTOR SERVICE - The Spinal Cord
@@ -58,6 +60,17 @@ interface ShipFilePayload {
   content: string
 }
 
+interface ShipGovernanceContext {
+  auditorPassed: boolean
+  previewVerified: boolean
+  runtimeProbePassed: boolean
+  runtimeHash?: string
+  dependencyLockHash?: string
+  rescueCount: number
+  requiresHumanReview: boolean
+  verifiedAt?: string
+}
+
 function extractShipFiles(raw: unknown): ShipFilePayload[] {
   if (!Array.isArray(raw)) {
     return []
@@ -83,6 +96,34 @@ function getBuilderFiles(): ShipFilePayload[] {
     path: file.path,
     content: file.content,
   }))
+}
+
+function getRecordedManualRescueCount(): number {
+  if (typeof window === 'undefined') return 0
+  const raw = window.sessionStorage.getItem('torbit_manual_rescue_count')
+  const parsed = raw ? Number(raw) : 0
+  if (!Number.isFinite(parsed) || parsed < 0) return 0
+  return Math.floor(parsed)
+}
+
+function getShipGovernanceContext(rescueCount: number = 0): ShipGovernanceContext {
+  const ledger = useLedger.getState()
+  const verifyEntry = ledger.getEntry('verify')
+  const auditorPassed = verifyEntry?.proof?.auditorVerdict === 'passed'
+  const runtimeHash = verifyEntry?.proof?.runtimeHash
+  const dependencyLockHash = verifyEntry?.proof?.dependencyLockHash
+  const combinedRescueCount = Math.max(rescueCount, getRecordedManualRescueCount())
+
+  return {
+    auditorPassed,
+    previewVerified: ledger.getPhaseStatus('verify') === 'complete',
+    runtimeProbePassed: Boolean(runtimeHash),
+    runtimeHash,
+    dependencyLockHash,
+    rescueCount: combinedRescueCount,
+    requiresHumanReview: !auditorPassed || combinedRescueCount > 0,
+    verifiedAt: verifyEntry?.completedAt ? new Date(verifyEntry.completedAt).toISOString() : undefined,
+  }
 }
 
 export class ExecutorService {
@@ -269,6 +310,7 @@ export class ExecutorService {
             outputDirectory,
             region,
             credentials,
+            rescueCount,
             files: providedFiles,
           } = args as {
             provider?: 'vercel' | 'netlify' | 'railway'
@@ -285,6 +327,7 @@ export class ExecutorService {
               netlifyToken?: string
               netlifySiteId?: string
             }
+            rescueCount?: number
             files?: Array<{ path: string; content: string }>
           }
 
@@ -295,6 +338,9 @@ export class ExecutorService {
           }
 
           terminal.addLog(`Deploying to ${provider}: ${projectName}`, 'info')
+          const governance = getShipGovernanceContext(
+            typeof rescueCount === 'number' && Number.isFinite(rescueCount) ? Math.max(0, Math.floor(rescueCount)) : 0
+          )
 
           const deployRes = await fetch('/api/ship/deploy', {
             method: 'POST',
@@ -310,6 +356,8 @@ export class ExecutorService {
               outputDirectory,
               region,
               credentials,
+              workflowMode: 'direct',
+              governance,
               files,
             }),
           })
@@ -323,10 +371,17 @@ export class ExecutorService {
             state?: string
             inspectorUrl?: string
             dashboardUrl?: string
+            trustBundleHash?: string
+            trustSigned?: boolean
+            manualRescueRequired?: boolean
+            blockers?: string[]
+            warnings?: string[]
           }
 
           if (!deployRes.ok || !deployData.success) {
-            throw new Error(deployData.error || `Deploy API request failed (${deployRes.status})`)
+            const blockers = Array.isArray(deployData.blockers) ? deployData.blockers : []
+            const details = blockers.length > 0 ? ` Blockers: ${blockers.join(' | ')}` : ''
+            throw new Error((deployData.error || `Deploy API request failed (${deployRes.status})`) + details)
           }
 
           if (deployData.deploymentUrl) {
@@ -351,13 +406,17 @@ export class ExecutorService {
             deployData.deploymentUrl ? `🌐 Production URL: ${deployData.deploymentUrl}` : null,
             deployData.inspectorUrl ? `Inspector: ${deployData.inspectorUrl}` : null,
             deployData.dashboardUrl ? `Dashboard: ${deployData.dashboardUrl}` : null,
+            deployData.trustBundleHash ? `Trust Bundle: ${deployData.trustBundleHash}` : null,
+            deployData.trustSigned ? 'Trust Signature: Attached' : null,
+            deployData.manualRescueRequired ? 'Manual Rescue: Yes (review before release)' : null,
           ].filter(Boolean).join('\n')
           break
         }
 
         case 'syncToGithub': {
           const {
-            operation = 'status',
+            operation = 'pull-request',
+            workflowMode = 'pr-first',
             token,
             owner,
             repoName,
@@ -368,9 +427,11 @@ export class ExecutorService {
             prTitle,
             prDescription,
             baseBranch = 'main',
+            rescueCount,
             files: providedFiles,
           } = args as {
             operation?: 'init' | 'push' | 'pull-request' | 'status'
+            workflowMode?: 'pr-first' | 'direct'
             token?: string
             owner?: string
             repoName?: string
@@ -381,17 +442,25 @@ export class ExecutorService {
             prTitle?: string
             prDescription?: string
             baseBranch?: string
+            rescueCount?: number
             files?: Array<{ path: string; content: string }>
           }
 
           const explicitFiles = extractShipFiles(providedFiles)
           const files = explicitFiles.length > 0 ? explicitFiles : getBuilderFiles()
-          if ((operation === 'push' || operation === 'pull-request') && files.length === 0) {
+          const effectiveOperation = operation === 'push' && workflowMode === 'pr-first'
+            ? 'pull-request'
+            : operation
+
+          if ((effectiveOperation === 'push' || effectiveOperation === 'pull-request') && files.length === 0) {
             throw new Error('No files available to sync to GitHub.')
           }
 
           const repoLabel = repoName || projectName || 'torbit-project'
-          terminal.addLog(`GitHub operation: ${operation} (${repoLabel})`, 'info')
+          terminal.addLog(`GitHub operation: ${effectiveOperation} (${repoLabel})`, 'info')
+          const governance = getShipGovernanceContext(
+            typeof rescueCount === 'number' && Number.isFinite(rescueCount) ? Math.max(0, Math.floor(rescueCount)) : 0
+          )
 
           const githubRes = await fetch('/api/ship/github', {
             method: 'POST',
@@ -400,6 +469,7 @@ export class ExecutorService {
             },
             body: JSON.stringify({
               operation,
+              workflowMode,
               token,
               owner,
               repoName,
@@ -410,7 +480,8 @@ export class ExecutorService {
               prTitle,
               prDescription,
               baseBranch,
-              ...(operation === 'push' || operation === 'pull-request' ? { files } : {}),
+              governance,
+              ...(effectiveOperation === 'push' || effectiveOperation === 'pull-request' ? { files } : {}),
             }),
           })
 
@@ -418,6 +489,8 @@ export class ExecutorService {
             success?: boolean
             error?: string
             operation?: string
+            requestedOperation?: string
+            workflowMode?: 'pr-first' | 'direct'
             owner?: string
             repo?: string
             branch?: string
@@ -428,10 +501,56 @@ export class ExecutorService {
             prNumber?: number
             branchExists?: boolean
             defaultBranch?: string
+            mergeable?: boolean | null
+            mergeableState?: string | null
+            mergeableWithoutRescue?: boolean
+            manualRescueRequired?: boolean
+            trustBundleHash?: string
+            trustSigned?: boolean
+            blockers?: string[]
+            warnings?: string[]
           }
 
           if (!githubRes.ok || !githubData.success) {
-            throw new Error(githubData.error || `GitHub API request failed (${githubRes.status})`)
+            const blockers = Array.isArray(githubData.blockers) ? githubData.blockers : []
+            const details = blockers.length > 0 ? ` Blockers: ${blockers.join(' | ')}` : ''
+            throw new Error((githubData.error || `GitHub API request failed (${githubRes.status})`) + details)
+          }
+
+          const resolvedOperation = githubData.operation || effectiveOperation
+
+          if (resolvedOperation === 'pull-request') {
+            recordMetric('pr_created', {
+              workflowMode: githubData.workflowMode || workflowMode,
+              projectName: projectName || repoLabel,
+              operation: resolvedOperation,
+            })
+
+            if (githubData.manualRescueRequired) {
+              recordMetric('manual_rescue_required', {
+                workflowMode: githubData.workflowMode || workflowMode,
+                projectName: projectName || repoLabel,
+              })
+            }
+
+            if (githubData.mergeable === true) {
+              recordMetric('pr_mergeable', {
+                workflowMode: githubData.workflowMode || workflowMode,
+                mergeableState: githubData.mergeableState || 'clean',
+              })
+            } else if (githubData.mergeable === false) {
+              recordMetric('pr_unmergeable', {
+                workflowMode: githubData.workflowMode || workflowMode,
+                mergeableState: githubData.mergeableState || 'blocked',
+              })
+            }
+
+            if (githubData.mergeableWithoutRescue) {
+              recordMetric('pr_mergeable_without_rescue', {
+                workflowMode: githubData.workflowMode || workflowMode,
+                projectName: projectName || repoLabel,
+              })
+            }
           }
 
           if (githubData.prUrl) {
@@ -440,7 +559,7 @@ export class ExecutorService {
             terminal.addLog(`Repository synced: ${githubData.repoUrl}`, 'success')
           }
 
-          switch (githubData.operation || operation) {
+          switch (resolvedOperation) {
             case 'init':
               output = [
                 `📦 Initializing GitHub Repository`,
@@ -458,6 +577,8 @@ export class ExecutorService {
                 `Branch: ${githubData.branch || branch}`,
                 `Files Synced: ${githubData.filesSynced ?? files.length}`,
                 githubData.repoUrl ? `🔗 ${githubData.repoUrl}` : null,
+                githubData.trustBundleHash ? `Trust Bundle: ${githubData.trustBundleHash}` : null,
+                githubData.trustSigned ? 'Trust Signature: Attached' : null,
               ].filter(Boolean).join('\n')
               break
             case 'pull-request':
@@ -467,7 +588,15 @@ export class ExecutorService {
                 `Repository: ${githubData.owner}/${githubData.repo}`,
                 `Base: ${githubData.baseBranch || baseBranch} ← ${githubData.branch || branch}`,
                 `Files Synced: ${githubData.filesSynced ?? files.length}`,
+                `Workflow: ${githubData.workflowMode || workflowMode}`,
                 githubData.prNumber ? `PR #${githubData.prNumber}` : null,
+                githubData.mergeable === true ? `Mergeable: Yes${githubData.mergeableState ? ` (${githubData.mergeableState})` : ''}` : null,
+                githubData.mergeable === false ? `Mergeable: No${githubData.mergeableState ? ` (${githubData.mergeableState})` : ''}` : null,
+                githubData.mergeable === null ? 'Mergeable: Pending GitHub analysis' : null,
+                githubData.mergeableWithoutRescue ? 'KPI Credit: Mergeable PR without rescue ✅' : null,
+                githubData.manualRescueRequired ? 'Manual Rescue: Required before merge' : null,
+                githubData.trustBundleHash ? `Trust Bundle: ${githubData.trustBundleHash}` : null,
+                githubData.trustSigned ? 'Trust Signature: Attached' : null,
                 githubData.prUrl ? `🔗 ${githubData.prUrl}` : null,
                 githubData.repoUrl ? `Repo: ${githubData.repoUrl}` : null,
               ].filter(Boolean).join('\n')

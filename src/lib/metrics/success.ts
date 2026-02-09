@@ -22,6 +22,13 @@ export interface SuccessMetrics {
   buildsStarted: number
   buildsCompleted: number
   buildsVerified: number
+
+  // GitHub PR funnel (mergeability moat)
+  prCreated: number
+  prMergeable: number
+  prUnmergeable: number
+  prMergeableWithoutRescue: number
+  manualRescueRequired: number
   
   // Export funnel
   exportsInitiated: number
@@ -50,6 +57,11 @@ export type MetricEventType =
   | 'build_completed'
   | 'build_verified'
   | 'preview_shown'
+  | 'pr_created'
+  | 'pr_mergeable'
+  | 'pr_unmergeable'
+  | 'pr_mergeable_without_rescue'
+  | 'manual_rescue_required'
   | 'export_initiated'
   | 'export_downloaded'
   | 'export_opened'
@@ -86,7 +98,13 @@ function getMetrics(): SuccessMetrics {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
-      return JSON.parse(stored) as SuccessMetrics
+      const parsed = JSON.parse(stored) as Partial<SuccessMetrics>
+      return {
+        ...createEmptyMetrics(),
+        ...parsed,
+        promptToPreviewTimes: Array.isArray(parsed.promptToPreviewTimes) ? parsed.promptToPreviewTimes : [],
+        promptToVerifiedTimes: Array.isArray(parsed.promptToVerifiedTimes) ? parsed.promptToVerifiedTimes : [],
+      }
     }
   } catch {
     // Ignore parse errors
@@ -110,6 +128,11 @@ function createEmptyMetrics(): SuccessMetrics {
     buildsStarted: 0,
     buildsCompleted: 0,
     buildsVerified: 0,
+    prCreated: 0,
+    prMergeable: 0,
+    prUnmergeable: 0,
+    prMergeableWithoutRescue: 0,
+    manualRescueRequired: 0,
     exportsInitiated: 0,
     exportsDownloaded: 0,
     exportsOpened: 0,
@@ -149,6 +172,21 @@ export function recordMetric(type: MetricEventType, metadata?: Record<string, un
       break
     case 'build_verified':
       metrics.buildsVerified++
+      break
+    case 'pr_created':
+      metrics.prCreated++
+      break
+    case 'pr_mergeable':
+      metrics.prMergeable++
+      break
+    case 'pr_unmergeable':
+      metrics.prUnmergeable++
+      break
+    case 'pr_mergeable_without_rescue':
+      metrics.prMergeableWithoutRescue++
+      break
+    case 'manual_rescue_required':
+      metrics.manualRescueRequired++
       break
     case 'export_initiated':
       metrics.exportsInitiated++
@@ -212,6 +250,8 @@ export function recordPromptToVerified(promptStartTime: number): void {
  */
 export function calculateSuccessRates(): {
   buildVerificationRate: number
+  mergeablePRRate: number
+  promptToMergeablePRWithoutRescueRate: number
   exportOpenRate: number
   exportDeployRate: number
   medianPromptToPreview: number
@@ -230,12 +270,22 @@ export function calculateSuccessRates(): {
   const exportDeployRate = metrics.exportsOpened > 0
     ? (metrics.exportsDeployed / metrics.exportsOpened) * 100
     : 0
+
+  const mergeablePRRate = metrics.prCreated > 0
+    ? (metrics.prMergeable / metrics.prCreated) * 100
+    : 0
+
+  const promptToMergeablePRWithoutRescueRate = metrics.buildsStarted > 0
+    ? (metrics.prMergeableWithoutRescue / metrics.buildsStarted) * 100
+    : 0
   
   const medianPromptToPreview = calculateMedian(metrics.promptToPreviewTimes)
   const medianPromptToVerified = calculateMedian(metrics.promptToVerifiedTimes)
   
   return {
     buildVerificationRate,
+    mergeablePRRate,
+    promptToMergeablePRWithoutRescueRate,
     exportOpenRate,
     exportDeployRate,
     medianPromptToPreview,

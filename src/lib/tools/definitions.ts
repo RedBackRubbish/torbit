@@ -116,7 +116,8 @@ export const deployToProductionSchema = z.object({
 
 // SYNC TO GITHUB (Push code and open PR)
 export const syncToGithubSchema = z.object({
-  operation: z.enum(['init', 'push', 'pull-request', 'status']).describe('Git operation to perform'),
+  operation: z.enum(['init', 'push', 'pull-request', 'status']).default('pull-request').describe('Git operation to perform'),
+  workflowMode: z.enum(['pr-first', 'direct']).default('pr-first').describe('Shipping workflow mode. Use pr-first unless explicitly asked for direct push.'),
   token: z.string().optional().describe('User-scoped GitHub personal access token'),
   owner: z.string().optional().describe('GitHub user/org owner (defaults to token owner)'),
   repoName: z.string().optional().describe('Repository name (for init)'),
@@ -126,6 +127,7 @@ export const syncToGithubSchema = z.object({
   prTitle: z.string().optional().describe('Pull request title (for pull-request)'),
   prDescription: z.string().optional().describe('Pull request description'),
   baseBranch: z.string().default('main').describe('Base branch for PR'),
+  rescueCount: z.number().int().nonnegative().optional().describe('How many manual rescue attempts were needed before shipping'),
 })
 
 // GENERATE DESIGN SYSTEM (Dynamic theming from prompt)
