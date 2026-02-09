@@ -372,12 +372,17 @@ export async function POST(req: Request) {
 - Frameworks: ${Object.entries(snapshot.frameworks).map(([name, version]) => `${name}@${version}`).join(', ') || 'none'}
 ${assumptionPreview ? `- Assumptions:\n${assumptionPreview}` : '- Assumptions: none'}`
 
-    // Wrap user messages with XML delimiters to defend against prompt injection
+    // Wrap user messages with XML delimiters to defend against prompt injection.
+    // Sanitize the content by escaping XML-like closing tags that could break out
+    // of the delimiter structure.
     const lastUserContent = messages[messages.length - 1]?.content || ''
     if (messages.length > 0 && messages[messages.length - 1]?.role === 'user') {
+      const sanitized = lastUserContent
+        .replace(/<\/user_request>/gi, '&lt;/user_request&gt;')
+        .replace(/<user_request>/gi, '&lt;user_request&gt;')
       messages[messages.length - 1] = {
         ...messages[messages.length - 1],
-        content: `<user_request>\n${lastUserContent}\n</user_request>`,
+        content: `<user_request>\n${sanitized}\n</user_request>`,
       }
     }
     // Create a TransformStream for custom streaming with tool execution

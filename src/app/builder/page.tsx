@@ -123,22 +123,22 @@ function BuilderPageContent() {
     if (!projectId) return
 
     let active = true
-    upsertPresence('online').catch(() => {})
+    upsertPresence('online').catch(e => console.warn('[Presence] Failed to set online:', e))
 
     const heartbeat = setInterval(() => {
       if (!active) return
-      upsertPresence('online').catch(() => {})
+      upsertPresence('online').catch(e => console.warn('[Presence] Heartbeat failed:', e))
     }, 30000)
 
     return () => {
       active = false
       clearInterval(heartbeat)
-      upsertPresence('offline').catch(() => {})
+      upsertPresence('offline').catch(e => console.warn('[Presence] Failed to set offline:', e))
     }
   }, [projectId, upsertPresence])
 
   useEffect(() => {
-    void flushQueuedTelemetryEvents().catch(() => {})
+    void flushQueuedTelemetryEvents().catch(e => console.warn('[Telemetry] Flush failed:', e))
   }, [])
 
   useEffect(() => {

@@ -538,9 +538,14 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
       return { success: false, output: '', error: 'package.json not found' }
     }
     
-    const pkg = JSON.parse(packageJson)
-    const deps = Object.keys(pkg.dependencies || {})
-    const devDeps = Object.keys(pkg.devDependencies || {})
+    let pkg: Record<string, unknown>
+    try {
+      pkg = JSON.parse(packageJson) as Record<string, unknown>
+    } catch {
+      return { success: false, output: '', error: 'Invalid package.json: malformed JSON' }
+    }
+    const deps = Object.keys((pkg.dependencies as Record<string, string>) || {})
+    const devDeps = Object.keys((pkg.devDependencies as Record<string, string>) || {})
     
     let output = `Dependencies: ${deps.length}\nDev Dependencies: ${devDeps.length}`
     
@@ -2544,7 +2549,12 @@ const toolHandlers: Record<ToolName, (args: Record<string, unknown>, ctx: ToolEx
       }
     }
     
-    const tunnel = JSON.parse(tunnelData.content)
+    let tunnel: Record<string, unknown>
+    try {
+      tunnel = JSON.parse(tunnelData.content) as Record<string, unknown>
+    } catch {
+      return { success: false, output: '', error: `Invalid tunnel data for: ${tunnelId}` }
+    }
     ctx.contextCache.delete(`tunnel:${tunnelId}`)
     
     return {

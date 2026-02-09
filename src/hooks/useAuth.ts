@@ -109,15 +109,16 @@ export function useAuth() {
           setState(s => ({ ...s, loading: false }))
           clearSafetyTimer()
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Ignore AbortError - happens during HMR or fast unmount
-        if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+        const error = err instanceof Error ? err : new Error(String(err))
+        if (error.name === 'AbortError' || error.message?.includes('aborted')) {
           console.debug('[useAuth] Request aborted (expected during HMR)')
           return
         }
-        console.error('[useAuth] Error:', err)
+        console.error('[useAuth] Error:', error)
         if (!cancelled) {
-          setState(s => ({ ...s, loading: false, error: err as Error }))
+          setState(s => ({ ...s, loading: false, error }))
           clearSafetyTimer()
         }
       }
