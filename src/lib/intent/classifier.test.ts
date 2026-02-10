@@ -8,6 +8,11 @@ describe('classifyIntent', () => {
     expect(classifyIntent('Why am I seeing a 500 error on this endpoint?')).toBe('chat')
   })
 
+  it('classifies conversational support prompts as chat', () => {
+    expect(classifyIntent('hey boss I need some encouragement with building something')).toBe('chat')
+    expect(classifyIntent('I feel overwhelmed and need advice on staying focused')).toBe('chat')
+  })
+
   it('classifies create instructions', () => {
     expect(classifyIntent('Build a Next.js dashboard from scratch')).toBe('create')
   })
@@ -27,6 +32,10 @@ describe('classifyIntent', () => {
 
   it('treats empty prompt as chat', () => {
     expect(classifyIntent('   ')).toBe('chat')
+  })
+
+  it('defaults ambiguous non-action statements to chat', () => {
+    expect(classifyIntent('just thinking out loud today')).toBe('chat')
   })
 })
 

@@ -51,6 +51,9 @@ const CREATE_PATTERNS = [
 ]
 
 const CHAT_LEAD_PATTERNS = [
+  /^hey\b/,
+  /^hi\b/,
+  /^hello\b/,
   /^what\b/,
   /^why\b/,
   /^how\b/,
@@ -61,6 +64,19 @@ const CHAT_LEAD_PATTERNS = [
   /^should we\b/,
   /^is it\b/,
   /^help me understand\b/,
+]
+
+const SUPPORT_CHAT_PATTERNS = [
+  /\bencouragement\b/,
+  /\bmotivat(e|ion)\b/,
+  /\boverwhelm(ed|ing)?\b/,
+  /\bstress(ed|ful)?\b/,
+  /\bstuck\b/,
+  /\bconfidence\b/,
+  /\bpep talk\b/,
+  /\bimposter syndrome\b/,
+  /\bi need support\b/,
+  /\bi need advice\b/,
 ]
 
 const ACTION_CUE_PATTERNS = [
@@ -91,6 +107,11 @@ export function classifyIntent(message: string): IntentKind {
   const isQuestion = normalized.endsWith('?')
   const hasActionCue = hasAnyPattern(normalized, ACTION_CUE_PATTERNS)
   const looksConversational = hasAnyPattern(normalized, CHAT_LEAD_PATTERNS)
+  const supportChatCue = hasAnyPattern(normalized, SUPPORT_CHAT_PATTERNS)
+
+  if (supportChatCue && !hasActionCue) {
+    return 'chat'
+  }
 
   if (isQuestion && looksConversational && !hasActionCue) {
     return 'chat'
@@ -103,7 +124,7 @@ export function classifyIntent(message: string): IntentKind {
 
   if (isQuestion || looksConversational) return 'chat'
 
-  return 'create'
+  return 'chat'
 }
 
 export function isActionIntent(intent: IntentKind): boolean {
