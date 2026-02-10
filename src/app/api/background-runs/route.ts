@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
 
@@ -14,6 +16,58 @@ const CreateBackgroundRunSchema = z.object({
   maxAttempts: z.number().int().min(1).max(10).optional(),
   retryable: z.boolean().optional(),
 })
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value)
+}
+
+function isMissingRowError(code: string | undefined): boolean {
+  return code === 'PGRST116'
+}
+
+async function ensureProjectExistsForRun(
+  supabase: SupabaseClient<Database>,
+  input: { projectId: string; userId: string; runType: string }
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const { projectId, userId, runType } = input
+
+  if (!isUuid(projectId)) {
+    return { ok: false, status: 400, error: 'Invalid projectId format. Expected UUID.' }
+  }
+
+  const { data: existingProject, error: existingProjectError } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', projectId)
+    .maybeSingle()
+
+  if (existingProjectError && !isMissingRowError(existingProjectError.code)) {
+    return { ok: false, status: 500, error: existingProjectError.message }
+  }
+
+  if (existingProject) {
+    return { ok: true }
+  }
+
+  const inferredProjectType = runType === 'mobile-release' ? 'mobile' : 'web'
+  const { error: createProjectError } = await supabase
+    .from('projects')
+    .insert({
+      id: projectId,
+      user_id: userId,
+      name: 'Torbit Session',
+      project_type: inferredProjectType,
+      description: 'Auto-created for background run orchestration.',
+    })
+
+  if (createProjectError) {
+    return { ok: false, status: 500, error: createProjectError.message }
+  }
+
+  return { ok: true }
+}
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -34,6 +88,14 @@ export async function GET(request: NextRequest) {
     statusParam === 'failed' ||
     statusParam === 'cancelled'
   ) ? statusParam : null
+
+  if (projectId && !isUuid(projectId)) {
+    return NextResponse.json({
+      success: true,
+      runs: [],
+      warning: 'Ignored invalid projectId filter (expected UUID).',
+    })
+  }
 
   let query = supabase
     .from('background_runs')
@@ -78,6 +140,15 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = parsed.data
+    const projectCheck = await ensureProjectExistsForRun(supabase as SupabaseClient<Database>, {
+      projectId: payload.projectId,
+      userId: user.id,
+      runType: payload.runType,
+    })
+    if (!projectCheck.ok) {
+      return NextResponse.json({ error: projectCheck.error }, { status: projectCheck.status })
+    }
+
     if (payload.idempotencyKey) {
       const { data: existingRun, error: existingRunError } = await supabase
         .from('background_runs')

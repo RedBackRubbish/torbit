@@ -25,6 +25,12 @@ interface UpdateRunInput {
   retryAfterSeconds?: number
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value)
+}
+
 export function useBackgroundRuns(projectId: string | null) {
   const [runs, setRuns] = useState<BackgroundRun[]>([])
   const [loading, setLoading] = useState(false)
@@ -33,6 +39,12 @@ export function useBackgroundRuns(projectId: string | null) {
   const fetchRuns = useCallback(async () => {
     if (!projectId) {
       setRuns([])
+      return
+    }
+
+    if (!isUuid(projectId)) {
+      setRuns([])
+      setError(null)
       return
     }
 
@@ -58,6 +70,12 @@ export function useBackgroundRuns(projectId: string | null) {
   useEffect(() => {
     if (!projectId) {
       setRuns([])
+      return
+    }
+
+    if (!isUuid(projectId)) {
+      setRuns([])
+      setError(null)
       return
     }
 

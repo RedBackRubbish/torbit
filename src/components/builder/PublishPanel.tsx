@@ -121,6 +121,12 @@ const ANDROID_TRACK_OPTIONS: Array<{ value: AndroidTrack; label: string; hint: s
 
 let idempotencyFallbackSequence = 0
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value)
+}
+
 function generateIdempotencyKey(): string {
   if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
     return `mobile-release:${globalThis.crypto.randomUUID()}`
@@ -586,7 +592,8 @@ export function PublishPanel() {
     }
 
     let backgroundRunId: string | null = null
-    if (projectId) {
+    const canQueueBackgroundRun = Boolean(projectId && isUuid(projectId))
+    if (canQueueBackgroundRun && projectId) {
       try {
         const enqueueResponse = await fetch('/api/background-runs', {
           method: 'POST',
