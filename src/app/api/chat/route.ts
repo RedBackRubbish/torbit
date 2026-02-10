@@ -58,6 +58,7 @@ import { getDesignGuidance, getDaisyUIGuidance } from '@/lib/design/system'
 import type { MobileCapabilities, MobileProjectConfig } from '@/lib/mobile/types'
 import { DEFAULT_MOBILE_CONFIG } from '@/lib/mobile/types'
 import { resolveScopedProjectId } from '@/lib/projects/project-id'
+import { runVibeAudit } from '@/lib/vibe-audit'
 
 // Allow streaming responses up to 120 seconds for tool-heavy tasks
 export const runtime = 'nodejs'
@@ -65,6 +66,10 @@ export const maxDuration = 120
 
 // Maximum output tokens per request to prevent unbounded cost
 const MAX_OUTPUT_TOKENS = 16384
+const WORLD_CLASS_ORCHESTRATION_ENABLED = process.env.TORBIT_WORLD_CLASS_ORCHESTRATION !== 'false'
+const VIBE_AUDIT_ENABLED = process.env.TORBIT_VIBE_AUDIT !== 'false'
+
+type InteractionMode = 'build' | 'conversation'
 
 // Combine God Prompt with agent-specific prompts
 const createAgentPrompt = (agentPrompt: string) => `${GOD_PROMPT}\n\n---\n\n## AGENT-SPECIFIC INSTRUCTIONS\n\n${agentPrompt}`
@@ -215,6 +220,72 @@ const MAX_RETRIES = 3
 function requestLikelyNeedsFileOutput(content: string): boolean {
   const text = content.toLowerCase()
   return /build|create|generate|make|implement|develop|app|website|landing|dashboard|todo|page|screen|ui/.test(text)
+}
+
+function detectInteractionMode(content: string): InteractionMode {
+  const text = content.toLowerCase().trim()
+  if (!text) return 'build'
+
+  const buildSignals = [
+    /build|create|generate|implement|develop|ship|deploy|refactor|fix|debug|patch|add|remove|edit|update|rewrite/,
+    /make\s+(a|an|the)/,
+    /(website|landing page|dashboard|app|api|component|screen|feature)/,
+  ]
+  const conversationalSignals = [
+    /^do you think\b/,
+    /^what do you think\b/,
+    /^is (this|that|it) (a )?good idea\b/,
+    /^should (we|i)\b/,
+    /^can you explain\b/,
+    /\bpros and cons\b/,
+    /\bwhich is better\b/,
+  ]
+
+  const hasBuildSignal = buildSignals.some((pattern) => pattern.test(text))
+  const hasConversationalSignal = conversationalSignals.some((pattern) => pattern.test(text))
+  const isQuestion = text.includes('?')
+
+  if (hasConversationalSignal && !hasBuildSignal) return 'conversation'
+  if (isQuestion && !hasBuildSignal) return 'conversation'
+  return 'build'
+}
+
+function getToolPathArg(args: Record<string, unknown>): string | null {
+  const value = args.path
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function buildToolOnlyFallback(toolCalls: Array<{ name: string; args: Record<string, unknown> }>): string {
+  if (toolCalls.length === 0) {
+    return 'Request completed, but no response text was returned. Please retry if you need a detailed explanation.'
+  }
+
+  const mutationCalls = toolCalls.filter((toolCall) => (
+    toolCall.name === 'createFile' ||
+    toolCall.name === 'editFile' ||
+    toolCall.name === 'applyPatch' ||
+    toolCall.name === 'deleteFile'
+  ))
+
+  if (mutationCalls.length === 0) {
+    return `Completed ${toolCalls.length} tool step${toolCalls.length === 1 ? '' : 's'}. Review the action log for details.`
+  }
+
+  const touchedFiles = Array.from(new Set(
+    mutationCalls
+      .map((toolCall) => getToolPathArg(toolCall.args))
+      .filter((filePath): filePath is string => Boolean(filePath))
+  ))
+
+  if (touchedFiles.length === 0) {
+    return `Applied ${mutationCalls.length} file change${mutationCalls.length === 1 ? '' : 's'}.`
+  }
+
+  const preview = touchedFiles.slice(0, 3).join(', ')
+  const suffix = touchedFiles.length > 3 ? ` and ${touchedFiles.length - 3} more` : ''
+  return `Applied ${mutationCalls.length} file change${mutationCalls.length === 1 ? '' : 's'}: ${preview}${suffix}.`
 }
 
 function detectRuntimeEnvironment(): 'local' | 'staging' | 'production' {
@@ -403,6 +474,7 @@ ${fileList}`
     // Sanitize the content by escaping XML-like closing tags that could break out
     // of the delimiter structure.
     const lastUserContent = messages[messages.length - 1]?.content || ''
+    const interactionMode = detectInteractionMode(lastUserContent)
     if (messages.length > 0 && messages[messages.length - 1]?.role === 'user') {
       const sanitized = lastUserContent
         .replace(/<\/user_request>/gi, '&lt;/user_request&gt;')
@@ -418,6 +490,8 @@ ${fileList}`
     const stream = new ReadableStream({
       async start(controller) {
         let isClosed = false
+        let vibeAuditPrompt: string | null = null
+        let vibeAuditComplete = false
         
         const sendChunk = (chunk: StreamChunk) => {
           if (isClosed) return // Guard against writing to closed controller
@@ -445,8 +519,24 @@ ${fileList}`
           const sentToolCalls = new Set<string>()
 
           try {
-            const strictExecutionMode = attempt > 1
-            const attemptSystemPrompt = strictExecutionMode
+            if (interactionMode === 'build' && VIBE_AUDIT_ENABLED && !vibeAuditComplete) {
+              vibeAuditComplete = true
+              try {
+                const vibeAudit = await runVibeAudit(process.cwd())
+                if (vibeAudit.proof.length > 0) {
+                  sendChunk({
+                    type: 'proof',
+                    proof: vibeAudit.proof,
+                  })
+                }
+                vibeAuditPrompt = vibeAudit.guardrailPrompt || null
+              } catch (vibeError) {
+                console.warn('[TORBIT] Vibe audit failed, continuing without guardrails:', vibeError)
+              }
+            }
+
+            const strictExecutionMode = attempt > 1 && interactionMode === 'build'
+            const baseAttemptSystemPrompt = strictExecutionMode
               ? `${systemPrompt}
 
 ## STRICT EXECUTION MODE
@@ -454,6 +544,22 @@ ${fileList}`
 - Use createFile/editFile/applyPatch tools now.
 - Do not stop at planning/thinking only.`
               : systemPrompt
+
+            const modePrompt = interactionMode === 'conversation'
+              ? `${baseAttemptSystemPrompt}
+
+## CONVERSATION MODE
+- The user asked a conversational/advisory question.
+- Respond directly and naturally.
+- Do not propose a multi-step build plan unless the user asks for implementation.
+- Do not run file mutation tools unless the user explicitly asks you to change code.`
+              : baseAttemptSystemPrompt
+
+            const attemptSystemPrompt = vibeAuditPrompt && interactionMode === 'build'
+              ? `${modePrompt}
+
+${vibeAuditPrompt}`
+              : modePrompt
 
             const orchestrator = createOrchestrator({
               projectId,
@@ -476,39 +582,47 @@ ${fileList}`
               }
             }
 
-            const result = await orchestrator.executeAgent(
-              agentId,
-              messages[messages.length - 1]?.content || '',
-              {
-                maxSteps: 15,
-                maxTokens: MAX_OUTPUT_TOKENS,
-                systemPrompt: attemptSystemPrompt,
-                messages,
-                onTextDelta: (delta) => {
-                  sendChunk({ type: 'text', content: delta })
-                },
-                onToolCall: (toolCall) => {
-                  if (sentToolCalls.has(toolCall.id)) return
-                  sentToolCalls.add(toolCall.id)
-                  sendChunk({ type: 'tool-call', toolCall })
-                },
-                onToolResult: (toolResult) => {
-                  const resultText = typeof toolResult.result === 'string'
-                    ? toolResult.result
-                    : JSON.stringify(toolResult.result)
+            const executionOptions = {
+              maxSteps: interactionMode === 'conversation' ? 6 : 15,
+              maxTokens: MAX_OUTPUT_TOKENS,
+              systemPrompt: attemptSystemPrompt,
+              messages,
+              onTextDelta: (delta: string) => {
+                sendChunk({ type: 'text', content: delta })
+              },
+              onToolCall: (toolCall: { id: string; name: string; args: Record<string, unknown> }) => {
+                if (sentToolCalls.has(toolCall.id)) return
+                sentToolCalls.add(toolCall.id)
+                sendChunk({ type: 'tool-call', toolCall })
+              },
+              onToolResult: (toolResult: { id: string; name: string; result: unknown; duration: number }) => {
+                const resultText = typeof toolResult.result === 'string'
+                  ? toolResult.result
+                  : JSON.stringify(toolResult.result)
 
-                  sendChunk({
-                    type: 'tool-result',
-                    toolResult: {
-                      id: toolResult.id,
-                      success: !resultText.startsWith('Error:'),
-                      output: resultText,
-                      duration: toolResult.duration,
-                    },
-                  })
-                },
-              }
-            )
+                sendChunk({
+                  type: 'tool-result',
+                  toolResult: {
+                    id: toolResult.id,
+                    success: !resultText.startsWith('Error:'),
+                    output: resultText,
+                    duration: toolResult.duration,
+                  },
+                })
+              },
+            }
+
+            const result = WORLD_CLASS_ORCHESTRATION_ENABLED && interactionMode === 'build'
+              ? await orchestrator.executeWorldClassFlow(
+                agentId,
+                messages[messages.length - 1]?.content || '',
+                executionOptions
+              )
+              : await orchestrator.executeAgent(
+                agentId,
+                messages[messages.length - 1]?.content || '',
+                executionOptions
+              )
 
             if (!result.success) {
               throw new Error(result.output || 'Agent execution failed')
@@ -526,6 +640,18 @@ ${fileList}`
               requestLikelyNeedsFileOutput(lastUserContent)
             ) {
               throw new Error('NO_FILE_MUTATIONS')
+            }
+
+            if (!result.output || result.output.trim().length === 0) {
+              sendChunk({
+                type: 'text',
+                content: buildToolOnlyFallback(
+                  result.toolCalls.map((toolCall) => ({
+                    name: toolCall.name,
+                    args: toolCall.args,
+                  }))
+                ),
+              })
             }
 
             safeClose()

@@ -1,5 +1,6 @@
 import { generateObject } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
+import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/supabase/auth'
 
@@ -29,6 +30,8 @@ const SupervisorResponseSchema = z.object({
     effort: z.enum(['quick', 'moderate', 'significant']).describe('Implementation effort'),
   })).describe('Optional improvements to make the build even better. Include 1-3 even for APPROVED builds.'),
 })
+
+type SupervisorResponseObject = z.infer<typeof SupervisorResponseSchema>
 
 const SUPERVISOR_PROMPT = `You are TORBIT's SUPERVISOR — a senior engineer who reviews builds for completeness.
 
@@ -65,6 +68,45 @@ Built: Landing page with hero, features, footer
 ]
 
 Be strict about explicit requests. Be lenient about implied features. Always suggest improvements.`
+
+const DEFAULT_SUPERVISOR_MODEL = process.env.TORBIT_SUPERVISOR_MODEL
+  || process.env.TORBIT_SUPERVISOR_CODEX_MODEL
+  || 'gpt-5.3-codex'
+const DEFAULT_ANTHROPIC_REVIEW_MODEL = 'claude-opus-4-6-20260206'
+
+function getSupervisorReviewModel() {
+  const configured = DEFAULT_SUPERVISOR_MODEL.trim()
+
+  if (configured.startsWith('claude-')) {
+    return anthropic(configured)
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    return openai(configured)
+  }
+
+  return anthropic(DEFAULT_ANTHROPIC_REVIEW_MODEL)
+}
+
+function buildSupervisorResponse(object: SupervisorResponseObject) {
+  return {
+    status: object.status,
+    summary: object.summary,
+    fixes: object.fixes.map((fix, i) => ({
+      id: `fix-${i + 1}`,
+      feature: fix.feature,
+      description: fix.description,
+      severity: fix.severity,
+      status: 'pending' as const,
+    })),
+    suggestions: object.suggestions.map((suggestion, i) => ({
+      id: `suggestion-${i + 1}`,
+      idea: suggestion.idea,
+      description: suggestion.description,
+      effort: suggestion.effort,
+    })),
+  }
+}
 
 export async function POST(req: Request) {
   // ========================================================================
@@ -111,31 +153,102 @@ export async function POST(req: Request) {
 ${safeFilesCreated.length > 10 ? `... and ${safeFilesCreated.length - 10} more` : ''}
 `
 
+    const wantsStream = (
+      new URL(req.url).searchParams.get('stream') === '1' ||
+      req.headers.get('accept')?.includes('text/event-stream') === true
+    )
+
+    if (wantsStream) {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          let isClosed = false
+          const sendChunk = (chunk: unknown) => {
+            if (isClosed) return
+            try {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+            } catch {
+              isClosed = true
+            }
+          }
+          const safeClose = () => {
+            if (isClosed) return
+            isClosed = true
+            try {
+              controller.close()
+            } catch {
+              // No-op
+            }
+          }
+
+          const progressMessages = [
+            'Supervisor connected. Reviewing feature coverage.',
+            'Supervisor checking runtime safety and user experience protections.',
+            'Supervisor validating quality bar and release readiness.',
+          ]
+          let progressIndex = 0
+          sendChunk({ type: 'supervisor-progress', content: progressMessages[progressIndex] })
+
+          const ticker = setInterval(() => {
+            progressIndex = (progressIndex + 1) % progressMessages.length
+            sendChunk({ type: 'supervisor-progress', content: progressMessages[progressIndex] })
+          }, 1200)
+
+          try {
+            const { object } = await generateObject({
+              model: getSupervisorReviewModel(),
+              schema: SupervisorResponseSchema,
+              system: SUPERVISOR_PROMPT,
+              prompt: `Review this build:\n${buildSummary}`,
+            })
+
+            clearInterval(ticker)
+            const responsePayload = buildSupervisorResponse(object)
+
+            sendChunk({
+              type: 'supervisor-progress',
+              content: responsePayload.status === 'APPROVED'
+                ? 'Supervisor verdict: pass. Build meets requested scope.'
+                : 'Supervisor verdict: fixes required before release.',
+            })
+
+            if (responsePayload.suggestions.length > 0) {
+              sendChunk({
+                type: 'supervisor-progress',
+                content: `Supervisor recommendations prepared (${responsePayload.suggestions.length}).`,
+              })
+            }
+
+            sendChunk({ type: 'supervisor-result', result: responsePayload })
+            safeClose()
+          } catch (error) {
+            clearInterval(ticker)
+            sendChunk({
+              type: 'error',
+              error: error instanceof Error ? error.message : 'Verification failed',
+            })
+            safeClose()
+          }
+        },
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      })
+    }
+
     const { object } = await generateObject({
-      model: anthropic('claude-opus-4-6-20260206'),
+      model: getSupervisorReviewModel(),
       schema: SupervisorResponseSchema,
       system: SUPERVISOR_PROMPT,
       prompt: `Review this build:\n${buildSummary}`,
     })
 
-    // Return structured JSON directly
-    return Response.json({
-      status: object.status,
-      summary: object.summary,
-      fixes: object.fixes.map((fix: { feature: string; description: string; severity: 'critical' | 'recommended' }, i: number) => ({
-        id: `fix-${i + 1}`,
-        feature: fix.feature,
-        description: fix.description,
-        severity: fix.severity,
-        status: 'pending' as const,
-      })),
-      suggestions: object.suggestions.map((s: { idea: string; description: string; effort: 'quick' | 'moderate' | 'significant' }, i: number) => ({
-        id: `suggestion-${i + 1}`,
-        idea: s.idea,
-        description: s.description,
-        effort: s.effort,
-      })),
-    })
+    return Response.json(buildSupervisorResponse(object))
   } catch (error) {
     console.error('Supervisor verification error:', error)
     return Response.json(

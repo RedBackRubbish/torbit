@@ -61,8 +61,10 @@ export default function ChatPanel() {
   const [showSupervisor, setShowSupervisor] = useState(false)
   const [supervisorLoading, setSupervisorLoading] = useState(false)
   const [supervisorResult, setSupervisorResult] = useState<SupervisorReviewResult | null>(null)
+  const [supervisorLiveLines, setSupervisorLiveLines] = useState<string[]>([])
   // Pending verification - waits for serverUrl to trigger supervisor
   const [pendingVerification, setPendingVerification] = useState<{
+    reviewMessageId: string
     originalPrompt: string
     filesCreated: string[]
     componentNames: (string | undefined)[]
@@ -272,6 +274,37 @@ export default function ChatPanel() {
       appliedMutationIds.add(toolCall.id)
     }
 
+    const buildFallbackSummary = (calls: ToolCall[]): string => {
+      if (calls.length === 0) {
+        return 'Request completed, but no response text was returned. Please retry for a detailed explanation.'
+      }
+
+      const mutationCalls = calls.filter((toolCall) => (
+        toolCall.name === 'createFile' ||
+        toolCall.name === 'editFile' ||
+        toolCall.name === 'applyPatch' ||
+        toolCall.name === 'deleteFile'
+      ))
+
+      if (mutationCalls.length === 0) {
+        return `Completed ${calls.length} tool step${calls.length === 1 ? '' : 's'}. Review the action log for details.`
+      }
+
+      const paths = Array.from(new Set(
+        mutationCalls
+          .map((toolCall) => (typeof toolCall.args.path === 'string' ? toolCall.args.path.trim() : ''))
+          .filter((pathValue) => pathValue.length > 0)
+      ))
+
+      if (paths.length === 0) {
+        return `Applied ${mutationCalls.length} file change${mutationCalls.length === 1 ? '' : 's'}.`
+      }
+
+      const preview = paths.slice(0, 3).join(', ')
+      const suffix = paths.length > 3 ? ` and ${paths.length - 3} more` : ''
+      return `Applied ${mutationCalls.length} file change${mutationCalls.length === 1 ? '' : 's'}: ${preview}${suffix}.`
+    }
+
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -435,6 +468,17 @@ export default function ChatPanel() {
                 ))
               }
               break
+
+            case 'retry':
+              if (chunk.retry) {
+                const retryMessage = fullContent || `Retrying request (${chunk.retry.attempt + 1}/${chunk.retry.maxAttempts})...`
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantId
+                    ? { ...m, content: retryMessage, retrying: true }
+                    : m
+                ))
+              }
+              break
           }
         } catch (parseError) {
           console.error('[DEBUG] SSE parse error:', parseError, 'line:', line)
@@ -454,6 +498,15 @@ export default function ChatPanel() {
     // Server-sent governance proofs via 'proof' chunks will override these.
     // Also persist any governance data received during this build.
     const allToolCalls = Array.from(toolCalls.values())
+    if (!fullContent.trim()) {
+      fullContent = buildFallbackSummary(allToolCalls)
+      setMessages(prev => prev.map(m =>
+        m.id === assistantId
+          ? { ...m, content: fullContent, toolCalls: allToolCalls, retrying: false }
+          : m
+      ))
+    }
+
     const createFileCalls = allToolCalls.filter(tc => tc.name === 'createFile')
     const editFileCalls = allToolCalls.filter(tc => tc.name === 'editFile')
     const patchCalls = allToolCalls.filter(tc => tc.name === 'applyPatch')
@@ -528,8 +581,8 @@ export default function ChatPanel() {
 
     setIsLoading(true)
     setIsGenerating(true)
-    setAgentStatus(agentId, 'thinking', isHealRequest ? 'Analyzing...' : 'Planning...')
-    setCurrentTask(isHealRequest ? 'Diagnosing...' : 'Planning architecture...')
+    setAgentStatus(agentId, 'thinking', isHealRequest ? 'Analyzing...' : 'Responding...')
+    setCurrentTask(isHealRequest ? 'Diagnosing...' : 'Working on your request...')
     
     // 🔊 Start generation sound
     generationSound.onStart()
@@ -607,12 +660,21 @@ export default function ChatPanel() {
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No response body')
 
-      await parseSSEStream(reader, assistantId, agentId, initialContent)
+      const streamResult = await parseSSEStream(reader, assistantId, agentId, initialContent)
       setAgentStatus(agentId, 'complete', 'Done')
       
-      // Generate completion summary if this was a build (not a heal request)
+      const mutationCalls = streamResult.toolCalls.filter((toolCall) => (
+        toolCall.status === 'complete' && (
+          toolCall.name === 'createFile' ||
+          toolCall.name === 'editFile' ||
+          toolCall.name === 'applyPatch' ||
+          toolCall.name === 'deleteFile'
+        )
+      ))
+
+      // Generate completion summary only when this run made file mutations (not a heal request)
       const latestFiles = useBuilderStore.getState().files
-      if (!isHealRequest && latestFiles.length > 0) {
+      if (!isHealRequest && mutationCalls.length > 0 && latestFiles.length > 0) {
         // Get file paths for verification
         const filePaths = latestFiles.map(f => f.path)
         
@@ -634,16 +696,18 @@ export default function ChatPanel() {
           .filter((v, i, a) => a.indexOf(v) === i) // unique
         
         // Show message that we're waiting for build, NOT that supervisor is reviewing yet
+        const reviewMessageId = `complete-${Date.now()}`
         setMessages(prev => [...prev, {
-          id: `complete-${Date.now()}`,
+          id: reviewMessageId,
           role: 'assistant',
-          content: `Generated ${latestFiles.length} files. Verifying preview runtime now...`,
+          content: `I updated ${mutationCalls.length} file changes. Verifying preview runtime now.`,
           agentId,
           toolCalls: [],
         }])
         
         // Store pending verification data - supervisor will run when serverUrl is available
         setPendingVerification({
+          reviewMessageId,
           originalPrompt: messageContent || prompt || '',
           filesCreated: filePaths,
           componentNames,
@@ -828,6 +892,7 @@ Analyze the error, identify the problematic file, and use editFile to fix it imm
   // Auto-apply fixes from supervisor (called automatically, no button needed)
   const autoApplyFixes = useCallback((result: SupervisorReviewResult) => {
     if (!result || result.fixes.length === 0) return
+    setSupervisorLiveLines(prev => [...prev, 'Supervisor initiated automatic remediation.'])
     
     // Mark all fixes as "fixing"
     setSupervisorResult(prev => prev ? {
@@ -862,6 +927,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
           const newFixes = [...prev.fixes]
           if (newFixes[index]) {
             newFixes[index] = { ...newFixes[index], status: 'complete' }
+            setSupervisorLiveLines(prev => [...prev, `Applied fix: ${newFixes[index].feature}`])
           }
           // Auto-close panel when all fixes are complete
           const allComplete = newFixes.every(f => f.status === 'complete')
@@ -904,13 +970,14 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     })
 
     setMessages((prev) => prev.map((message) =>
-      message.content?.includes('Building preview') || message.content?.includes('Supervisor is reviewing')
+      message.id === pendingVerification.reviewMessageId
         ? { ...message, content: failureSummary }
         : message
     ))
 
     setSupervisorLoading(false)
     setShowSupervisor(false)
+    setSupervisorLiveLines([])
     setPendingVerification(null)
   }, [error, pendingVerification, buildFailure])
 
@@ -921,28 +988,10 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     
     // Update message to show supervisor is now reviewing (build succeeded)
     setMessages(prev => prev.map(m =>
-      m.content?.includes('Building preview')
+      m.id === pendingVerification.reviewMessageId
         ? {
           ...m,
-          content: [
-            '**Goal**',
-            '- Build and verify the live preview runtime.',
-            '',
-            '**What changed**',
-            `- ${pendingVerification.fileCount} files were generated.`,
-            '',
-            '**What passed**',
-            '- Preview runtime is live.',
-            '',
-            '**What failed**',
-            '- None yet.',
-            '',
-            '**Auto-retry done?**',
-            '- No',
-            '',
-            '**Next action**',
-            '- Supervisor is reviewing quality and completeness...',
-          ].join('\n'),
+          content: 'Preview is live. Supervisor is now reviewing quality and completeness in real time...',
         }
         : m
     ))
@@ -951,6 +1000,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     setShowSupervisor(true)
     setSupervisorLoading(true)
     setSupervisorResult(null)
+    setSupervisorLiveLines([])
     
     const runVerification = async () => {
       try {
@@ -963,140 +1013,125 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
           }
         }
 
-        const verifyResponse = await fetch('/api/verify', {
+        const verifyResponse = await fetch('/api/verify?stream=1', {
           method: 'POST',
-          headers,
+          headers: {
+            ...headers,
+            Accept: 'text/event-stream',
+          },
           body: JSON.stringify(pendingVerification),
         })
-        
-        if (verifyResponse.ok) {
-          const result = await verifyResponse.json() as SupervisorReviewResult
-          setSupervisorLoading(false)
-          setSupervisorResult(result)
-          
-          if (result.status === 'APPROVED') {
-            let approvedMessage = [
-              '**Goal**',
-              '- Build and verify the live preview runtime.',
-              '',
-              '**What changed**',
-              `- ${pendingVerification.fileCount} files were generated.`,
-              '',
-              '**What passed**',
-              '- Preview runtime is live.',
-              '- Supervisor approved build quality.',
-            ].join('\n')
-            
-            if (result.suggestions && result.suggestions.length > 0) {
-              approvedMessage += `\n\n**Suggestions for improvement:**\n`
-              approvedMessage += result.suggestions
-                .map((s, i) => `${i + 1}. **${s.idea}** (${s.effort}) — ${s.description}`)
-                .join('\n')
-            }
-            
-            approvedMessage += `\n\n**What failed**\n- None.\n\n**Auto-retry done?**\n- No\n\n**Next action**\n- Preview is live. Tell me what to iterate next.`
-            
-            setMessages(prev => prev.map(m =>
-              m.content?.includes('Supervisor is reviewing')
-                ? { ...m, content: approvedMessage }
-                : m
-            ))
-            setTimeout(() => setShowSupervisor(false), 2000)
-          } else {
-            // NEEDS_FIXES - Show what Supervisor found
-            const issueList = result.fixes
-              .map((f, i) => `${i + 1}. **${f.feature}**: ${f.description}`)
-              .join('\n')
 
-            setMessages(prev => prev.map(m =>
-              m.content?.includes('Supervisor is reviewing')
-                ? {
-                  ...m,
-                  content: [
-                    '**Goal**',
-                    '- Build and verify the live preview runtime.',
-                    '',
-                    '**What changed**',
-                    `- ${pendingVerification.fileCount} files were generated.`,
-                    '',
-                    '**What passed**',
-                    '- Preview runtime is live.',
-                    '',
-                    '**What failed**',
-                    `- Supervisor found issues:\n${issueList}`,
-                    '',
-                    '**Auto-retry done?**',
-                    '- No',
-                    '',
-                    '**Next action**',
-                    '- Applying fixes now...',
-                  ].join('\n'),
-                }
-                : m
-            ))
-            setTimeout(() => {
-              autoApplyFixes(result)
-            }, 2000)
+        const appendSupervisorLine = (line: string) => {
+          setSupervisorLiveLines(prev => {
+            if (prev[prev.length - 1] === line) return prev
+            return [...prev, line]
+          })
+        }
+
+        if (!verifyResponse.ok) {
+          throw new Error('Supervisor verification failed')
+        }
+
+        type SupervisorStreamChunk = {
+          type: 'supervisor-progress' | 'supervisor-result' | 'error'
+          content?: string
+          error?: string
+          result?: SupervisorReviewResult
+        }
+
+        let result: SupervisorReviewResult | null = null
+        const streamContentType = verifyResponse.headers.get('content-type') || ''
+
+        if (streamContentType.includes('text/event-stream')) {
+          const reader = verifyResponse.body?.getReader()
+          if (!reader) throw new Error('Supervisor stream unavailable')
+
+          const decoder = new TextDecoder()
+          let buffer = ''
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const blocks = buffer.split('\n\n')
+            buffer = blocks.pop() || ''
+
+            for (const block of blocks) {
+              if (!block.startsWith('data: ')) continue
+              const chunk = JSON.parse(block.slice(6)) as SupervisorStreamChunk
+              if (chunk.type === 'supervisor-progress' && chunk.content) {
+                appendSupervisorLine(chunk.content)
+              } else if (chunk.type === 'supervisor-result' && chunk.result) {
+                result = chunk.result
+              } else if (chunk.type === 'error') {
+                throw new Error(chunk.error || 'Supervisor stream failed')
+              }
+            }
           }
         } else {
-          // Verification API failed - just approve since build succeeded
-          setSupervisorLoading(false)
-          setSupervisorResult({ status: 'APPROVED', summary: 'Build complete', fixes: [] })
-          setShowSupervisor(false)
-          setMessages(prev => prev.map(m => 
-            m.content?.includes('Supervisor is reviewing')
-              ? {
-                ...m,
-                content: [
-                  '**Goal**',
-                  '- Build and verify the live preview runtime.',
-                  '',
-                  '**What changed**',
-                  `- ${pendingVerification.fileCount} files were generated.`,
-                  '',
-                  '**What passed**',
-                  '- Preview runtime is live.',
-                  '',
-                  '**What failed**',
-                  '- Supervisor verification API failed.',
-                  '',
-                  '**Auto-retry done?**',
-                  '- No',
-                  '',
-                  '**Next action**',
-                  '- Review runtime logs and iterate on the feature set.',
-                ].join('\n'),
-              }
+          result = await verifyResponse.json() as SupervisorReviewResult
+        }
+
+        if (!result) {
+          throw new Error('Supervisor result missing')
+        }
+
+        setSupervisorLoading(false)
+        setSupervisorResult(result)
+
+        if (result.status === 'APPROVED') {
+          appendSupervisorLine('Supervisor verdict: pass. Build approved.')
+          if (result.suggestions?.length) {
+            result.suggestions.forEach((suggestion, index) => {
+              appendSupervisorLine(`Recommendation ${index + 1}: ${suggestion.idea} (${suggestion.effort})`)
+            })
+          }
+
+          let approvedMessage = `Supervisor approved the build. ${result.summary}`
+          if (result.suggestions && result.suggestions.length > 0) {
+            approvedMessage += '\n\nRecommendations:\n'
+            approvedMessage += result.suggestions
+              .map((suggestion, index) => `${index + 1}. ${suggestion.idea} (${suggestion.effort}) — ${suggestion.description}`)
+              .join('\n')
+          }
+
+          setMessages(prev => prev.map(m =>
+            m.id === pendingVerification.reviewMessageId
+              ? { ...m, content: approvedMessage }
               : m
           ))
+          setTimeout(() => setShowSupervisor(false), 2200)
+        } else {
+          appendSupervisorLine('Supervisor verdict: fixes required before release.')
+          result.fixes.forEach((fix, index) => {
+            appendSupervisorLine(`Required fix ${index + 1}: ${fix.feature}`)
+          })
+
+          const issueList = result.fixes
+            .map((fix, index) => `${index + 1}. ${fix.feature}: ${fix.description}`)
+            .join('\n')
+
+          setMessages(prev => prev.map(m =>
+            m.id === pendingVerification.reviewMessageId
+              ? { ...m, content: `Supervisor found blockers and I’m fixing them automatically now:\n${issueList}` }
+              : m
+          ))
+
+          setTimeout(() => {
+            autoApplyFixes(result)
+          }, 1300)
         }
       } catch (err) {
         console.error('Supervisor verification failed:', err)
         setSupervisorLoading(false)
         setShowSupervisor(false)
         setMessages(prev => prev.map(m => 
-          m.content?.includes('Supervisor is reviewing')
+          m.id === pendingVerification.reviewMessageId
             ? {
               ...m,
-              content: [
-                '**Goal**',
-                '- Build and verify the live preview runtime.',
-                '',
-                '**What changed**',
-                `- ${pendingVerification.fileCount} files were generated.`,
-                '',
-                '**What passed**',
-                '- Preview runtime is live.',
-                '',
-                '**What failed**',
-                '- Supervisor verification request failed.',
-                '',
-                '**Auto-retry done?**',
-                '- No',
-                '',
-                '**Next action**',
-                '- Continue iterating or rerun verification.',
-              ].join('\n'),
+              content: 'Preview is live, but supervisor verification failed. I can retry the review or continue iterating.',
             }
             : m
         ))
@@ -1169,8 +1204,8 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     if (toolName === 'createFile' && args.path) {
       return (args.path as string).split('/').pop() || 'file'
     }
-    if (toolName === 'think') return 'Reasoning'
-    if (toolName === 'verifyDependencyGraph') return 'verify Dependency Graph'
+    if (toolName === 'think') return 'Working'
+    if (toolName === 'verifyDependencyGraph') return 'Checking dependencies'
     return toolName.replace(/([A-Z])/g, ' $1').trim()
   }
 
@@ -1334,6 +1369,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
         isOpen={showSupervisor}
         isLoading={supervisorLoading}
         result={supervisorResult}
+        liveLines={supervisorLiveLines}
         onDismiss={() => setShowSupervisor(false)}
       />
     </motion.div>
@@ -1506,13 +1542,13 @@ function ExecutionStatusRail({
       recoveryAction: hasError && isReady && !serverUrl ? recoveryActionLabel : undefined,
     },
     {
-      label: isBuilding ? (currentTask && currentTask !== 'Thinking...' ? currentTask : 'Building artifacts') : (hasFiles ? 'Artifacts ready' : 'Awaiting build'),
+      label: isBuilding ? (currentTask && currentTask !== 'Thinking...' ? currentTask : 'Updating project') : (hasFiles ? 'Artifacts ready' : 'Awaiting update'),
       status: hasError && isReady && serverUrl ? 'error' : isBuilding ? 'active' : hasFiles ? 'complete' : 'pending',
       errorMessage: hasError && isReady && serverUrl ? runtimeErrorLabel : undefined,
       recoveryAction: hasError && isReady && serverUrl ? recoveryActionLabel : undefined,
     },
     {
-      label: isFullyComplete ? 'Build verified' : (isBuilding ? 'Verification pending' : 'Awaiting verification'),
+      label: isFullyComplete ? 'Verified' : (isBuilding ? 'Verification pending' : 'Awaiting verification'),
       status: isFullyComplete ? 'verified' : 'pending',
     },
   ]

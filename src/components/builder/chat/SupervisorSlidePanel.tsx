@@ -40,6 +40,7 @@ interface SupervisorSlidePanelProps {
   isOpen: boolean
   isLoading?: boolean
   result: SupervisorReviewResult | null
+  liveLines?: string[]
   onDismiss: () => void
 }
 
@@ -47,6 +48,7 @@ export function SupervisorSlidePanel({
   isOpen,
   isLoading = false,
   result,
+  liveLines = [],
   onDismiss,
 }: SupervisorSlidePanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -107,18 +109,42 @@ export function SupervisorSlidePanel({
             <div className="flex-1 overflow-y-auto p-4">
               {isLoading ? (
                 /* Loading state */
-                <div className="flex items-center gap-3 py-8 justify-center">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                  >
-                    <Loader2 className="w-4 h-4 text-amber-400" />
-                  </motion.div>
-                  <span className="text-[13px] text-[#707070]">Reviewing build...</span>
+                <div className="space-y-4 py-4">
+                  <div className="flex items-center gap-3 justify-center">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                    >
+                      <Loader2 className="w-4 h-4 text-amber-400" />
+                    </motion.div>
+                    <span className="text-[13px] text-[#707070]">Supervisor is reviewing...</span>
+                  </div>
+                  {liveLines.length > 0 && (
+                    <div className="rounded-lg border border-[#1a1a1a] bg-[#101010] p-3 space-y-2 max-h-[320px] overflow-y-auto">
+                      {liveLines.map((line, index) => (
+                        <motion.p
+                          key={`${line}-${index}`}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-[12px] text-[#9a9a9a] leading-relaxed"
+                        >
+                          {line}
+                        </motion.p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : result?.status === 'APPROVED' ? (
                 /* Approved state */
                 <div className="space-y-4">
+                  {liveLines.length > 0 && (
+                    <div className="rounded-lg border border-[#1a1a1a] bg-[#101010] p-3 space-y-2">
+                      <p className="text-[11px] uppercase tracking-wider text-[#565656]">Supervisor Log</p>
+                      {liveLines.slice(-5).map((line, index) => (
+                        <p key={`${line}-${index}`} className="text-[12px] text-[#8b8b8b] leading-relaxed">{line}</p>
+                      ))}
+                    </div>
+                  )}
                   <div className="py-6 text-center">
                     <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
                       <CheckCircle2 className="w-6 h-6 text-emerald-400" />
@@ -165,6 +191,14 @@ export function SupervisorSlidePanel({
               ) : result?.status === 'NEEDS_FIXES' ? (
                 /* Fixes needed */
                 <div className="space-y-4">
+                  {liveLines.length > 0 && (
+                    <div className="rounded-lg border border-[#1a1a1a] bg-[#101010] p-3 space-y-2">
+                      <p className="text-[11px] uppercase tracking-wider text-[#565656]">Supervisor Log</p>
+                      {liveLines.slice(-6).map((line, index) => (
+                        <p key={`${line}-${index}`} className="text-[12px] text-[#8b8b8b] leading-relaxed">{line}</p>
+                      ))}
+                    </div>
+                  )}
                   {/* Summary */}
                   <div className="pb-3 border-b border-[#151515]">
                     <p className="text-[12px] text-[#606060] mb-1">Review Summary</p>

@@ -15,6 +15,8 @@ import { streamText, stepCountIs } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { google } from '@ai-sdk/google'
 import { openai } from '@ai-sdk/openai'
+import { createOpenRouter } from '@openrouter/ai-sdk-provider'
+import { z } from 'zod'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { AgentId } from '../tools/definitions'
@@ -98,6 +100,16 @@ export interface ParallelResult {
   parallelSpeedup: number // Theoretical sequential time / actual parallel time
 }
 
+export interface WorldClassExecutionOptions {
+  systemPrompt?: string
+  messages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+  maxSteps?: number
+  maxTokens?: number
+  onTextDelta?: (delta: string) => void
+  onToolCall?: (toolCall: { id: string; name: string; args: Record<string, unknown> }) => void
+  onToolResult?: (toolResult: { id: string; name: string; result: unknown; duration: number }) => void
+}
+
 // ============================================
 // MODEL SELECTION (Kimi K2.5 Primary + Claude Governance)
 // ============================================
@@ -106,19 +118,88 @@ const USE_CODEX_PRIMARY = process.env.TORBIT_USE_CODEX_PRIMARY === 'true'
 const CODEX_PRIMARY_MODEL = process.env.TORBIT_CODEX_MODEL || process.env.OPENAI_CODEX_MODEL || 'gpt-5.3-codex'
 const CODEX_FAST_MODEL = process.env.TORBIT_CODEX_FAST_MODEL || 'gpt-5-mini'
 const OPENAI_FALLBACK_MODEL = process.env.TORBIT_OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
+const KIMI_FALLBACK_MODEL = process.env.TORBIT_KIMI_FALLBACK_MODEL || 'moonshotai/kimi-k2.5'
+const KIMI_FAST_FALLBACK_MODEL = process.env.TORBIT_KIMI_FAST_FALLBACK_MODEL || KIMI_FALLBACK_MODEL
 const ANTHROPIC_OPUS_MODEL = 'claude-opus-4-6'
 const ANTHROPIC_SONNET_MODEL = 'claude-sonnet-4-5-20250929'
 const GOOGLE_PRO_MODEL = 'gemini-2.5-pro'
 const GOOGLE_FLASH_MODEL = 'gemini-2.0-flash'
+const CONTEXT_COMPILER_MODEL = process.env.TORBIT_CONTEXT_COMPILER_MODEL || process.env.TORBIT_GEMINI_CONTEXT_MODEL || 'gemini-3-pro-preview'
+const SUPERVISOR_MODEL = process.env.TORBIT_SUPERVISOR_MODEL || process.env.TORBIT_SUPERVISOR_CODEX_MODEL || CODEX_PRIMARY_MODEL
+const WORKER_PRIMARY_MODEL = process.env.TORBIT_WORKER_MODEL || process.env.TORBIT_KIMI_WORKER_MODEL || KIMI_FALLBACK_MODEL
+const CRITICAL_MODEL = process.env.TORBIT_CRITICAL_MODEL || process.env.TORBIT_OPUS_MODEL || ANTHROPIC_OPUS_MODEL
+const JANITOR_MODEL = process.env.TORBIT_JANITOR_MODEL || process.env.TORBIT_SONNET_MODEL || ANTHROPIC_SONNET_MODEL
+const WORLD_CLASS_CONTEXT_MIN_CHARS = Number(process.env.TORBIT_CONTEXT_COMPILER_MIN_CHARS || 10000)
+const PROVIDER_BILLING_BACKOFF_MS = Number(process.env.TORBIT_PROVIDER_BILLING_BACKOFF_MS || 15 * 60 * 1000)
 let codexFallbackWarningShown = false
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY,
+})
 
 type ModelCandidate = {
-  provider: 'anthropic' | 'openai' | 'google'
+  provider: 'anthropic' | 'openai' | 'google' | 'openrouter'
   label: string
-  model: ReturnType<typeof anthropic> | ReturnType<typeof openai> | ReturnType<typeof google>
+  model: ReturnType<typeof anthropic> | ReturnType<typeof openai> | ReturnType<typeof google> | ReturnType<typeof openrouter>
 }
 
-function getModelCandidates(taskComplexity: 'high' | 'medium' | 'low', preferredTier?: ModelTier): ModelCandidate[] {
+export type ModelRole = 'default' | 'context' | 'supervisor' | 'worker' | 'critical' | 'janitor'
+
+const SupervisorPlanSchema = z.object({
+  risk: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
+  executeJanitor: z.boolean().default(true),
+  escalateToCritical: z.boolean().default(false),
+  workerDirective: z.string().min(1).default('Implement the request directly with concrete file changes.'),
+  janitorDirective: z.string().default('Run a focused cleanup pass: lint/type/test failures, minimal edits only.'),
+  criticalDirective: z.string().default('Repair blockers and regressions with minimal, surgical fixes.'),
+  notes: z.array(z.string()).default([]),
+})
+
+type SupervisorPlan = z.infer<typeof SupervisorPlanSchema>
+
+const DEFAULT_SUPERVISOR_PLAN: SupervisorPlan = {
+  risk: 'medium',
+  executeJanitor: true,
+  escalateToCritical: false,
+  workerDirective: 'Implement the request directly with concrete file changes.',
+  janitorDirective: 'Run a focused cleanup pass: lint/type/test failures, minimal edits only.',
+  criticalDirective: 'Repair blockers and regressions with minimal, surgical fixes.',
+  notes: [],
+}
+
+const providerBackoffUntil = new Map<ModelCandidate['provider'], number>()
+
+function hasProviderBackoff(provider: ModelCandidate['provider'], now = Date.now()): boolean {
+  const until = providerBackoffUntil.get(provider)
+  if (!until) return false
+  if (until <= now) {
+    providerBackoffUntil.delete(provider)
+    return false
+  }
+  return true
+}
+
+function setProviderBackoff(provider: ModelCandidate['provider'], durationMs = PROVIDER_BILLING_BACKOFF_MS): void {
+  providerBackoffUntil.set(provider, Date.now() + durationMs)
+}
+
+function isBillingOrQuotaFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const msg = error.message.toLowerCase()
+  return (
+    msg.includes('credit balance') ||
+    msg.includes('purchase credits') ||
+    msg.includes('billing') ||
+    msg.includes('insufficient credits') ||
+    msg.includes('quota exceeded') ||
+    msg.includes('status code: 402')
+  )
+}
+
+function getModelCandidates(
+  taskComplexity: 'high' | 'medium' | 'low',
+  preferredTier?: ModelTier,
+  role: ModelRole = 'default'
+): ModelCandidate[] {
   const tier: ModelTier = preferredTier ?? (
     taskComplexity === 'high' ? 'opus' : taskComplexity === 'medium' ? 'sonnet' : 'flash'
   )
@@ -126,6 +207,7 @@ function getModelCandidates(taskComplexity: 'high' | 'medium' | 'low', preferred
   const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY)
   const hasGoogle = Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY)
   const hasOpenAI = Boolean(process.env.OPENAI_API_KEY)
+  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY)
   const candidates: ModelCandidate[] = []
   const seen = new Set<string>()
 
@@ -136,78 +218,93 @@ function getModelCandidates(taskComplexity: 'high' | 'medium' | 'low', preferred
     candidates.push(candidate)
   }
 
-  if (tier === 'flash') {
-    if (hasGoogle) {
-      addCandidate({
-        provider: 'google',
-        label: GOOGLE_FLASH_MODEL,
-        model: google(GOOGLE_FLASH_MODEL),
-      })
-    }
-    if (hasOpenAI) {
-      const fastModel = USE_CODEX_PRIMARY ? CODEX_FAST_MODEL : OPENAI_FALLBACK_MODEL
-      addCandidate({
-        provider: 'openai',
-        label: fastModel,
-        model: openai(fastModel),
-      })
-    }
-    if (hasAnthropic) {
-      addCandidate({
-        provider: 'anthropic',
-        label: ANTHROPIC_SONNET_MODEL,
-        model: anthropic(ANTHROPIC_SONNET_MODEL),
-      })
-    }
-  } else {
-    if (USE_CODEX_PRIMARY && hasOpenAI) {
-      addCandidate({
-        provider: 'openai',
-        label: CODEX_PRIMARY_MODEL,
-        model: openai(CODEX_PRIMARY_MODEL),
-      })
-    }
-
-    if (hasAnthropic) {
-      const anthropicModel = tier === 'opus' ? ANTHROPIC_OPUS_MODEL : ANTHROPIC_SONNET_MODEL
-      addCandidate({
-        provider: 'anthropic',
-        label: anthropicModel,
-        model: anthropic(anthropicModel),
-      })
-    }
-
-    if (hasOpenAI) {
-      const openaiModel = OPENAI_FALLBACK_MODEL
-      addCandidate({
-        provider: 'openai',
-        label: openaiModel,
-        model: openai(openaiModel),
-      })
-    }
-
-    if (hasGoogle) {
-      const googleModel = tier === 'opus' ? GOOGLE_PRO_MODEL : GOOGLE_FLASH_MODEL
-      addCandidate({
-        provider: 'google',
-        label: googleModel,
-        model: google(googleModel),
-      })
-    }
+  const addOpenAI = (label: string) => {
+    if (!hasOpenAI) return
+    addCandidate({ provider: 'openai', label, model: openai(label) })
+  }
+  const addAnthropic = (label: string) => {
+    if (!hasAnthropic) return
+    addCandidate({ provider: 'anthropic', label, model: anthropic(label) })
+  }
+  const addGoogle = (label: string) => {
+    if (!hasGoogle) return
+    addCandidate({ provider: 'google', label, model: google(label) })
+  }
+  const addOpenRouter = (label: string) => {
+    if (!hasOpenRouter) return
+    addCandidate({ provider: 'openrouter', label, model: openrouter.chat(label) })
   }
 
-  if (USE_CODEX_PRIMARY && !hasOpenAI && !codexFallbackWarningShown) {
+  switch (role) {
+    case 'context':
+      addGoogle(CONTEXT_COMPILER_MODEL)
+      addGoogle(GOOGLE_PRO_MODEL)
+      addOpenRouter(KIMI_FALLBACK_MODEL)
+      addOpenAI(OPENAI_FALLBACK_MODEL)
+      addAnthropic(ANTHROPIC_SONNET_MODEL)
+      break
+    case 'supervisor':
+      addOpenAI(SUPERVISOR_MODEL)
+      addOpenAI(CODEX_PRIMARY_MODEL)
+      addOpenAI(OPENAI_FALLBACK_MODEL)
+      addOpenRouter(KIMI_FALLBACK_MODEL)
+      addAnthropic(ANTHROPIC_SONNET_MODEL)
+      addGoogle(GOOGLE_PRO_MODEL)
+      break
+    case 'worker':
+      addOpenRouter(WORKER_PRIMARY_MODEL)
+      addOpenRouter(KIMI_FALLBACK_MODEL)
+      addAnthropic(ANTHROPIC_SONNET_MODEL)
+      addOpenAI(OPENAI_FALLBACK_MODEL)
+      addGoogle(GOOGLE_FLASH_MODEL)
+      break
+    case 'critical':
+      addAnthropic(CRITICAL_MODEL)
+      addOpenAI(SUPERVISOR_MODEL)
+      addOpenRouter(KIMI_FALLBACK_MODEL)
+      addGoogle(GOOGLE_PRO_MODEL)
+      break
+    case 'janitor':
+      addAnthropic(JANITOR_MODEL)
+      addOpenRouter(KIMI_FAST_FALLBACK_MODEL)
+      addOpenAI(OPENAI_FALLBACK_MODEL)
+      addGoogle(GOOGLE_FLASH_MODEL)
+      break
+    case 'default':
+    default:
+      if (tier === 'flash') {
+        addGoogle(GOOGLE_FLASH_MODEL)
+        addOpenAI(USE_CODEX_PRIMARY ? CODEX_FAST_MODEL : OPENAI_FALLBACK_MODEL)
+        addOpenRouter(KIMI_FAST_FALLBACK_MODEL)
+        addAnthropic(ANTHROPIC_SONNET_MODEL)
+      } else {
+        if (USE_CODEX_PRIMARY) addOpenAI(CODEX_PRIMARY_MODEL)
+        addAnthropic(tier === 'opus' ? ANTHROPIC_OPUS_MODEL : ANTHROPIC_SONNET_MODEL)
+        addOpenRouter(KIMI_FALLBACK_MODEL)
+        addOpenAI(OPENAI_FALLBACK_MODEL)
+        addGoogle(tier === 'opus' ? GOOGLE_PRO_MODEL : GOOGLE_FLASH_MODEL)
+      }
+      break
+  }
+
+  if (role === 'default' && USE_CODEX_PRIMARY && !hasOpenAI && !codexFallbackWarningShown) {
     codexFallbackWarningShown = true
     console.warn('[Orchestrator] TORBIT_USE_CODEX_PRIMARY=true but OPENAI_API_KEY is missing. Falling back to available providers.')
   }
 
-  if (candidates.length === 0) {
+  const eligibleCandidates = candidates.filter((candidate) => !hasProviderBackoff(candidate.provider))
+
+  if (eligibleCandidates.length === 0 && candidates.length > 0) {
+    return candidates
+  }
+
+  if (eligibleCandidates.length === 0) {
     throw new Error(
       'No AI provider configured. Set at least one of OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY.'
     )
   }
 
-  return candidates
+  return eligibleCandidates
 }
 
 function shouldFallbackToNextModel(error: unknown): boolean {
@@ -217,10 +314,13 @@ function shouldFallbackToNextModel(error: unknown): boolean {
     msg.includes('credit balance') ||
     msg.includes('purchase credits') ||
     msg.includes('billing') ||
+    msg.includes('insufficient credits') ||
+    msg.includes('quota exceeded') ||
     msg.includes('api key') ||
     msg.includes('authentication') ||
     msg.includes('unauthorized') ||
     msg.includes('forbidden') ||
+    msg.includes('status code: 402') ||
     msg.includes('status code: 401') ||
     msg.includes('status code: 403') ||
     msg.includes('status code: 429') ||
@@ -229,6 +329,42 @@ function shouldFallbackToNextModel(error: unknown): boolean {
     msg.includes('model_not_found') ||
     msg.includes('does not exist or you do not have access')
   )
+}
+
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{')
+  if (start < 0) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+    if (inString) continue
+    if (char === '{') depth += 1
+    if (char === '}') depth -= 1
+    if (depth === 0) return text.slice(start, i + 1)
+  }
+  return null
+}
+
+function estimateRequestChars(prompt: string, messages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>): number {
+  const historySize = (messages || [])
+    .map((message) => message.content.length)
+    .reduce((sum, size) => sum + size, 0)
+  return prompt.length + historySize
 }
 
 // ============================================
@@ -391,6 +527,8 @@ export class TorbitOrchestrator {
     prompt: string,
     options?: {
       modelTier?: ModelTier
+      /** Force a model-role profile (context/supervisor/worker/critical/janitor) */
+      modelRole?: ModelRole
       maxSteps?: number
       /** Maximum output tokens for the model response */
       maxTokens?: number
@@ -424,7 +562,7 @@ export class TorbitOrchestrator {
       }
     }
     
-    const modelCandidates = getModelCandidates('medium', options?.modelTier)
+    const modelCandidates = getModelCandidates('medium', options?.modelTier, options?.modelRole ?? 'default')
     const tools = getToolsForAgent(agentId, this.context)
     const systemPrompt = options?.systemPrompt ?? AGENT_PROMPTS[agentId]
     const sanitizedMessages = options?.messages
@@ -434,9 +572,6 @@ export class TorbitOrchestrator {
     // Map model tier to fuel model tier for cost calculation
     const fuelModelTier: FuelModelTier = options?.modelTier === 'opus' ? 'opus' :
                                           options?.modelTier === 'sonnet' ? 'sonnet' : 'flash'
-    const requestBody = sanitizedMessages && sanitizedMessages.length > 0
-      ? { messages: sanitizedMessages }
-      : { prompt }
     const fallbackErrors: string[] = []
     let lastError: unknown = null
     let lastToolCalls: AgentResult['toolCalls'] = []
@@ -449,14 +584,23 @@ export class TorbitOrchestrator {
       const toolCallArgs = new Map<string, Record<string, unknown>>()
 
       try {
-        const result = await streamText({
+        const baseStreamOptions = {
           model: candidate.model,
           system: systemPrompt,
-          ...requestBody,
           tools,
           ...(options?.maxTokens ? { maxTokens: options.maxTokens } : {}),
           stopWhen: stepCountIs(options?.maxSteps ?? 10),
-        })
+        }
+
+        const result = sanitizedMessages && sanitizedMessages.length > 0
+          ? await streamText({
+            ...baseStreamOptions,
+            messages: sanitizedMessages,
+          })
+          : await streamText({
+            ...baseStreamOptions,
+            prompt,
+          })
         
         // Use fullStream to get tool calls IMMEDIATELY as they happen
         // This enables real-time file visibility before execution completes
@@ -541,6 +685,14 @@ export class TorbitOrchestrator {
         lastError = error
         lastToolCalls = toolCalls
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+
+        if (isBillingOrQuotaFailure(error)) {
+          setProviderBackoff(candidate.provider)
+          console.warn(
+            `[Orchestrator] Provider ${candidate.provider} entered temporary billing backoff for ${Math.round(PROVIDER_BILLING_BACKOFF_MS / 1000)}s.`
+          )
+        }
+
         fallbackErrors.push(`${candidate.provider}:${candidate.label} -> ${errorMessage}`)
 
         const nextCandidate = modelCandidates[i + 1]
@@ -565,6 +717,317 @@ export class TorbitOrchestrator {
       success: false,
       output: `Error: ${lastError instanceof Error ? lastError.message : 'Unknown error'}`,
       toolCalls: lastToolCalls,
+      duration: Date.now() - start,
+    }
+  }
+
+  private async runTextStepWithRole(
+    role: Exclude<ModelRole, 'default'>,
+    systemPrompt: string,
+    prompt: string,
+    options?: { modelTier?: ModelTier; maxTokens?: number }
+  ): Promise<{ success: boolean; output: string; modelLabel?: string; error?: string }> {
+    const modelCandidates = getModelCandidates('medium', options?.modelTier, role)
+    let lastError: unknown = null
+    const fallbackErrors: string[] = []
+
+    for (let i = 0; i < modelCandidates.length; i += 1) {
+      const candidate = modelCandidates[i]
+      try {
+        const result = await streamText({
+          model: candidate.model,
+          system: systemPrompt,
+          prompt,
+          ...(options?.maxTokens ? { maxTokens: options.maxTokens } : {}),
+          stopWhen: stepCountIs(1),
+        })
+
+        let output = ''
+        for await (const part of result.fullStream) {
+          if (part.type === 'text-delta') {
+            output += part.text
+          } else if (part.type === 'error') {
+            const streamError = (part as { error?: unknown }).error
+            if (streamError instanceof Error) throw streamError
+            if (typeof streamError === 'string') throw new Error(streamError)
+            throw new Error(streamError ? JSON.stringify(streamError) : 'Model streaming failed')
+          }
+        }
+
+        return {
+          success: true,
+          output: output.trim(),
+          modelLabel: `${candidate.provider}:${candidate.label}`,
+        }
+      } catch (error) {
+        lastError = error
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        if (isBillingOrQuotaFailure(error)) {
+          setProviderBackoff(candidate.provider)
+          console.warn(
+            `[Orchestrator] Provider ${candidate.provider} entered temporary billing backoff for ${Math.round(PROVIDER_BILLING_BACKOFF_MS / 1000)}s.`
+          )
+        }
+        fallbackErrors.push(`${candidate.provider}:${candidate.label} -> ${errorMessage}`)
+
+        const nextCandidate = modelCandidates[i + 1]
+        if (nextCandidate && shouldFallbackToNextModel(error)) {
+          console.warn(
+            `[Orchestrator] Control step (${role}) model ${candidate.provider}:${candidate.label} failed. Falling back to ${nextCandidate.provider}:${nextCandidate.label}.`,
+            error
+          )
+          continue
+        }
+        break
+      }
+    }
+
+    if (fallbackErrors.length > 1) {
+      console.error(`[Orchestrator] Control step (${role}) failed across fallback chain`, fallbackErrors)
+    }
+
+    return {
+      success: false,
+      output: '',
+      error: lastError instanceof Error ? lastError.message : 'Unknown error',
+    }
+  }
+
+  private resolveSupervisorPlan(raw: string): SupervisorPlan {
+    const jsonBlob = extractFirstJsonObject(raw)
+    if (!jsonBlob) return { ...DEFAULT_SUPERVISOR_PLAN }
+    try {
+      const parsed = JSON.parse(jsonBlob)
+      const validated = SupervisorPlanSchema.safeParse(parsed)
+      if (!validated.success) {
+        return { ...DEFAULT_SUPERVISOR_PLAN }
+      }
+      return validated.data
+    } catch {
+      return { ...DEFAULT_SUPERVISOR_PLAN }
+    }
+  }
+
+  /**
+   * World-class orchestration pipeline:
+   * 1) Large-context compiler
+   * 2) Supervisor plan
+   * 3) Worker execution
+   * 4) Critical rescue (if needed)
+   * 5) Janitor cleanup pass
+   * 6) Final supervisor review
+   */
+  async executeWorldClassFlow(
+    agentId: AgentId,
+    prompt: string,
+    options?: WorldClassExecutionOptions
+  ): Promise<AgentResult> {
+    const start = Date.now()
+    const sanitizedMessages = options?.messages
+      ?.filter((msg) => msg.content && msg.content.trim().length > 0)
+      .map((msg) => ({ role: msg.role, content: msg.content }))
+
+    const requestedChars = estimateRequestChars(prompt, sanitizedMessages)
+    const shouldCompileContext = requestedChars >= WORLD_CLASS_CONTEXT_MIN_CHARS
+
+    let executionPrompt = prompt
+    let contextCompilerOutput: string | null = null
+
+    if (shouldCompileContext) {
+      const contextCompilerSystemPrompt = [
+        'You are a context compiler.',
+        'Produce a concise, implementation-ready execution brief from large context.',
+        'Do not include chain-of-thought.',
+        'Output plain text with these sections:',
+        'Goal, Constraints, Existing Surfaces, Plan, Acceptance Criteria.',
+      ].join('\n')
+
+      const historyPreview = (sanitizedMessages || [])
+        .slice(-12)
+        .map((message) => `${message.role.toUpperCase()}: ${message.content}`)
+        .join('\n\n')
+
+      const compilePrompt = [
+        'Compile this into an execution brief for the coding worker.',
+        '',
+        'REQUEST:',
+        prompt,
+        historyPreview ? '\nRECENT HISTORY:\n' + historyPreview : '',
+      ].join('\n')
+
+      const contextResult = await this.runTextStepWithRole('context', contextCompilerSystemPrompt, compilePrompt, {
+        modelTier: 'opus',
+        maxTokens: 4096,
+      })
+
+      if (contextResult.success && contextResult.output.trim().length > 0) {
+        contextCompilerOutput = contextResult.output.trim()
+        executionPrompt = `${prompt}\n\n## COMPILED CONTEXT\n${contextCompilerOutput}`
+      }
+    }
+
+    const supervisorSystemPrompt = [
+      'You are the build supervisor.',
+      'Return JSON only. No markdown.',
+      'Keys: risk, executeJanitor, escalateToCritical, workerDirective, janitorDirective, criticalDirective, notes.',
+      'risk must be one of: low, medium, high, critical.',
+      'workerDirective must be specific and implementation-oriented.',
+      'janitorDirective and criticalDirective must be concise and actionable.',
+    ].join('\n')
+
+    const supervisorPlanPrompt = [
+      'Create a control plan for the worker run.',
+      '',
+      'User request:',
+      prompt,
+      '',
+      contextCompilerOutput ? `Compiled context:\n${contextCompilerOutput}\n` : '',
+      'Guidance:',
+      '- Set executeJanitor true for most code changes.',
+      '- Set escalateToCritical true for security/infra/auth/payment/high-risk changes.',
+      '- Keep directives tightly scoped.',
+    ].join('\n')
+
+    const supervisorPlanResult = await this.runTextStepWithRole('supervisor', supervisorSystemPrompt, supervisorPlanPrompt, {
+      modelTier: 'sonnet',
+      maxTokens: 1800,
+    })
+
+    const supervisorPlan = this.resolveSupervisorPlan(supervisorPlanResult.output)
+
+    const workerPrompt = [
+      executionPrompt,
+      '',
+      '## EXECUTION DIRECTIVE',
+      supervisorPlan.workerDirective,
+    ].join('\n')
+
+    const workerMessages = (() => {
+      if (!sanitizedMessages || sanitizedMessages.length === 0) return undefined
+      const mergedMessages = [...sanitizedMessages]
+      const last = mergedMessages[mergedMessages.length - 1]
+      if (last.role === 'user') {
+        mergedMessages[mergedMessages.length - 1] = { role: 'user', content: workerPrompt }
+      } else {
+        mergedMessages.push({ role: 'user', content: workerPrompt })
+      }
+      return mergedMessages
+    })()
+
+    const workerResult = await this.executeAgent(agentId, workerPrompt, {
+      modelRole: 'worker',
+      modelTier: options?.maxSteps && options.maxSteps > 10 ? 'opus' : 'sonnet',
+      maxSteps: options?.maxSteps,
+      maxTokens: options?.maxTokens,
+      messages: workerMessages,
+      systemPrompt: options?.systemPrompt,
+      onTextDelta: options?.onTextDelta,
+      onToolCall: options?.onToolCall,
+      onToolResult: options?.onToolResult,
+    })
+
+    const allToolCalls = [...workerResult.toolCalls]
+    const outputSections: string[] = []
+    if (workerResult.output.trim()) outputSections.push(workerResult.output.trim())
+
+    let overallSuccess = workerResult.success
+    const shouldRunCritical =
+      !workerResult.success ||
+      supervisorPlan.escalateToCritical ||
+      supervisorPlan.risk === 'critical'
+
+    if (shouldRunCritical) {
+      const criticalPrompt = [
+        'Critical rescue mode.',
+        'Fix only blocking issues and regressions with minimal changes.',
+        'Do not expand scope.',
+        '',
+        'Original request:',
+        prompt,
+        '',
+        'Worker output/errors:',
+        workerResult.output || 'No worker output captured.',
+        '',
+        'Critical directive:',
+        supervisorPlan.criticalDirective,
+      ].join('\n')
+
+      const criticalResult = await this.executeAgent('architect', criticalPrompt, {
+        modelRole: 'critical',
+        modelTier: 'opus',
+        maxSteps: Math.min(options?.maxSteps ?? 10, 10),
+        maxTokens: options?.maxTokens,
+        systemPrompt: options?.systemPrompt,
+        onTextDelta: options?.onTextDelta,
+        onToolCall: options?.onToolCall,
+        onToolResult: options?.onToolResult,
+      })
+
+      allToolCalls.push(...criticalResult.toolCalls)
+      if (criticalResult.output.trim()) outputSections.push(criticalResult.output.trim())
+      overallSuccess = overallSuccess || criticalResult.success
+    }
+
+    if (overallSuccess && supervisorPlan.executeJanitor) {
+      const janitorPrompt = [
+        'Janitor pass.',
+        'Perform minimal cleanup only:',
+        '- Run lint/type/test checks as needed.',
+        '- Apply only surgical fixes.',
+        '- No new features.',
+        '- Keep behavior unchanged.',
+        '',
+        'Directive:',
+        supervisorPlan.janitorDirective,
+      ].join('\n')
+
+      const janitorResult = await this.executeAgent('qa', janitorPrompt, {
+        modelRole: 'janitor',
+        modelTier: 'sonnet',
+        maxSteps: 6,
+        maxTokens: Math.min(options?.maxTokens ?? 4096, 4096),
+        onTextDelta: options?.onTextDelta,
+        onToolCall: options?.onToolCall,
+        onToolResult: options?.onToolResult,
+      })
+
+      allToolCalls.push(...janitorResult.toolCalls)
+      if (janitorResult.output.trim()) outputSections.push(janitorResult.output.trim())
+    }
+
+    const finalReviewSystemPrompt = [
+      'You are the final review supervisor.',
+      'Write a concise production review with: Result, Key Changes, Risks, and Next Action.',
+      'No chain-of-thought.',
+    ].join('\n')
+
+    const finalReviewPrompt = [
+      `Risk: ${supervisorPlan.risk}`,
+      `Execution success: ${overallSuccess ? 'yes' : 'no'}`,
+      '',
+      'Supervisor notes:',
+      supervisorPlan.notes.join('; ') || 'none',
+      '',
+      'Execution transcript:',
+      outputSections.join('\n\n').slice(0, 7000) || 'No output.',
+    ].join('\n')
+
+    const finalReview = await this.runTextStepWithRole('supervisor', finalReviewSystemPrompt, finalReviewPrompt, {
+      modelTier: 'sonnet',
+      maxTokens: 1200,
+    })
+
+    if (finalReview.success && finalReview.output.trim().length > 0) {
+      const reviewBlock = `\n\n## Review Summary\n${finalReview.output.trim()}`
+      outputSections.push(reviewBlock.trim())
+      options?.onTextDelta?.(reviewBlock)
+    }
+
+    return {
+      agentId,
+      success: overallSuccess,
+      output: outputSections.join('\n\n').trim() || 'Execution completed.',
+      toolCalls: allToolCalls,
       duration: Date.now() - start,
     }
   }

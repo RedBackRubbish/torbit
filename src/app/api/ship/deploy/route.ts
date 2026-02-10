@@ -9,9 +9,11 @@ import {
   signShipTrustBundle,
   type ShipGovernancePayload,
 } from '@/lib/ship/trust-bundle'
+import { runVibeAuditOnSnapshot, type VibeAuditFinding } from '@/lib/vibe-audit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
+const VIBE_DEPLOY_BLOCK_ENABLED = process.env.TORBIT_DEPLOY_VIBE_BLOCK !== 'false'
 
 const ShipFileSchema = z.object({
   path: z.string().min(1),
@@ -337,6 +339,32 @@ export async function POST(request: NextRequest) {
       path: normalizeFilePath(file.path),
       content: file.content,
     }))
+
+    if (VIBE_DEPLOY_BLOCK_ENABLED) {
+      const envContents = Object.entries(payload.environmentVariables || {})
+        .map(([key, value]) => `${key}=${value}`)
+        .join('\n')
+      const vibeAudit = runVibeAuditOnSnapshot(normalizedFiles, { envContents })
+      const blockingIds = new Set<VibeAuditFinding['id']>(['database', 'secrets', 'resilience', 'legal'])
+      const unresolvedFindings = vibeAudit.findings.filter((finding) => (
+        finding.status === 'failed' || (finding.status === 'warning' && blockingIds.has(finding.id))
+      ))
+
+      if (unresolvedFindings.length > 0) {
+        return NextResponse.json(
+          {
+            error: 'Deploy blocked by Vibe Audit.',
+            blockers: unresolvedFindings.map((finding) => `${finding.label}: ${finding.detail}`),
+            warnings: vibeAudit.findings
+              .filter((finding) => finding.status === 'warning')
+              .map((finding) => `${finding.label}: ${finding.detail}`),
+            autoFixPrompt: vibeAudit.guardrailPrompt,
+          },
+          { status: 412 }
+        )
+      }
+    }
+
     const projectName = payload.projectName?.trim() || 'Torbit Project'
     const credentials = payload.credentials
     const governance: ShipGovernancePayload = payload.governance ?? {

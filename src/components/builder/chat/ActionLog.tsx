@@ -38,7 +38,7 @@ function getActionMeta(toolCall: ToolCall): ActionMeta {
     case 'think':
       return {
         icon: <Sparkles className="w-3.5 h-3.5" />,
-        label: `Thought for ${args.duration || '0'}s`,
+        label: `Reasoned for ${args.duration || '0'}s`,
       }
     case 'createFile':
       return {

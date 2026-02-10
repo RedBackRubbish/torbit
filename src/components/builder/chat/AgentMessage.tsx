@@ -69,7 +69,7 @@ export function AgentMessage({ message, isLast, isLoading }: AgentMessageProps) 
             animate={{ opacity: [0.4, 1, 0.4] }}
             transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
           />
-          <span className="text-[12px] text-[#505050]">Thinking...</span>
+          <span className="text-[12px] text-[#505050]">Working on it...</span>
         </div>
       )}
       

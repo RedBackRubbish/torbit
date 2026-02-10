@@ -30,7 +30,7 @@ export default function ShipMenu() {
   } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   
-  const { projectType, files, projectName } = useBuilderStore()
+  const { projectType, files, projectName, setPendingHealRequest } = useBuilderStore()
   const { recordExport, getPhaseStatus, entries } = useLedger()
   const isMobile = projectType === 'mobile'
   const hasFiles = files.length > 0
@@ -93,6 +93,16 @@ export default function ShipMenu() {
   const extractFirstUrl = (text: string): string | null => {
     const match = text.match(/https?:\/\/[^\s)]+/i)
     return match ? match[0] : null
+  }
+
+  const extractDeployBlockers = (text: string): string[] => {
+    const blockersMatch = text.match(/Blockers:\s*([^\n]+)/i)
+    if (!blockersMatch?.[1]) return []
+
+    return blockersMatch[1]
+      .split('|')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
   }
 
   const getSessionToken = (key: string): string | null => {
@@ -209,6 +219,20 @@ export default function ShipMenu() {
       })
 
       if (!deployResult.success) {
+        const blockers = extractDeployBlockers(deployResult.output || '')
+        if (blockers.length > 0) {
+          setPendingHealRequest({
+            error: `Deploy blocked: ${blockers.join(' | ')}`,
+            suggestion: 'Fix every deploy blocker, re-run safety checks, and prepare for re-deploy.',
+          })
+          setFeedback({
+            tone: 'error',
+            title: 'Deploy blocked, auto-fix started',
+            message: 'Torbit detected blocker(s), queued an automatic fix pass, and will re-check readiness.',
+          })
+          return
+        }
+
         setFeedback({
           tone: 'error',
           title: 'Deploy failed',
