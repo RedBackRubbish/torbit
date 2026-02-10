@@ -8,13 +8,22 @@ interface ChatInputProps {
   isLoading: boolean
   onInputChange: (value: string) => void
   onSubmit: (e: React.FormEvent) => void
+  intentMode: 'auto' | 'chat' | 'action'
+  onIntentModeChange: (mode: 'auto' | 'chat' | 'action') => void
   currentStep?: number
 }
 
 /**
  * ChatInput - Minimal, clean input bar
  */
-export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInputProps) {
+export function ChatInput({
+  input,
+  isLoading,
+  onInputChange,
+  onSubmit,
+  intentMode,
+  onIntentModeChange,
+}: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-resize textarea
@@ -45,6 +54,33 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit }: ChatInp
       exit={{ opacity: 0, y: 8 }}
       className="p-3 border-t border-[#151515] bg-[#000000]"
     >
+      <div className="mb-2 flex items-center gap-2" role="radiogroup" aria-label="Prompt mode">
+        {([
+          { value: 'auto', label: 'Auto' },
+          { value: 'chat', label: 'Chat' },
+          { value: 'action', label: 'Action' },
+        ] as const).map((mode) => (
+          <button
+            key={mode.value}
+            type="button"
+            role="radio"
+            aria-checked={intentMode === mode.value}
+            disabled={isLoading}
+            onClick={() => onIntentModeChange(mode.value)}
+            className={`rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+              intentMode === mode.value
+                ? 'bg-[#1d1d1d] text-[#f5f5f5] border border-[#3a3a3a]'
+                : 'bg-[#0a0a0a] text-[#7a7a7a] border border-[#1f1f1f] hover:text-[#b5b5b5]'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {mode.label}
+          </button>
+        ))}
+        <span className="text-[11px] text-[#505050]">
+          {intentMode === 'chat' ? 'Reply only' : intentMode === 'action' ? 'Execute now' : 'Smart routing'}
+        </span>
+      </div>
+
       <form onSubmit={onSubmit} className="relative">
         <div className="relative rounded-xl bg-[#0a0a0a] border border-[#1a1a1a] focus-within:border-[#333] transition-all overflow-hidden">
           <textarea

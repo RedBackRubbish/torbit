@@ -9,6 +9,9 @@ export interface PresenceMember extends ProjectPresence {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const PRESENCE_FEATURE_ENABLED = process.env.NODE_ENV === 'test'
+  ? true
+  : process.env.NEXT_PUBLIC_ENABLE_PROJECT_PRESENCE === 'true'
 
 // Cache table support for the current runtime session so repeated mounts
 // do not keep hitting a missing endpoint and spamming 404s.
@@ -59,7 +62,9 @@ export function useProjectPresence(projectId: string | null) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const [presenceSupported, setPresenceSupported] = useState(presenceFeatureSupportedCache !== false)
+  const [presenceSupported, setPresenceSupported] = useState(
+    PRESENCE_FEATURE_ENABLED && presenceFeatureSupportedCache !== false
+  )
   const [presenceProbeComplete, setPresenceProbeComplete] = useState(presenceFeatureProbeCompleteCache)
 
   const disablePresenceSupport = useCallback(() => {
@@ -79,6 +84,12 @@ export function useProjectPresence(projectId: string | null) {
   }, [])
 
   const fetchPresence = useCallback(async () => {
+    if (!PRESENCE_FEATURE_ENABLED) {
+      setPresence([])
+      setPresenceProbeComplete(true)
+      return false
+    }
+
     if (!projectId) {
       setPresence([])
       setPresenceProbeComplete(false)

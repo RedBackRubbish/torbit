@@ -26,7 +26,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --port 3100',
+    command: 'rm -rf .next && npm run dev -- --port 3100 --webpack',
     url: 'http://127.0.0.1:3100',
     // Always use the project server to avoid false positives from unrelated local apps.
     reuseExistingServer: false,

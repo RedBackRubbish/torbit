@@ -59,6 +59,7 @@ export default function ChatPanel() {
   const [liveMessage, setLiveMessage] = useState('')
   const [runStatus, setRunStatus] = useState<'Thinking' | 'Working' | 'Reviewing' | 'Ready' | 'Needs Input'>('Ready')
   const [runStatusDetail, setRunStatusDetail] = useState<string>('')
+  const [intentMode, setIntentMode] = useState<'auto' | 'chat' | 'action'>('auto')
   
   // Supervisor slide panel state
   const [showSupervisor, setShowSupervisor] = useState(false)
@@ -743,6 +744,7 @@ export default function ChatPanel() {
           capabilities,
           persistedInvariants,
           fileManifest: buildFileManifest(),
+          intentMode: isHealRequest ? 'action' : intentMode,
         }),
       })
 
@@ -847,7 +849,7 @@ export default function ChatPanel() {
       // 🔊 Complete sound (if not error)
       if (!requestFailed) generationSound.onComplete()
     }
-  }, [buildFileManifest, capabilities, generateGreeting, generationSound, isLoading, messages, parseSSEStream, projectId, projectType, prompt, setAgentStatus, setIsGenerating])
+  }, [buildFileManifest, capabilities, generateGreeting, generationSound, intentMode, isLoading, messages, parseSSEStream, projectId, projectType, prompt, setAgentStatus, setIsGenerating])
 
   // Auto-submit initial prompt
   useEffect(() => {
@@ -1449,6 +1451,8 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
             isLoading={isLoading}
             onInputChange={setChatInput}
             onSubmit={handleSubmit}
+            intentMode={intentMode}
+            onIntentModeChange={setIntentMode}
           />
         )}
       </AnimatePresence>

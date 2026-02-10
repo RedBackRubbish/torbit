@@ -1,4 +1,5 @@
 export type IntentKind = 'chat' | 'create' | 'edit' | 'debug' | 'deploy'
+export type IntentMode = 'auto' | 'chat' | 'action'
 
 const DEPLOY_PATTERNS = [
   /\bdeploy\b/,
@@ -125,6 +126,20 @@ export function classifyIntent(message: string): IntentKind {
   if (isQuestion || looksConversational) return 'chat'
 
   return 'chat'
+}
+
+export function resolveIntent(message: string, mode: IntentMode = 'auto'): IntentKind {
+  const classified = classifyIntent(message)
+
+  if (mode === 'chat') {
+    return 'chat'
+  }
+
+  if (mode === 'action') {
+    return classified === 'chat' ? 'create' : classified
+  }
+
+  return classified
 }
 
 export function isActionIntent(intent: IntentKind): boolean {

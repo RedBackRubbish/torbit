@@ -26,6 +26,9 @@ interface UpdateRunInput {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const BACKGROUND_RUNS_FEATURE_ENABLED = process.env.NODE_ENV === 'test'
+  ? true
+  : process.env.NEXT_PUBLIC_ENABLE_BACKGROUND_RUNS !== 'false'
 let backgroundRunsSupportedCache: boolean | null = null
 
 function isUuid(value: string): boolean {
@@ -46,7 +49,9 @@ export function useBackgroundRuns(projectId: string | null) {
   const [runs, setRuns] = useState<BackgroundRun[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const [backgroundRunsSupported, setBackgroundRunsSupported] = useState(backgroundRunsSupportedCache !== false)
+  const [backgroundRunsSupported, setBackgroundRunsSupported] = useState(
+    BACKGROUND_RUNS_FEATURE_ENABLED && backgroundRunsSupportedCache !== false
+  )
 
   const disableBackgroundRunsSupport = useCallback(() => {
     backgroundRunsSupportedCache = false
@@ -56,6 +61,12 @@ export function useBackgroundRuns(projectId: string | null) {
   }, [])
 
   const fetchRuns = useCallback(async () => {
+    if (!BACKGROUND_RUNS_FEATURE_ENABLED) {
+      setRuns([])
+      setError(null)
+      return false
+    }
+
     if (!projectId || !backgroundRunsSupported) {
       setRuns([])
       return false

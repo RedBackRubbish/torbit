@@ -9,7 +9,7 @@ import { createOrchestrator, type AgentResult } from '@/lib/agents/orchestrator'
 import { chatRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 import { getAuthenticatedUser } from '@/lib/supabase/auth'
 import { resolveScopedProjectId } from '@/lib/projects/project-id'
-import { classifyIntent, isActionIntent } from '@/lib/intent/classifier'
+import { classifyIntent, isActionIntent, resolveIntent, type IntentMode } from '@/lib/intent/classifier'
 import { runVibeAudit } from '@/lib/vibe-audit'
 import { runVibeAutofix } from '@/lib/vibe-autofix'
 import { makeSupervisorEvent, type SupervisorEvent } from '@/lib/supervisor/events'
@@ -47,6 +47,7 @@ const ChatRequestSchema = z.object({
     totalFiles: z.number().int().nonnegative(),
     truncated: z.boolean().optional(),
   }).optional(),
+  intentMode: z.enum(['auto', 'chat', 'action']).optional(),
 })
 
 const VALID_AGENT_IDS = Object.keys(AGENT_TOOLS) as AgentId[]
@@ -626,7 +627,9 @@ export async function POST(req: Request) {
   const persistedProjectId = isUuid(parsedBody.projectId) ? parsedBody.projectId : null
   const runId = randomUUID()
   const userPrompt = getLastUserMessage(normalizedMessages)
-  const intent = classifyIntent(userPrompt)
+  const classifiedIntent = classifyIntent(userPrompt)
+  const intentMode: IntentMode = parsedBody.intentMode || 'auto'
+  const intent = resolveIntent(userPrompt, intentMode)
   const actionIntent = isActionIntent(intent)
 
   const stream = new ReadableStream({
@@ -704,6 +707,8 @@ export async function POST(req: Request) {
         if (!actionIntent) {
           emitSupervisor('intent_classified', 'routing', 'Intent classified.', {
             intent,
+            classified_intent: classifiedIntent,
+            intent_mode: intentMode,
             action: false,
           })
 
@@ -719,11 +724,15 @@ export async function POST(req: Request) {
 
         emitSupervisor('run_started', 'run', 'Action run started.', {
           intent,
+          classified_intent: classifiedIntent,
+          intent_mode: intentMode,
           agent_id: requestedAgentId,
         })
 
         emitSupervisor('intent_classified', 'routing', 'Intent classified.', {
           intent,
+          classified_intent: classifiedIntent,
+          intent_mode: intentMode,
           action: true,
         })
 

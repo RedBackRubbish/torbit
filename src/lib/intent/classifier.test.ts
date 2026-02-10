@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyIntent, isActionIntent } from './classifier'
+import { classifyIntent, isActionIntent, resolveIntent } from './classifier'
 
 describe('classifyIntent', () => {
   it('classifies conversational questions as chat', () => {
@@ -46,5 +46,19 @@ describe('isActionIntent', () => {
     expect(isActionIntent('edit')).toBe(true)
     expect(isActionIntent('debug')).toBe(true)
     expect(isActionIntent('deploy')).toBe(true)
+  })
+})
+
+describe('resolveIntent', () => {
+  it('forces chat mode regardless of classifier', () => {
+    expect(resolveIntent('Deploy this to production', 'chat')).toBe('chat')
+  })
+
+  it('forces action mode for conversational prompts', () => {
+    expect(resolveIntent('I need encouragement today', 'action')).toBe('create')
+  })
+
+  it('uses classifier in auto mode', () => {
+    expect(resolveIntent('Fix this 500 error', 'auto')).toBe('debug')
   })
 })
