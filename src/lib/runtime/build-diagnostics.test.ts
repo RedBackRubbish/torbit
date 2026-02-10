@@ -52,9 +52,9 @@ describe('build diagnostics', () => {
     expect(failure.actionableFix).toContain('backoff')
   })
 
-  it('classifies runtime route probe failures as code errors', () => {
+  it('classifies runtime validation failures as code errors', () => {
     const failure = classifyBuildFailure({
-      message: 'Runtime route probe failed: ROUTE_PROBE_FAIL empty-runtime-html status=200',
+      message: 'Runtime validation failed: RUNTIME_VALIDATION_FAIL empty-runtime-html status=200',
       stage: 'route_probe',
       command: 'route-probe:3000',
     })

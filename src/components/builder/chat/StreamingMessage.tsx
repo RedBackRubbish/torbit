@@ -18,7 +18,7 @@ interface StreamingMessageProps {
   isLoading: boolean
 }
 
-type GenerationPhase = 'thinking' | 'creating' | 'installing' | 'building' | 'ready'
+type GenerationPhase = 'thinking' | 'creating' | 'installing' | 'reviewing' | 'ready'
 
 function getPhaseFromTools(toolCalls: ToolCall[], isLoading: boolean): GenerationPhase {
   if (!isLoading) return 'ready'
@@ -49,7 +49,7 @@ function PhaseLabel({ phase, filesComplete, totalFiles }: {
     thinking: { label: 'Thinking', color: 'text-[#707070]' },
     creating: { label: 'Working', color: 'text-[#707070]' },
     installing: { label: 'Working', color: 'text-[#707070]' },
-    building: { label: 'Reviewing', color: 'text-[#707070]' },
+    reviewing: { label: 'Reviewing', color: 'text-[#707070]' },
     ready: { label: 'Ready', color: 'text-emerald-500/70' },
   }
 

@@ -614,7 +614,7 @@ function DesignModePreview({ files, isGenerating }: DesignModePreviewProps) {
                 Design mode active
               </h3>
               <p className="text-[12px] text-[#404040]">
-                Start building - code will appear in the file tree
+                Start a run - code will appear in the file tree
               </p>
             </>
           )}

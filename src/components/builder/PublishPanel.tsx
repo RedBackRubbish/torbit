@@ -80,7 +80,7 @@ interface ActionInlineWarning {
 
 type ReleaseRailStepState = 'pending' | 'active' | 'complete' | 'error'
 interface ReleaseRailStep {
-  key: 'requested' | 'building' | 'submitted'
+  key: 'requested' | 'reviewing' | 'submitted'
   label: string
   state: ReleaseRailStepState
 }
@@ -212,7 +212,7 @@ function buildReleaseRailSteps(run: BackgroundRun): ReleaseRailStep[] {
   if (run.status === 'queued') {
     return [
       { key: 'requested', label: 'Requested', state: 'complete' },
-      { key: 'building', label: 'Building', state: 'pending' },
+      { key: 'reviewing', label: 'Reviewing', state: 'pending' },
       { key: 'submitted', label: 'Submitted', state: 'pending' },
     ]
   }
@@ -220,7 +220,7 @@ function buildReleaseRailSteps(run: BackgroundRun): ReleaseRailStep[] {
   if (run.status === 'running') {
     return [
       { key: 'requested', label: 'Requested', state: 'complete' },
-      { key: 'building', label: 'Building', state: 'active' },
+      { key: 'reviewing', label: 'Reviewing', state: 'active' },
       { key: 'submitted', label: 'Submitted', state: 'pending' },
     ]
   }
@@ -228,14 +228,14 @@ function buildReleaseRailSteps(run: BackgroundRun): ReleaseRailStep[] {
   if (run.status === 'succeeded') {
     return [
       { key: 'requested', label: 'Requested', state: 'complete' },
-      { key: 'building', label: 'Building', state: 'complete' },
+      { key: 'reviewing', label: 'Reviewing', state: 'complete' },
       { key: 'submitted', label: 'Submitted', state: 'complete' },
     ]
   }
 
   return [
     { key: 'requested', label: 'Requested', state: 'complete' },
-    { key: 'building', label: 'Building', state: 'error' },
+    { key: 'reviewing', label: 'Reviewing', state: 'error' },
     { key: 'submitted', label: 'Submitted', state: 'pending' },
   ]
 }
@@ -252,7 +252,7 @@ function getReleaseRailSummary(run: BackgroundRun): string {
     if (run.cancel_requested) {
       return 'Cancel requested. Waiting for worker checkpoint.'
     }
-    return 'Build and submit pipeline is running.'
+    return 'Release pipeline is running.'
   }
 
   if (run.status === 'succeeded') {

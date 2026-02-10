@@ -210,6 +210,13 @@ function isRetryableRouteProbeFailure(details: string): boolean {
   )
 }
 
+function sanitizeRuntimeValidationDetails(details: string): string {
+  return details
+    .replace(/route_probe_fail/gi, 'runtime_validation_fail')
+    .replace(/route_probe_ok/gi, 'runtime_validation_ok')
+    .replace(/route[_\s-]?probe/gi, 'runtime validation')
+}
+
 export function createRuntimeProbeCommand(
   port: number,
   options?: { fetchTimeoutMs?: number }
@@ -244,21 +251,21 @@ const timeout = setTimeout(() => controller.abort(), ${fetchTimeoutMs});
     const hasRenderableMarkup = /<(main|section|article|header|footer|nav|aside|h1|h2|h3|p|button|input|form|canvas|svg|img|ul|ol|table|div)[\\s>]/i.test(bodyWithoutScripts);
 
     if (response.status >= 500) {
-      console.error('ROUTE_PROBE_FAIL status=' + response.status);
+      console.error('RUNTIME_VALIDATION_FAIL status=' + response.status);
       process.exit(1);
       return;
     }
 
     if (!hasRenderableMarkup && textOnly.length === 0) {
-      console.error('ROUTE_PROBE_FAIL empty-runtime-html status=' + response.status);
+      console.error('RUNTIME_VALIDATION_FAIL empty-runtime-html status=' + response.status);
       process.exit(1);
       return;
     }
 
-    console.log('ROUTE_PROBE_OK status=' + response.status + ' text=' + textOnly.slice(0, 120));
+    console.log('RUNTIME_VALIDATION_OK status=' + response.status + ' text=' + textOnly.slice(0, 120));
     process.exit(0);
   } catch (error) {
-    console.error('ROUTE_PROBE_FAIL ' + (error instanceof Error ? error.message : String(error)));
+    console.error('RUNTIME_VALIDATION_FAIL ' + (error instanceof Error ? error.message : String(error)));
     process.exit(1);
   } finally {
     clearTimeout(timeout);
@@ -836,7 +843,7 @@ export function E2BProvider({ children }: E2BProviderProps) {
         if (host) {
           failedStage = 'route_probe'
           failingCommand = `route-probe:${runtimeProfile.port}`
-          addLog('🔎 Probing runtime route output...', 'info')
+          addLog('🔎 Validating runtime output...', 'info')
           let probePassed = false
           let lastProbeDetails = ''
 
@@ -855,7 +862,9 @@ export function E2BProvider({ children }: E2BProviderProps) {
               break
             }
 
-            const probeDetails = probeResult.stderr || probeResult.stdout || 'Runtime route probe failed'
+            const probeDetails = sanitizeRuntimeValidationDetails(
+              probeResult.stderr || probeResult.stdout || 'Runtime validation failed'
+            )
             lastProbeDetails = probeDetails
             const shouldRetry = attempt < ROUTE_PROBE_MAX_ATTEMPTS
               && isRetryableRouteProbeFailure(probeDetails)
@@ -864,17 +873,17 @@ export function E2BProvider({ children }: E2BProviderProps) {
               break
             }
 
-            addLog(`⏳ Runtime warming up (${attempt}/${ROUTE_PROBE_MAX_ATTEMPTS}); retrying probe...`, 'info')
+            addLog(`⏳ Runtime warming up (${attempt}/${ROUTE_PROBE_MAX_ATTEMPTS}); retrying validation...`, 'info')
             await new Promise((resolve) => setTimeout(resolve, ROUTE_PROBE_RETRY_DELAY_MS))
           }
 
           if (!probePassed) {
-            const probeDetails = lastProbeDetails || 'Runtime route probe failed'
-            exactLogLine = `Runtime route probe failed: ${probeDetails.slice(0, 300)}`
+            const probeDetails = lastProbeDetails || 'Runtime validation failed'
+            exactLogLine = `Runtime validation failed: ${probeDetails.slice(0, 300)}`
             throw new Error(exactLogLine)
           }
 
-          addLog('✅ Runtime route probe passed', 'success')
+          addLog('✅ Runtime validation passed', 'success')
           setServerUrl(host)
           setError(null)
           setBuildFailure(null)

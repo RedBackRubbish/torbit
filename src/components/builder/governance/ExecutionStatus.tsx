@@ -29,7 +29,7 @@ interface ExecutionStatusProps {
 
 /**
  * Minimal execution status bar
- * Shows: Building... • UI • Backend • Validation
+ * Shows: Working... • UI • Backend • Validation
  */
 export function ExecutionStatus({ isActive, stages, currentStage }: ExecutionStatusProps) {
   if (!isActive) return null
@@ -56,7 +56,7 @@ export function ExecutionStatus({ isActive, stages, currentStage }: ExecutionSta
       />
       
       {/* Label */}
-      <span className="text-[#808080]">Building…</span>
+      <span className="text-[#808080]">Working…</span>
       
       {/* Stage dots */}
       <div className="flex items-center gap-1.5 ml-1">

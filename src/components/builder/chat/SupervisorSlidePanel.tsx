@@ -148,7 +148,7 @@ export function SupervisorSlidePanel({
                     <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
                       <CheckCircle2 className="w-6 h-6 text-emerald-400" />
                     </div>
-                    <p className="text-[14px] font-medium text-emerald-400 mb-1">Build Approved</p>
+                    <p className="text-[14px] font-medium text-emerald-400 mb-1">Ready</p>
                     <p className="text-[12px] text-[#606060]">All requirements verified</p>
                   </div>
                   

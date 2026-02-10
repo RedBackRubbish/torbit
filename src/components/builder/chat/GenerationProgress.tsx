@@ -24,7 +24,7 @@ export type GenerationPhase =
   | 'thinking'
   | 'creating' 
   | 'installing' 
-  | 'building' 
+  | 'reviewing' 
   | 'ready' 
   | 'idle'
 
@@ -45,26 +45,26 @@ const PHASES: Record<GenerationPhase, PhaseConfig> = {
   thinking: {
     icon: <Brain className="w-4 h-4" />,
     label: 'Thinking',
-    description: 'Planning the architecture...',
-    color: '#a78bfa',
+    description: 'Assessing your request',
+    color: '#9ca3af',
   },
   creating: {
     icon: <FolderTree className="w-4 h-4" />,
     label: 'Working',
-    description: 'Building your files',
-    color: '#60a5fa',
+    description: 'Applying file updates',
+    color: '#d4d4d4',
   },
   installing: {
     icon: <Package className="w-4 h-4" />,
     label: 'Working',
     description: 'Adding dependencies',
-    color: '#f59e0b',
+    color: '#a3a3a3',
   },
-  building: {
+  reviewing: {
     icon: <Hammer className="w-4 h-4" />,
     label: 'Reviewing',
-    description: 'Compiling the app',
-    color: '#f97316',
+    description: 'Running verification checks',
+    color: '#c0c0c0',
   },
   ready: {
     icon: <CheckCircle2 className="w-4 h-4" />,
