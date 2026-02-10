@@ -17,7 +17,7 @@ vi.mock('@/lib/supabase/client', () => ({
 
 const baseRun = {
   id: 'run-1',
-  project_id: 'project-1',
+  project_id: '11111111-1111-4111-8111-111111111111',
   user_id: 'user-1',
   run_type: 'mobile-release',
   status: 'queued',
@@ -86,7 +86,7 @@ describe('useBackgroundRuns', () => {
 
   it('loads runs and supports create/update actions', async () => {
     const { useBackgroundRuns } = await import('../useBackgroundRuns')
-    const { result } = renderHook(() => useBackgroundRuns('project-1'))
+    const { result } = renderHook(() => useBackgroundRuns('11111111-1111-4111-8111-111111111111'))
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false)

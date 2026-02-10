@@ -46,6 +46,10 @@
     "**/*.test.tsx",
     "**/*.spec.ts",
     "**/*.spec.tsx",
-    "src/__tests__/**/*"
+    "src/__tests__/**/*",
+    ".next/types/* *.ts",
+    ".next/types/**/* *.ts",
+    ".next/dev/types/* *.ts",
+    ".next/dev/types/**/* *.ts"
   ]
 }
