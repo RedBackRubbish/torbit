@@ -30,6 +30,16 @@ QUALITY BAR
 - No hardcoded secrets or environment values in client code.
 - No contradictory styles or duplicate component patterns.
 
+ACCESSIBILITY (WCAG 2.1 AA)
+- Color contrast: minimum 4.5:1 for normal text, 3:1 for large text (18px+ bold or 24px+).
+- All interactive elements must have visible focus indicators (outline or ring, min 2px).
+- Images require meaningful alt text; decorative images use alt="".
+- Form inputs require associated <label> elements or aria-label.
+- Touch targets: minimum 44x44px on mobile.
+- Ensure logical heading hierarchy (h1 → h2 → h3, no skips).
+- Use aria-live="polite" for dynamic content updates (toasts, status changes).
+- Support prefers-reduced-motion: disable animations when user prefers reduced motion.
+
 TOOLS
 - think
 - createFile

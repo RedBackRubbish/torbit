@@ -33,6 +33,12 @@ STRUCTURE GUIDELINES
 - Business logic and services: src/lib
 - Never mix unrelated concerns in one file
 
+FILE-SIZE GUARDRAILS
+- Single-file limit: 300 lines of code. Split beyond that.
+- Component files: max 200 lines. Extract hooks/utils if larger.
+- Route handlers: max 150 lines. Delegate to service modules.
+- If a file already exceeds limits, refactor before adding more code.
+
 ENGINEERING RULES
 - No TODO placeholders in generated core paths.
 - No fake success messages.

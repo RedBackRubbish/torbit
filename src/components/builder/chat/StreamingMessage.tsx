@@ -16,6 +16,7 @@ interface StreamingMessageProps {
   message: Message
   isLast: boolean
   isLoading: boolean
+  onRetry?: () => void
 }
 
 type GenerationPhase = 'thinking' | 'creating' | 'installing' | 'reviewing' | 'ready'
@@ -70,7 +71,7 @@ function PhaseLabel({ phase, filesComplete, totalFiles }: {
   )
 }
 
-export function StreamingMessage({ message, isLast, isLoading }: StreamingMessageProps) {
+export function StreamingMessage({ message, isLast, isLoading, onRetry }: StreamingMessageProps) {
   const toolCalls = useMemo(() => message.toolCalls ?? [], [message.toolCalls])
   
   // Track files that are in "auditing" phase
@@ -146,11 +147,24 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
       
       {/* Error */}
       {message.error && (
-        <div className="flex items-start gap-2.5 p-3 mt-2 bg-red-500/5 border border-red-500/10 rounded-lg">
-          <svg className="w-4 h-4 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
-          <p className="text-[13px] text-red-400">{message.error.message}</p>
+        <div className="mt-2 bg-red-500/5 border border-red-500/10 rounded-lg">
+          <div className="flex items-start gap-2.5 p-3">
+            <svg className="w-4 h-4 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <p className="text-[13px] text-red-400">{message.error.message}</p>
+          </div>
+          {message.error.retryable && onRetry && (
+            <div className="px-3 pb-3">
+              <button
+                type="button"
+                onClick={onRetry}
+                className="text-[12px] text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 rounded-md px-3 py-1.5 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
         </div>
       )}
       

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { Component, useState, useRef, useEffect } from 'react'
+import type { ReactNode, ErrorInfo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import { useBuilderStore } from '@/store/builder'
@@ -12,6 +13,59 @@ import { DEVICE_PRESETS } from '@/lib/mobile/types'
 import { TorbitSpinner, TorbitLogo } from '@/components/ui/TorbitLogo'
 import { SafariFallback, SafariBanner } from './SafariFallback'
 import type { BuildFailure } from '@/lib/runtime/build-diagnostics'
+
+// ============================================================================
+// Preview Error Boundary
+// ============================================================================
+
+interface PreviewErrorBoundaryProps {
+  children: ReactNode
+}
+
+interface PreviewErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+class PreviewErrorBoundary extends Component<PreviewErrorBoundaryProps, PreviewErrorBoundaryState> {
+  state: PreviewErrorBoundaryState = { hasError: false, error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[PreviewPanel] ErrorBoundary caught:', error, info.componentStack)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex-1 flex items-center justify-center bg-[#000000] p-8">
+          <div className="text-center max-w-sm">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+            </div>
+            <h3 className="text-[14px] font-medium text-red-400 mb-1.5">Preview crashed</h3>
+            <p className="text-[12px] text-[#505050] mb-4">
+              {this.state.error?.message || 'An unexpected error occurred in the preview panel.'}
+            </p>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="text-[12px] text-[#808080] hover:text-white border border-[#252525] hover:border-[#404040] rounded-md px-4 py-2 transition-colors"
+            >
+              Reload preview
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
 
 // ============================================================================
 // Device Preset Selector
@@ -254,6 +308,7 @@ export default function PreviewPanel() {
           {/* Preview Area */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className={`flex-1 flex items-center justify-center p-4 overflow-auto bg-[#000000] ${showRuntimeLog ? 'h-1/2' : ''}`}>
+              <PreviewErrorBoundary>
               <PreviewContent
                 isBooting={isBooting}
                 isReady={isReady}
@@ -270,6 +325,7 @@ export default function PreviewPanel() {
                 onContinueWithoutExecution={() => setDesignModeActive(true)}
                 designModeActive={designModeActive}
               />
+              </PreviewErrorBoundary>
             </div>
 
             {/* Runtime Log (formerly Terminal) */}

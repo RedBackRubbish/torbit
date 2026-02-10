@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback, type KeyboardEvent } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, type KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBuilderStore, ProjectFile } from '@/store/builder'
 import { Auditor, AuditStatus } from '@/lib/auditor'
@@ -358,13 +358,156 @@ function FileTreeItem({ node, depth }: FileTreeItemProps) {
   )
 }
 
+// ============================================================================
+// Fuzzy File Search (Cmd+P / Ctrl+P)
+// ============================================================================
+
+function fuzzyMatch(query: string, target: string): { match: boolean; score: number } {
+  const q = query.toLowerCase()
+  const t = target.toLowerCase()
+  if (q.length === 0) return { match: true, score: 0 }
+
+  let qi = 0
+  let score = 0
+  let lastMatchIndex = -1
+
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) {
+      score += (ti === lastMatchIndex + 1) ? 2 : 1 // consecutive matches score higher
+      if (ti === 0 || t[ti - 1] === '/' || t[ti - 1] === '.') score += 3 // path boundary bonus
+      lastMatchIndex = ti
+      qi++
+    }
+  }
+
+  return { match: qi === q.length, score }
+}
+
+function QuickOpenModal({ files, onClose }: { files: ProjectFile[]; onClose: () => void }) {
+  const [query, setQuery] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const { setActiveFile } = useBuilderStore()
+
+  const results = useMemo(() => {
+    if (!query.trim()) return files.slice(0, 20)
+    return files
+      .map((f) => ({ file: f, ...fuzzyMatch(query, f.path) }))
+      .filter((r) => r.match)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20)
+      .map((r) => r.file)
+  }, [files, query])
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [query])
+
+  useEffect(() => {
+    const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [selectedIndex])
+
+  const selectFile = (file: ProjectFile) => {
+    setActiveFile(file.id)
+    onClose()
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setSelectedIndex((i) => Math.min(i + 1, results.length - 1))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setSelectedIndex((i) => Math.max(i - 1, 0))
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (results[selectedIndex]) selectFile(results[selectedIndex])
+        break
+      case 'Escape':
+        e.preventDefault()
+        onClose()
+        break
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        transition={{ duration: 0.12 }}
+        className="w-[420px] bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#151515]">
+          <svg className="w-4 h-4 text-[#505050] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search files..."
+            className="flex-1 bg-transparent text-[13px] text-[#e0e0e0] placeholder-[#404040] outline-none"
+          />
+          <kbd className="text-[10px] text-[#404040] bg-[#151515] px-1.5 py-0.5 rounded">ESC</kbd>
+        </div>
+        <div ref={listRef} className="max-h-[320px] overflow-y-auto custom-scrollbar">
+          {results.length === 0 ? (
+            <div className="py-8 text-center text-[12px] text-[#404040]">No matching files</div>
+          ) : (
+            results.map((file, i) => (
+              <button
+                key={file.id}
+                onClick={() => selectFile(file)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                  i === selectedIndex ? 'bg-[#151515] text-[#e0e0e0]' : 'text-[#808080] hover:bg-[#0f0f0f]'
+                }`}
+              >
+                <span className="shrink-0">{getFileIcon(file.path.split('/').pop() || '')}</span>
+                <span className="flex-1 truncate text-[12px]">{file.path.split('/').pop()}</span>
+                <span className="text-[10px] text-[#404040] truncate max-w-[200px]">{file.path}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
 /**
  * FileExplorer - Emergent-style minimal file tree
  */
 export default function FileExplorer() {
   const { files, isGenerating } = useBuilderStore()
-  
+  const [quickOpen, setQuickOpen] = useState(false)
+
   const fileTree = useMemo(() => buildFileTree(files), [files])
+
+  // Cmd+P / Ctrl+P to open quick search
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+        e.preventDefault()
+        setQuickOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   if (files.length === 0) {
     if (isGenerating) {
@@ -386,20 +529,43 @@ export default function FileExplorer() {
   }
 
   return (
-    <div
-      className="h-full overflow-y-auto py-1 custom-scrollbar"
-      role="tree"
-      aria-label="Project file explorer"
-      data-file-tree-root="true"
-      data-testid="file-tree"
-    >
-      {fileTree.map((node) => (
-        <FileTreeItem
-          key={node.path}
-          node={node}
-          depth={0}
-        />
-      ))}
-    </div>
+    <>
+      <div
+        className="h-full overflow-y-auto py-1 custom-scrollbar"
+        role="tree"
+        aria-label="Project file explorer"
+        data-file-tree-root="true"
+        data-testid="file-tree"
+      >
+        {/* Quick search trigger */}
+        <button
+          onClick={() => setQuickOpen(true)}
+          className="w-full flex items-center gap-2 px-3 py-1.5 mb-1 text-[11px] text-[#404040] hover:text-[#707070] transition-colors"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <span>Search files</span>
+          <kbd className="ml-auto text-[10px] text-[#303030] bg-[#0a0a0a] border border-[#1a1a1a] px-1 py-0.5 rounded">⌘P</kbd>
+        </button>
+
+        {fileTree.map((node) => (
+          <FileTreeItem
+            key={node.path}
+            node={node}
+            depth={0}
+          />
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {quickOpen && (
+          <QuickOpenModal
+            files={files}
+            onClose={() => setQuickOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </>
   )
 }

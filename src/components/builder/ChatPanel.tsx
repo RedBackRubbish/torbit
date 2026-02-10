@@ -1496,12 +1496,20 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
             ) : (
               <div className="p-4 space-y-0">
                 {messages.map((message, i) => (
-                  <MessageBubble 
+                  <MessageBubble
                     key={message.id}
                     message={message}
                     isLast={i === messages.length - 1}
                     isLoading={isLoading}
                     index={i}
+                    onRetry={message.error?.retryable ? () => {
+                      // Find the user message that preceded this failed response
+                      const precedingUserMsg = [...messages].slice(0, i).reverse().find(m => m.role === 'user')
+                      if (!precedingUserMsg) return
+                      // Remove the failed message and resubmit
+                      setMessages(prev => prev.filter(m => m.id !== message.id))
+                      handleSubmitMessage(precedingUserMsg.content, selectedAgent)
+                    } : undefined}
                   />
                 ))}
                 {isLoading && <ChatHistorySkeleton rows={1} />}

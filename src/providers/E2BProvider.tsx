@@ -517,6 +517,36 @@ interface E2BProviderProps {
 }
 
 export function E2BProvider({ children }: E2BProviderProps) {
+  // ========================================================================
+  // Mock Mode — for local dev without an E2B API key
+  // Set NEXT_PUBLIC_E2B_MOCK=true in .env.local to enable
+  // ========================================================================
+  if (process.env.NEXT_PUBLIC_E2B_MOCK === 'true') {
+    const mockFiles = useRef<Record<string, string>>({})
+    const mockValue: E2BContextValue = {
+      sandboxId: 'mock-sandbox',
+      isBooting: false,
+      isReady: true,
+      serverUrl: null,
+      error: null,
+      buildFailure: null,
+      verification: {
+        environmentVerifiedAt: Date.now(),
+        runtimeVersion: 'mock',
+        sandboxId: 'mock-sandbox',
+        dependenciesLockedAt: null,
+        dependencyCount: 0,
+        lockfileHash: null,
+      },
+      writeFile: async (path, content) => { mockFiles.current[path] = content },
+      readFile: async (path) => mockFiles.current[path] ?? null,
+      runCommand: async () => ({ exitCode: 0, stdout: '[mock] command skipped', stderr: '' }),
+      syncFilesToSandbox: async () => {},
+      killSandbox: async () => {},
+    }
+    return <E2BContext.Provider value={mockValue}>{children}</E2BContext.Provider>
+  }
+
   const [sandboxId, setSandboxId] = useState<string | null>(null)
   const [sandboxAccessToken, setSandboxAccessToken] = useState<string | null>(null)
   const [isBooting, setIsBooting] = useState(true)
@@ -890,13 +920,19 @@ export function E2BProvider({ children }: E2BProviderProps) {
         failingCommand = runtimeProfile.command
         addLog(`🚀 Starting ${runtimeProfile.framework === 'nextjs' ? 'Next.js' : 'Vite'} dev server...`, 'info')
         
-        // Run dev server in background and check for early failures
+        // Run dev server in background and check for early failures.
+        // Capture the promise so we can suppress unhandled rejections if
+        // the dev server crashes after we've already moved on.
         const devServerPromise = e2bApi('runCommand', {
-          sandboxId, 
+          sandboxId,
           sandboxAccessToken,
           command: runtimeProfile.command,
           timeoutMs: 300000,
         })
+
+        // Prevent unhandled rejection if the long-running promise rejects
+        // after we stop waiting for it (e.g. server crashes mid-session).
+        devServerPromise.catch(() => {})
 
         const earlyExit = await Promise.race([
           devServerPromise

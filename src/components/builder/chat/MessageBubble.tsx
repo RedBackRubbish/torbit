@@ -9,12 +9,13 @@ interface MessageBubbleProps {
   isLast: boolean
   isLoading: boolean
   index: number
+  onRetry?: () => void
 }
 
 /**
  * MessageBubble - Routes to user or agent message style
  */
-export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps) {
+export function MessageBubble({ message, isLast, isLoading, onRetry }: MessageBubbleProps) {
   // User message - Right-aligned minimal pill
   if (message.role === 'user') {
     return (
@@ -34,10 +35,11 @@ export function MessageBubble({ message, isLast, isLoading }: MessageBubbleProps
 
   // Assistant message - Enhanced streaming experience
   return (
-    <StreamingMessage 
-      message={message} 
-      isLast={isLast} 
-      isLoading={isLoading} 
+    <StreamingMessage
+      message={message}
+      isLast={isLast}
+      isLoading={isLoading}
+      onRetry={onRetry}
     />
   )
 }

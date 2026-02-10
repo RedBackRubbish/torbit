@@ -660,10 +660,25 @@ export class TorbitOrchestrator {
         // Use fullStream to get tool calls IMMEDIATELY as they happen
         // This enables real-time file visibility before execution completes
         let output = ''
+        let textDeltaBuffer = ''
+        let lastTextFlush = Date.now()
+        const TEXT_FLUSH_INTERVAL_MS = 50 // Cap at ~20 UI updates/sec
+
+        const flushTextBuffer = () => {
+          if (textDeltaBuffer) {
+            options?.onTextDelta?.(textDeltaBuffer)
+            textDeltaBuffer = ''
+            lastTextFlush = Date.now()
+          }
+        }
+
         for await (const part of result.fullStream) {
           if (part.type === 'text-delta') {
             output += part.text
-            options?.onTextDelta?.(part.text)
+            textDeltaBuffer += part.text
+            if (Date.now() - lastTextFlush >= TEXT_FLUSH_INTERVAL_MS) {
+              flushTextBuffer()
+            }
           } else if (part.type === 'error') {
             const streamError = (part as { error?: unknown }).error
             if (streamError instanceof Error) {
@@ -727,7 +742,10 @@ export class TorbitOrchestrator {
             })
           }
         }
-        
+
+        // Flush any remaining buffered text deltas
+        flushTextBuffer()
+
         return {
           agentId,
           success: true,
@@ -763,8 +781,16 @@ export class TorbitOrchestrator {
       }
     }
 
-    if (fallbackErrors.length > 1) {
-      console.error('[Orchestrator] All fallback model attempts failed', fallbackErrors)
+    if (fallbackErrors.length > 0) {
+      console.error('[Orchestrator] Model fallback chain exhausted', {
+        agent: agentId,
+        attempts: fallbackErrors.length,
+        candidates: modelCandidates.map((c) => `${c.provider}:${c.label}`),
+        errors: fallbackErrors,
+        sessionRetries: this.sessionRetries,
+        fuelSpent: this.sessionFuelSpent,
+        durationMs: Date.now() - start,
+      })
     }
 
     return {
@@ -837,8 +863,13 @@ export class TorbitOrchestrator {
       }
     }
 
-    if (fallbackErrors.length > 1) {
-      console.error(`[Orchestrator] Control step (${role}) failed across fallback chain`, fallbackErrors)
+    if (fallbackErrors.length > 0) {
+      console.error(`[Orchestrator] Control step (${role}) fallback chain exhausted`, {
+        role,
+        attempts: fallbackErrors.length,
+        candidates: modelCandidates.map((c) => `${c.provider}:${c.label}`),
+        errors: fallbackErrors,
+      })
     }
 
     return {

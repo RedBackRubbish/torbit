@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useShallow } from 'zustand/react/shallow'
 import { immer } from 'zustand/middleware/immer'
 import type { 
   ProjectType, 
@@ -334,6 +335,17 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
 
     addFile: (file) => {
       set((state) => {
+        const normalizedPath = file.path.replace(/^\/+/, '')
+        const existingIndex = state.files.findIndex(
+          (f) => f.path.replace(/^\/+/, '') === normalizedPath
+        )
+        if (existingIndex >= 0) {
+          // Update existing file instead of creating a duplicate
+          state.files[existingIndex].content = file.content
+          state.files[existingIndex].isModified = true
+          state.files[existingIndex].auditStatus = 'new'
+          return
+        }
         state.files.push({
           ...file,
           id: crypto.randomUUID(),
@@ -475,3 +487,28 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
     },
   }))
 )
+
+// ============================================
+// Selector Hooks (shallow equality to prevent unnecessary re-renders)
+// ============================================
+// Use these instead of destructuring `useBuilderStore()` in components
+// that only need a subset of state. This prevents re-renders when
+// unrelated state changes (e.g. streaming tool calls updating files
+// won't re-render agent status components).
+
+export const useBuilderFiles = () =>
+  useBuilderStore(useShallow((s) => ({ files: s.files, activeFileId: s.activeFileId })))
+
+export const useBuilderAgents = () =>
+  useBuilderStore(useShallow((s) => ({ agents: s.agents, activeAgentId: s.activeAgentId })))
+
+export const useBuilderGeneration = () =>
+  useBuilderStore(useShallow((s) => ({ isGenerating: s.isGenerating, messages: s.messages })))
+
+export const useBuilderProject = () =>
+  useBuilderStore(useShallow((s) => ({
+    projectId: s.projectId,
+    projectName: s.projectName,
+    projectType: s.projectType,
+    prompt: s.prompt,
+  })))
