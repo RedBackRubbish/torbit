@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/client'
 import type { BackgroundRun } from '@/lib/supabase/types'
 import type { BackgroundRunOperation } from '@/lib/background-runs/state-machine'
+import { readApiErrorMessage } from '@/lib/api/error-envelope'
+import { trackMetricEvent } from '@/lib/metrics/telemetry'
 
 export type BackgroundRunStatus = BackgroundRun['status']
 
@@ -35,8 +37,8 @@ function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value)
 }
 
-function isBackgroundRunsUnavailableError(errorMessage: string | undefined): boolean {
-  const normalized = (errorMessage || '').toLowerCase()
+function isBackgroundRunsUnavailableError(errorValue: unknown): boolean {
+  const normalized = readApiErrorMessage(errorValue, '').toLowerCase()
   return (
     normalized.includes('background_runs') ||
     normalized.includes('schema cache') ||
@@ -80,29 +82,57 @@ export function useBackgroundRuns(projectId: string | null) {
 
     setLoading(true)
     setError(null)
+    trackMetricEvent({
+      name: 'api.background_runs.request',
+      projectId,
+      metadata: { operation: 'list' },
+    })
 
     try {
       const response = await fetch(`/api/background-runs?projectId=${encodeURIComponent(projectId)}&limit=100`)
       const payload = await response.json() as {
         success?: boolean
         runs?: BackgroundRun[]
-        error?: string
+        error?: unknown
         degraded?: boolean
       }
 
       if (payload.degraded || isBackgroundRunsUnavailableError(payload.error)) {
+        trackMetricEvent({
+          name: 'api.background_runs.error_500',
+          projectId,
+          metadata: { operation: 'list', degraded: true },
+        })
         disableBackgroundRunsSupport()
         return false
       }
 
       if (!response.ok || !payload.success) {
-        throw new Error(payload.error || 'Failed to fetch background runs.')
+        if (response.status === 404) {
+          trackMetricEvent({
+            name: 'api.background_runs.error_404',
+            projectId,
+            metadata: { operation: 'list' },
+          })
+        } else if (response.status >= 500) {
+          trackMetricEvent({
+            name: 'api.background_runs.error_500',
+            projectId,
+            metadata: { operation: 'list', status: response.status },
+          })
+        }
+        throw new Error(readApiErrorMessage(payload.error, 'Failed to fetch background runs.'))
       }
 
       setRuns(payload.runs || [])
       return true
     } catch (err) {
-      if (isBackgroundRunsUnavailableError(err instanceof Error ? err.message : '')) {
+      if (isBackgroundRunsUnavailableError(err instanceof Error ? err.message : err)) {
+        trackMetricEvent({
+          name: 'api.background_runs.error_500',
+          projectId,
+          metadata: { operation: 'list', degraded: true },
+        })
         disableBackgroundRunsSupport()
         return false
       }
@@ -205,19 +235,42 @@ export function useBackgroundRuns(projectId: string | null) {
         retryable: input.retryable,
       }),
     })
+    trackMetricEvent({
+      name: 'api.background_runs.request',
+      projectId,
+      metadata: { operation: 'create' },
+    })
 
     const payload = await response.json() as {
       success?: boolean
       run?: BackgroundRun
-      error?: string
+      error?: unknown
       degraded?: boolean
     }
     if (payload.degraded || isBackgroundRunsUnavailableError(payload.error)) {
+      trackMetricEvent({
+        name: 'api.background_runs.error_500',
+        projectId,
+        metadata: { operation: 'create', degraded: true },
+      })
       disableBackgroundRunsSupport()
       throw new Error('Background runs are currently unavailable.')
     }
     if (!response.ok || !payload.success || !payload.run) {
-      throw new Error(payload.error || 'Failed to create background run.')
+      if (response.status === 404) {
+        trackMetricEvent({
+          name: 'api.background_runs.error_404',
+          projectId,
+          metadata: { operation: 'create' },
+        })
+      } else if (response.status >= 500) {
+        trackMetricEvent({
+          name: 'api.background_runs.error_500',
+          projectId,
+          metadata: { operation: 'create', status: response.status },
+        })
+      }
+      throw new Error(readApiErrorMessage(payload.error, 'Failed to create background run.'))
     }
 
     setRuns((current) => {
@@ -244,24 +297,47 @@ export function useBackgroundRuns(projectId: string | null) {
       },
       body: JSON.stringify(input),
     })
+    trackMetricEvent({
+      name: 'api.background_runs.request',
+      projectId: projectId || undefined,
+      metadata: { operation: 'update' },
+    })
 
     const payload = await response.json() as {
       success?: boolean
       run?: BackgroundRun
-      error?: string
+      error?: unknown
       degraded?: boolean
     }
     if (payload.degraded || isBackgroundRunsUnavailableError(payload.error)) {
+      trackMetricEvent({
+        name: 'api.background_runs.error_500',
+        projectId: projectId || undefined,
+        metadata: { operation: 'update', degraded: true },
+      })
       disableBackgroundRunsSupport()
       throw new Error('Background runs are currently unavailable.')
     }
     if (!response.ok || !payload.success || !payload.run) {
-      throw new Error(payload.error || 'Failed to update background run.')
+      if (response.status === 404) {
+        trackMetricEvent({
+          name: 'api.background_runs.error_404',
+          projectId: projectId || undefined,
+          metadata: { operation: 'update' },
+        })
+      } else if (response.status >= 500) {
+        trackMetricEvent({
+          name: 'api.background_runs.error_500',
+          projectId: projectId || undefined,
+          metadata: { operation: 'update', status: response.status },
+        })
+      }
+      throw new Error(readApiErrorMessage(payload.error, 'Failed to update background run.'))
     }
 
     setRuns((current) => current.map((run) => run.id === payload.run!.id ? payload.run! : run))
     return payload.run
-  }, [backgroundRunsSupported, disableBackgroundRunsSupport])
+  }, [backgroundRunsSupported, disableBackgroundRunsSupport, projectId])
 
   const dispatchRun = useCallback(async (input?: { runId?: string; limit?: number }): Promise<{
     processed: number
@@ -293,6 +369,11 @@ export function useBackgroundRuns(projectId: string | null) {
         limit: input?.limit || 1,
       }),
     })
+    trackMetricEvent({
+      name: 'api.background_runs.request',
+      projectId: projectId || undefined,
+      metadata: { operation: 'dispatch' },
+    })
 
     const payload = await response.json() as {
       success?: boolean
@@ -309,17 +390,35 @@ export function useBackgroundRuns(projectId: string | null) {
         finishedAt: string | null
         error?: string
       }>
-      error?: string
+      error?: unknown
       degraded?: boolean
     }
 
     if (payload.degraded || isBackgroundRunsUnavailableError(payload.error)) {
+      trackMetricEvent({
+        name: 'api.background_runs.error_500',
+        projectId: projectId || undefined,
+        metadata: { operation: 'dispatch', degraded: true },
+      })
       disableBackgroundRunsSupport()
       return { processed: 0, outcomes: [] }
     }
 
     if (!response.ok || !payload.success) {
-      throw new Error(payload.error || 'Failed to dispatch background runs.')
+      if (response.status === 404) {
+        trackMetricEvent({
+          name: 'api.background_runs.error_404',
+          projectId: projectId || undefined,
+          metadata: { operation: 'dispatch' },
+        })
+      } else if (response.status >= 500) {
+        trackMetricEvent({
+          name: 'api.background_runs.error_500',
+          projectId: projectId || undefined,
+          metadata: { operation: 'dispatch', status: response.status },
+        })
+      }
+      throw new Error(readApiErrorMessage(payload.error, 'Failed to dispatch background runs.'))
     }
 
     return {

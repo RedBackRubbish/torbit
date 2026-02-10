@@ -8,6 +8,7 @@ import { ExecutorService } from '@/services/executor'
 import type { PainSignal } from '@/lib/nervous-system'
 import { MessageBubble } from './chat/MessageBubble'
 import { ChatInput } from './chat/ChatInput'
+import { RunDiagnosticsPanel } from './chat/RunDiagnosticsPanel'
 import type { ActivityEntry } from './governance/InspectorView'
 import { TorbitLogo } from '@/components/ui/TorbitLogo'
 import { useE2BContext } from '@/providers/E2BProvider'
@@ -60,6 +61,23 @@ export default function ChatPanel() {
   const [runStatus, setRunStatus] = useState<'Thinking' | 'Working' | 'Reviewing' | 'Ready' | 'Needs Input'>('Ready')
   const [runStatusDetail, setRunStatusDetail] = useState<string>('')
   const [intentMode, setIntentMode] = useState<'auto' | 'chat' | 'action'>('auto')
+  const [runDiagnostics, setRunDiagnostics] = useState<{
+    runId: string | null
+    intent: string | null
+    lastErrorClass: string | null
+    recoveryAction: string
+    fallbackCount: number
+    gateFailures: number
+    updatedAt: string | null
+  }>({
+    runId: null,
+    intent: null,
+    lastErrorClass: null,
+    recoveryAction: 'No active faults.',
+    fallbackCount: 0,
+    gateFailures: 0,
+    updatedAt: null,
+  })
   
   // Supervisor slide panel state
   const [showSupervisor, setShowSupervisor] = useState(false)
@@ -261,8 +279,27 @@ export default function ChatPanel() {
     summary: string
     details: Record<string, unknown>
   }) => {
-    const intent = typeof event.details.intent === 'string' ? event.details.intent : null
+    const intent = typeof event.details.intent === 'string'
+      ? event.details.intent
+      : (typeof event.details.classified_intent === 'string' ? event.details.classified_intent : null)
     const isActionRun = intent ? intent !== 'chat' : true
+    const updateDiagnostics = (next: Partial<{
+      runId: string | null
+      intent: string | null
+      lastErrorClass: string | null
+      recoveryAction: string
+      fallbackCount: number
+      gateFailures: number
+      updatedAt: string | null
+    }>) => {
+      setRunDiagnostics((previous) => ({
+        ...previous,
+        runId: event.run_id,
+        intent: intent || previous.intent,
+        updatedAt: event.timestamp,
+        ...next,
+      }))
+    }
 
     if (isActionRun) {
       setShowSupervisor(true)
@@ -277,6 +314,12 @@ export default function ChatPanel() {
       setRunStatus('Thinking')
       setRunStatusDetail(event.summary)
       setSupervisorLoading(true)
+      updateDiagnostics({
+        lastErrorClass: null,
+        recoveryAction: 'Run started. Monitoring execution gates.',
+        fallbackCount: 0,
+        gateFailures: 0,
+      })
       return
     }
 
@@ -294,18 +337,45 @@ export default function ChatPanel() {
     if (event.event === 'autofix_started') {
       setRunStatus('Reviewing')
       setRunStatusDetail(event.summary)
+      updateDiagnostics({
+        recoveryAction: 'Automatic remediation is active.',
+      })
       return
     }
 
     if (event.event === 'gate_failed' || event.event === 'autofix_failed') {
       setRunStatus('Needs Input')
       setRunStatusDetail(event.summary)
+      const errorText = typeof event.details.error === 'string' ? event.details.error.toLowerCase() : ''
+      const classifiedError = errorText.includes('timeout') || errorText.includes('rate limit')
+        ? 'transient_provider_failure'
+        : 'gate_failure'
+      setRunDiagnostics((previous) => ({
+        ...previous,
+        runId: event.run_id,
+        intent: intent || previous.intent,
+        updatedAt: event.timestamp,
+        lastErrorClass: classifiedError,
+        gateFailures: previous.gateFailures + 1,
+        recoveryAction: 'Inspect the first failed gate and re-run with the recommended fix.',
+      }))
       return
     }
 
     if (event.event === 'fallback_invoked') {
       setRunStatus('Working')
       setRunStatusDetail(event.summary)
+      const chosenReplacement = typeof event.details.chosen_replacement === 'string'
+        ? event.details.chosen_replacement
+        : 'alternate provider'
+      setRunDiagnostics((previous) => ({
+        ...previous,
+        runId: event.run_id,
+        intent: intent || previous.intent,
+        updatedAt: event.timestamp,
+        fallbackCount: previous.fallbackCount + 1,
+        recoveryAction: `Fallback active: switched to ${chosenReplacement}.`,
+      }))
       return
     }
 
@@ -314,6 +384,16 @@ export default function ChatPanel() {
       setRunStatus(success ? 'Ready' : 'Needs Input')
       setRunStatusDetail(event.summary)
       setSupervisorLoading(false)
+      setRunDiagnostics((previous) => ({
+        ...previous,
+        runId: event.run_id,
+        intent: intent || previous.intent,
+        updatedAt: event.timestamp,
+        recoveryAction: success
+          ? 'Run completed successfully.'
+          : 'Run ended with failures. Review errors and retry.',
+        lastErrorClass: success ? null : (previous.lastErrorClass || 'run_failure'),
+      }))
 
       if (success) {
         setTimeout(() => {
@@ -326,6 +406,9 @@ export default function ChatPanel() {
     if (event.event === 'gate_passed' || event.event === 'autofix_succeeded') {
       setRunStatus('Reviewing')
       setRunStatusDetail(event.summary)
+      updateDiagnostics({
+        recoveryAction: 'Quality checks are passing. Finalizing run.',
+      })
     }
   }, [])
 
@@ -545,11 +628,20 @@ export default function ChatPanel() {
 
             case 'error':
               if (chunk.error) {
+                const streamError = chunk.error
                 setRunStatus('Needs Input')
-                setRunStatusDetail(chunk.error.message)
+                setRunStatusDetail(streamError.message)
+                setRunDiagnostics((previous) => ({
+                  ...previous,
+                  lastErrorClass: streamError.type || 'stream_error',
+                  recoveryAction: streamError.retryable
+                    ? 'Temporary failure detected. Retry the same request.'
+                    : 'Address the reported issue and submit a corrected request.',
+                  updatedAt: new Date().toISOString(),
+                }))
                 setMessages(prev => prev.map(m => 
                   m.id === assistantId 
-                    ? { ...m, error: chunk.error, content: fullContent || '' }
+                    ? { ...m, error: streamError, content: fullContent || '' }
                     : m
                 ))
               }
@@ -836,6 +928,12 @@ export default function ChatPanel() {
         ? 'Request timed out. Please try again.'
         : (error instanceof Error ? error.message : 'Unknown error')
       setRunStatusDetail(errorMessage)
+      setRunDiagnostics((previous) => ({
+        ...previous,
+        lastErrorClass: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'network',
+        recoveryAction: 'Check connectivity and retry the request.',
+        updatedAt: new Date().toISOString(),
+      }))
       setMessages(prev => prev.map(m => 
         m.id === assistantId 
           ? { ...m, content: '', error: { type: 'network', message: errorMessage, retryable: true }}
@@ -1439,6 +1537,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
             
             {/* Activity Ledger Timeline - Below status rail, above input */}
             <ActivityLedgerTimeline className="mt-2 pt-2 border-t border-[#101010]" />
+            <RunDiagnosticsPanel diagnostics={runDiagnostics} />
           </motion.div>
         )}
       </AnimatePresence>

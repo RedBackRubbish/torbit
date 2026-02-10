@@ -15,6 +15,11 @@ import { runVibeAutofix } from '@/lib/vibe-autofix'
 import { makeSupervisorEvent, type SupervisorEvent } from '@/lib/supervisor/events'
 import { assertRuntimeConfig } from '@/lib/env'
 import { isTransientModelError } from '@/lib/supervisor/fallback'
+import {
+  rankConversationProviders,
+  recordConversationProviderFailure,
+  recordConversationProviderSuccess,
+} from '@/lib/supervisor/chat-health'
 
 import { ARCHITECT_SYSTEM_PROMPT } from '@/lib/agents/prompts/architect'
 import { FRONTEND_SYSTEM_PROMPT } from '@/lib/agents/prompts/frontend'
@@ -143,6 +148,27 @@ async function persistSupervisorEvent(input: {
   })
 }
 
+async function persistProductEvent(input: {
+  userId: string
+  projectId: string | null
+  sessionId: string
+  eventName: string
+  eventData?: Record<string, unknown>
+  occurredAt?: string
+}): Promise<void> {
+  await postToSupabaseRest({
+    table: 'product_events',
+    rows: [{
+      user_id: input.userId,
+      project_id: isUuid(input.projectId) ? input.projectId : null,
+      event_name: input.eventName,
+      session_id: input.sessionId,
+      event_data: input.eventData || {},
+      occurred_at: input.occurredAt || new Date().toISOString(),
+    }],
+  })
+}
+
 interface ExecutionOptions {
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
   agentId: AgentId
@@ -264,8 +290,13 @@ function buildSystemPrompt(input: {
   return parts.join('\n\n')
 }
 
-function getConversationModels() {
-  const models: Array<{ label: string; model: ReturnType<typeof openai> | ReturnType<typeof anthropic> | ReturnType<typeof google> }> = []
+type ConversationModelCandidate = {
+  label: string
+  model: ReturnType<typeof openai> | ReturnType<typeof anthropic> | ReturnType<typeof google>
+}
+
+function getConversationModels(): ConversationModelCandidate[] {
+  const models: ConversationModelCandidate[] = []
 
   if (process.env.OPENAI_API_KEY) {
     models.push({ label: 'openai:gpt-5.2', model: openai('gpt-5.2') })
@@ -304,62 +335,120 @@ async function runConversationReply(input: {
     'Do not trigger build or file mutation workflows.',
   ].join('\n')
 
-  let streamed = false
+  let streamedAnyText = false
   let lastError: unknown = null
   let previousFailureMessage: string | null = null
 
-  for (let index = 0; index < models.length; index += 1) {
-    const candidate = models[index]
-    try {
-      if (index > 0) {
-        input.emitSupervisor(
-          'fallback_invoked',
-          'chat',
-          'Chat fallback model selected.',
-          {
-            intent: 'chat',
-            reason: previousFailureMessage ?? 'previous model failed',
-            chosen_replacement: candidate.label,
-          }
-        )
+  const providerOrder = rankConversationProviders(models.map((candidate) => candidate.label))
+  const modelByLabel = new Map(models.map((candidate) => [candidate.label, candidate]))
+
+  if (providerOrder.skipped.length > 0) {
+    input.emitSupervisor(
+      'fallback_invoked',
+      'chat',
+      'Skipping unhealthy chat providers with open circuit breaker.',
+      {
+        intent: 'chat',
+        skipped: providerOrder.skipped.map((provider) => ({
+          provider: provider.label,
+          cooldown_ms_remaining: provider.cooldownMsRemaining,
+          last_error: provider.lastError,
+        })),
       }
+    )
+  }
 
-      const response = await streamText({
-        model: candidate.model,
-        system: systemPrompt,
-        messages: input.messages,
-        maxOutputTokens: 4096,
-      })
+  const activeCandidates = providerOrder.active
+    .map((provider) => modelByLabel.get(provider.label))
+    .filter((candidate): candidate is ConversationModelCandidate => Boolean(candidate))
 
-      for await (const part of response.fullStream) {
-        if (part.type === 'text-delta') {
-          streamed = true
-          input.sendChunk({ type: 'text', content: part.text })
-        } else if (part.type === 'error') {
-          const streamError = (part as { error?: unknown }).error
-          if (streamError instanceof Error) throw streamError
-          if (typeof streamError === 'string') throw new Error(streamError)
-          throw new Error(streamError ? JSON.stringify(streamError) : 'Conversation stream failed')
+  for (let candidateIndex = 0; candidateIndex < activeCandidates.length; candidateIndex += 1) {
+    const candidate = activeCandidates[candidateIndex]
+    let candidateFailed = false
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const startedAt = Date.now()
+
+      try {
+        if (candidateIndex > 0 && attempt === 1) {
+          input.emitSupervisor(
+            'fallback_invoked',
+            'chat',
+            'Chat fallback model selected.',
+            {
+              intent: 'chat',
+              reason: previousFailureMessage ?? 'previous model failed',
+              chosen_replacement: candidate.label,
+            }
+          )
+        } else if (attempt > 1) {
+          input.emitSupervisor(
+            'fallback_invoked',
+            'chat',
+            'Retrying the same chat model once after transient failure.',
+            {
+              intent: 'chat',
+              reason: previousFailureMessage ?? 'transient failure',
+              chosen_replacement: candidate.label,
+              strategy: 'retry_once_same_model',
+            }
+          )
         }
-      }
 
-      return
-    } catch (error) {
-      lastError = error
-      const message = error instanceof Error ? error.message : 'Conversation stream failed.'
-      previousFailureMessage = message
-      console.warn('[chat] conversation model failed', {
-        model: candidate.label,
-        error: message,
-      })
-      if (index < models.length - 1) {
-        continue
+        const response = await streamText({
+          model: candidate.model,
+          system: systemPrompt,
+          messages: input.messages,
+          maxOutputTokens: 4096,
+        })
+
+        for await (const part of response.fullStream) {
+          if (part.type === 'text-delta') {
+            streamedAnyText = true
+            input.sendChunk({ type: 'text', content: part.text })
+          } else if (part.type === 'error') {
+            const streamError = (part as { error?: unknown }).error
+            if (streamError instanceof Error) throw streamError
+            if (typeof streamError === 'string') throw new Error(streamError)
+            throw new Error(streamError ? JSON.stringify(streamError) : 'Conversation stream failed')
+          }
+        }
+
+        recordConversationProviderSuccess(candidate.label, {
+          latencyMs: Date.now() - startedAt,
+        })
+        return
+      } catch (error) {
+        lastError = error
+        const message = error instanceof Error ? error.message : 'Conversation stream failed.'
+        previousFailureMessage = message
+        candidateFailed = true
+
+        recordConversationProviderFailure(candidate.label, {
+          errorMessage: message,
+        })
+
+        console.warn('[chat] conversation model failed', {
+          model: candidate.label,
+          attempt,
+          error: message,
+        })
+
+        const shouldRetrySameModel = attempt === 1 && isTransientModelError(message)
+        if (shouldRetrySameModel) {
+          continue
+        }
+
+        break
       }
-      break
+    }
+
+    if (!candidateFailed) {
+      return
     }
   }
 
-  if (!streamed) {
+  if (!streamedAnyText) {
     const lastErrorMessage = lastError instanceof Error
       ? lastError.message
       : 'Conversation providers did not return output.'
@@ -636,8 +725,14 @@ export async function POST(req: Request) {
     async start(controller) {
       const encoder = new TextEncoder()
       let closed = false
+      let emittedText = false
+      let metricsFinalized = false
+      const requestStartedAt = Date.now()
 
       const sendChunk = (chunk: StreamChunk) => {
+        if (chunk.type === 'text' && chunk.content && chunk.content.length > 0) {
+          emittedText = true
+        }
         if (closed) return
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
@@ -653,6 +748,50 @@ export async function POST(req: Request) {
           controller.close()
         } catch {
           // no-op
+        }
+      }
+
+      const recordProductEvent = (eventName: string, eventData: Record<string, unknown> = {}) => {
+        void persistProductEvent({
+          userId: user.id,
+          projectId: persistedProjectId,
+          sessionId: runId,
+          eventName,
+          eventData,
+        }).catch((productEventError) => {
+          console.warn('[metrics] Failed to persist product event', {
+            run_id: runId,
+            event_name: eventName,
+            error: productEventError instanceof Error ? productEventError.message : 'unknown',
+          })
+        })
+      }
+
+      const finalizeMetrics = (input: {
+        success: boolean
+        outcome: 'chat' | 'action' | 'aborted'
+        failureType?: 'execution' | 'transient' | 'unknown'
+      }) => {
+        if (metricsFinalized) return
+        metricsFinalized = true
+
+        const elapsedMs = Date.now() - requestStartedAt
+
+        recordProductEvent('chat.reply_latency', {
+          elapsedMs,
+          success: input.success,
+          intent,
+          action: actionIntent,
+          outcome: input.outcome,
+        })
+
+        if (!emittedText) {
+          recordProductEvent('chat.no_reply', {
+            intent,
+            action: actionIntent,
+            outcome: input.outcome,
+            failureType: input.failureType || null,
+          })
         }
       }
 
@@ -704,6 +843,13 @@ export async function POST(req: Request) {
       }
 
       try {
+        recordProductEvent('chat.requested', {
+          intent,
+          classified_intent: classifiedIntent,
+          intent_mode: intentMode,
+          action: actionIntent,
+        })
+
         if (!actionIntent) {
           emitSupervisor('intent_classified', 'routing', 'Intent classified.', {
             intent,
@@ -717,6 +863,10 @@ export async function POST(req: Request) {
             sendChunk,
             emitSupervisor,
             userMessage: userPrompt,
+          })
+          finalizeMetrics({
+            success: true,
+            outcome: 'chat',
           })
           close()
           return
@@ -833,6 +983,11 @@ export async function POST(req: Request) {
             success: false,
             error: failureMessage,
           })
+          finalizeMetrics({
+            success: false,
+            outcome: 'action',
+            failureType: isTransientModelError(failureMessage) ? 'transient' : 'execution',
+          })
           close()
           return
         }
@@ -855,6 +1010,10 @@ export async function POST(req: Request) {
           duration_ms: executionResult.duration,
         })
 
+        finalizeMetrics({
+          success: true,
+          outcome: 'action',
+        })
         close()
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to process request.'
@@ -872,6 +1031,11 @@ export async function POST(req: Request) {
           error: message,
         })
 
+        finalizeMetrics({
+          success: false,
+          outcome: 'aborted',
+          failureType: isTransientModelError(message) ? 'transient' : 'unknown',
+        })
         close()
       }
     },

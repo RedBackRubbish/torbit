@@ -15,7 +15,7 @@ export default defineConfig({
     ['list']
   ],
   use: {
-    baseURL: 'http://127.0.0.1:3100',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3100',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -25,15 +25,17 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'rm -rf .next && npm run dev -- --port 3100 --webpack',
-    url: 'http://127.0.0.1:3100',
-    // Always use the project server to avoid false positives from unrelated local apps.
-    reuseExistingServer: false,
-    timeout: 120 * 1000,
-    env: {
-      TORBIT_E2E_AUTH: 'true',
-      NEXT_PUBLIC_E2E_AUTH: 'true',
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+      command: 'rm -rf .next && npm run dev -- --port 3100 --webpack',
+      url: 'http://127.0.0.1:3100',
+      // Always use the project server to avoid false positives from unrelated local apps.
+      reuseExistingServer: false,
+      timeout: 120 * 1000,
+      env: {
+        TORBIT_E2E_AUTH: 'true',
+        NEXT_PUBLIC_E2E_AUTH: 'true',
+      },
     },
-  },
 });

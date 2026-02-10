@@ -17,9 +17,18 @@ describe('buildMetricsSummary', () => {
       { event_name: 'prompt_to_verified', occurred_at: '2026-02-08T10:07:00.000Z', event_data: { elapsedMs: 1200 } },
       { event_name: 'prompt_to_verified', occurred_at: '2026-02-08T10:08:00.000Z', event_data: { elapsedMs: 1800 } },
       { event_name: 'prompt_to_verified', occurred_at: '2026-02-08T10:09:00.000Z', event_data: { elapsedMs: 2200 } },
+      { event_name: 'chat.requested', occurred_at: '2026-02-08T10:10:00.000Z', event_data: {} },
+      { event_name: 'chat.requested', occurred_at: '2026-02-08T10:10:10.000Z', event_data: {} },
+      { event_name: 'chat.reply_latency', occurred_at: '2026-02-08T10:10:20.000Z', event_data: { elapsedMs: 600 } },
+      { event_name: 'chat.reply_latency', occurred_at: '2026-02-08T10:10:30.000Z', event_data: { elapsedMs: 900 } },
+      { event_name: 'chat.no_reply', occurred_at: '2026-02-08T10:10:40.000Z', event_data: {} },
+      { event_name: 'api.project_presence.request', occurred_at: '2026-02-08T10:11:00.000Z', event_data: {} },
+      { event_name: 'api.project_presence.error_404', occurred_at: '2026-02-08T10:11:10.000Z', event_data: {} },
+      { event_name: 'api.background_runs.request', occurred_at: '2026-02-08T10:11:20.000Z', event_data: {} },
+      { event_name: 'api.background_runs.error_500', occurred_at: '2026-02-08T10:11:30.000Z', event_data: {} },
     ])
 
-    expect(summary.totalEvents).toBe(13)
+    expect(summary.totalEvents).toBe(22)
     expect(summary.rates.buildCompletionRate).toBe(50)
     expect(summary.rates.buildVerificationRate).toBe(50)
     expect(summary.rates.mergeablePRRate).toBe(100)
@@ -28,7 +37,14 @@ describe('buildMetricsSummary', () => {
     expect(summary.rates.exportDeployRate).toBe(100)
     expect(summary.latency.promptToVerifiedSamples).toBe(3)
     expect(summary.latency.promptToVerifiedP50Ms).toBe(1800)
-    expect(summary.activityByDay).toEqual([{ day: '2026-02-08', count: 13 }])
+    expect(summary.slo.chatReplyLatencySamples).toBe(2)
+    expect(summary.slo.chatReplyLatencyP50Ms).toBe(750)
+    expect(summary.slo.chatNoReplyRate).toBe(50)
+    expect(summary.slo.api404Rate).toBe(50)
+    expect(summary.slo.api500Rate).toBe(50)
+    expect(summary.slo.presence404Rate).toBe(100)
+    expect(summary.slo.backgroundRuns500Rate).toBe(100)
+    expect(summary.activityByDay).toEqual([{ day: '2026-02-08', count: 22 }])
   })
 
   it('handles empty inputs safely', () => {
@@ -37,6 +53,8 @@ describe('buildMetricsSummary', () => {
     expect(summary.totalEvents).toBe(0)
     expect(summary.rates.buildCompletionRate).toBe(0)
     expect(summary.latency.promptToVerifiedP50Ms).toBe(0)
+    expect(summary.slo.chatNoReplyRate).toBe(0)
+    expect(summary.slo.api404Rate).toBe(0)
     expect(summary.activityByDay).toEqual([])
   })
 })

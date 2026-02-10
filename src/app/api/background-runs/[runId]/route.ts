@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { computeBackgroundRunTransition } from '@/lib/background-runs/state-machine'
+import { makeApiErrorEnvelope } from '@/lib/api/error-envelope'
 
 export const runtime = 'nodejs'
 
@@ -58,7 +59,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
+    return NextResponse.json(
+      makeApiErrorEnvelope({
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized. Please log in.',
+      }),
+      { status: 401 }
+    )
   }
 
   const { data, error } = await supabase
@@ -73,10 +80,20 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({
         success: false,
         degraded: true,
-        error: 'Background runs table is unavailable.',
+        error: {
+          code: 'BACKGROUND_RUNS_UNAVAILABLE',
+          message: 'Background runs table is unavailable.',
+          retryable: true,
+        },
       })
     }
-    return NextResponse.json({ error: 'Run not found.' }, { status: 404 })
+    return NextResponse.json(
+      makeApiErrorEnvelope({
+        code: 'RUN_NOT_FOUND',
+        message: 'Run not found.',
+      }),
+      { status: 404 }
+    )
   }
 
   return NextResponse.json({ success: true, run: data })
@@ -88,7 +105,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
+    return NextResponse.json(
+      makeApiErrorEnvelope({
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized. Please log in.',
+      }),
+      { status: 401 }
+    )
   }
 
   try {
@@ -97,7 +120,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Invalid request', details: parsed.error.flatten().fieldErrors },
+        makeApiErrorEnvelope({
+          code: 'INVALID_REQUEST',
+          message: 'Invalid request',
+          details: {
+            fields: parsed.error.flatten().fieldErrors,
+          },
+        }),
         { status: 400 }
       )
     }
@@ -115,10 +144,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({
           success: false,
           degraded: true,
-          error: 'Background runs table is unavailable.',
+          error: {
+            code: 'BACKGROUND_RUNS_UNAVAILABLE',
+            message: 'Background runs table is unavailable.',
+            retryable: true,
+          },
         })
       }
-      return NextResponse.json({ error: 'Run not found.' }, { status: 404 })
+      return NextResponse.json(
+        makeApiErrorEnvelope({
+          code: 'RUN_NOT_FOUND',
+          message: 'Run not found.',
+        }),
+        { status: 404 }
+      )
     }
 
     const transition = computeBackgroundRunTransition({
@@ -135,7 +174,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (!transition.ok) {
       const status = transition.code === 'invalid_payload' ? 400 : 409
       return NextResponse.json(
-        { error: transition.message, code: transition.code },
+        makeApiErrorEnvelope({
+          code: transition.code.toUpperCase(),
+          message: transition.message,
+          retryable: false,
+        }),
         { status }
       )
     }
@@ -165,18 +208,33 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({
           success: false,
           degraded: true,
-          error: 'Background runs table is unavailable.',
+          error: {
+            code: 'BACKGROUND_RUNS_UNAVAILABLE',
+            message: 'Background runs table is unavailable.',
+            retryable: true,
+          },
         })
       }
       console.error('[background-runs] Update failed:', error.message)
-      return NextResponse.json({ error: 'Failed to update background run.' }, { status: 500 })
+      return NextResponse.json(
+        makeApiErrorEnvelope({
+          code: 'BACKGROUND_RUNS_UPDATE_FAILED',
+          message: 'Failed to update background run.',
+          retryable: true,
+        }),
+        { status: 500 }
+      )
     }
 
     return NextResponse.json({ success: true, run: data })
   } catch (error) {
     console.error('[background-runs] Unexpected error:', error)
     return NextResponse.json(
-      { error: 'Failed to update background run.' },
+      makeApiErrorEnvelope({
+        code: 'BACKGROUND_RUNS_UPDATE_FAILED',
+        message: 'Failed to update background run.',
+        retryable: true,
+      }),
       { status: 500 }
     )
   }

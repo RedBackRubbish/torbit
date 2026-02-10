@@ -8,6 +8,7 @@ import {
   dispatchQueuedBackgroundRuns,
 } from '@/lib/background-runs/dispatcher'
 import { authorizeWorkerRequest } from '@/lib/background-runs/worker'
+import { makeApiErrorEnvelope } from '@/lib/api/error-envelope'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -39,7 +40,10 @@ export async function POST(request: NextRequest) {
       supabase = createBackgroundRunsAdminClient()
     } catch (error) {
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Worker configuration is invalid.' },
+        makeApiErrorEnvelope({
+          code: 'WORKER_CONFIG_INVALID',
+          message: error instanceof Error ? error.message : 'Worker configuration is invalid.',
+        }),
         { status: 500 }
       )
     }
@@ -48,7 +52,13 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await serverClient.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
+      return NextResponse.json(
+        makeApiErrorEnvelope({
+          code: 'UNAUTHORIZED',
+          message: 'Unauthorized. Please log in.',
+        }),
+        { status: 401 }
+      )
     }
 
     userId = user.id
@@ -61,7 +71,13 @@ export async function POST(request: NextRequest) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Invalid request', details: parsed.error.flatten().fieldErrors },
+        makeApiErrorEnvelope({
+          code: 'INVALID_REQUEST',
+          message: 'Invalid request',
+          details: {
+            fields: parsed.error.flatten().fieldErrors,
+          },
+        }),
         { status: 400 }
       )
     }
@@ -96,7 +112,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: message },
+      makeApiErrorEnvelope({
+        code: 'BACKGROUND_RUNS_DISPATCH_FAILED',
+        message,
+        retryable: true,
+      }),
       { status: 500 }
     )
   }

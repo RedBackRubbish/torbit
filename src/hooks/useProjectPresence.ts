@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase/client'
 import type { Json, ProjectPresence } from '@/lib/supabase/types'
+import { trackMetricEvent } from '@/lib/metrics/telemetry'
 
 export interface PresenceMember extends ProjectPresence {
   isCurrentUser: boolean
@@ -118,6 +119,13 @@ export function useProjectPresence(projectId: string | null) {
 
     setLoading(true)
     setError(null)
+    trackMetricEvent({
+      name: 'api.project_presence.request',
+      projectId,
+      metadata: {
+        operation: 'list',
+      },
+    })
 
     try {
       const { data: authData } = await supabase.auth.getUser()
@@ -139,9 +147,24 @@ export function useProjectPresence(projectId: string | null) {
       return true
     } catch (err) {
       if (isMissingPresenceTableError(err)) {
+        trackMetricEvent({
+          name: 'api.project_presence.error_404',
+          projectId,
+          metadata: {
+            operation: 'list',
+            degraded: true,
+          },
+        })
         disablePresenceSupport()
         return false
       }
+      trackMetricEvent({
+        name: 'api.project_presence.error_500',
+        projectId,
+        metadata: {
+          operation: 'list',
+        },
+      })
       setError(err instanceof Error ? err : new Error('Failed to fetch project presence.'))
       setPresenceProbeComplete(true)
       return false
@@ -232,6 +255,13 @@ export function useProjectPresence(projectId: string | null) {
     if (!uid) return
 
     const now = new Date().toISOString()
+    trackMetricEvent({
+      name: 'api.project_presence.request',
+      projectId,
+      metadata: {
+        operation: 'upsert',
+      },
+    })
     const { error: upsertError } = await supabase
       .from('project_presence')
       .upsert({
@@ -247,9 +277,24 @@ export function useProjectPresence(projectId: string | null) {
 
     if (upsertError) {
       if (isMissingPresenceTableError(upsertError)) {
+        trackMetricEvent({
+          name: 'api.project_presence.error_404',
+          projectId,
+          metadata: {
+            operation: 'upsert',
+            degraded: true,
+          },
+        })
         disablePresenceSupport()
         return
       }
+      trackMetricEvent({
+        name: 'api.project_presence.error_500',
+        projectId,
+        metadata: {
+          operation: 'upsert',
+        },
+      })
       throw upsertError
     }
   }, [currentUserId, disablePresenceSupport, presenceProbeComplete, presenceSupported, projectId])

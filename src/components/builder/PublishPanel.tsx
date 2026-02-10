@@ -38,6 +38,7 @@ import { TrustLayerCard } from '@/components/governance/TrustLayerCard'
 import { TorbitSpinner } from '@/components/ui/TorbitLogo'
 import { recordMetric } from '@/lib/metrics/success'
 import { useGovernanceStore } from '@/store/governance'
+import { readApiErrorMessage } from '@/lib/api/error-envelope'
 
 type PublishStatus = 'idle' | 'validating' | 'preflight' | 'processing' | 'complete' | 'error'
 type PublishAction = 'xcode' | 'testflight' | 'appstore-connect' | 'android'
@@ -617,10 +618,10 @@ export function PublishPanel() {
         const enqueuePayload = await enqueueResponse.json() as {
           success?: boolean
           run?: { id?: string }
-          error?: string
+          error?: unknown
         }
         if (!enqueueResponse.ok || !enqueuePayload.success || !enqueuePayload.run?.id) {
-          throw new Error(enqueuePayload.error || 'Failed to queue release run.')
+          throw new Error(readApiErrorMessage(enqueuePayload.error, 'Failed to queue release run.'))
         }
         backgroundRunId = enqueuePayload.run?.id || null
         if (backgroundRunId) {
@@ -670,7 +671,7 @@ export function PublishPanel() {
 
     let dispatchPayload: {
       success?: boolean
-      error?: string
+      error?: unknown
       outcomes?: Array<{
         runId: string
         status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
@@ -699,7 +700,7 @@ export function PublishPanel() {
 
       const payload = await dispatchResponse.json() as {
         success?: boolean
-        error?: string
+        error?: unknown
         outcomes?: Array<{
           runId: string
           status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'

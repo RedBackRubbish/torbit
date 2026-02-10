@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
+import { makeApiErrorEnvelope } from '@/lib/api/error-envelope'
 
 export const runtime = 'nodejs'
 
@@ -96,7 +97,13 @@ export async function GET(request: NextRequest) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
+    return NextResponse.json(
+      makeApiErrorEnvelope({
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized. Please log in.',
+      }),
+      { status: 401 }
+    )
   }
 
   const { searchParams } = new URL(request.url)
@@ -144,7 +151,14 @@ export async function GET(request: NextRequest) {
         warning: 'Background runs table is unavailable. Returning empty run list.',
       })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(
+      makeApiErrorEnvelope({
+        code: 'BACKGROUND_RUNS_QUERY_FAILED',
+        message: error.message,
+        retryable: true,
+      }),
+      { status: 500 }
+    )
   }
 
   return NextResponse.json({ success: true, runs: data || [] })
@@ -155,7 +169,13 @@ export async function POST(request: NextRequest) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
+    return NextResponse.json(
+      makeApiErrorEnvelope({
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized. Please log in.',
+      }),
+      { status: 401 }
+    )
   }
 
   try {
@@ -164,7 +184,13 @@ export async function POST(request: NextRequest) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Invalid request', details: parsed.error.flatten().fieldErrors },
+        makeApiErrorEnvelope({
+          code: 'INVALID_REQUEST',
+          message: 'Invalid request',
+          details: {
+            fields: parsed.error.flatten().fieldErrors,
+          },
+        }),
         { status: 400 }
       )
     }
@@ -176,7 +202,14 @@ export async function POST(request: NextRequest) {
       runType: payload.runType,
     })
     if (!projectCheck.ok) {
-      return NextResponse.json({ error: projectCheck.error }, { status: projectCheck.status })
+      return NextResponse.json(
+        makeApiErrorEnvelope({
+          code: projectCheck.status === 409 ? 'PROJECT_BOOTSTRAP_REQUIRED' : projectCheck.status === 400 ? 'INVALID_PROJECT_ID' : 'PROJECT_LOOKUP_FAILED',
+          message: projectCheck.error,
+          retryable: projectCheck.status >= 500,
+        }),
+        { status: projectCheck.status }
+      )
     }
 
     if (payload.idempotencyKey) {
@@ -194,10 +227,21 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             success: false,
             degraded: true,
-            error: 'Background runs queue is unavailable; fallback pipeline should continue.',
+            error: {
+              code: 'BACKGROUND_RUNS_UNAVAILABLE',
+              message: 'Background runs queue is unavailable; fallback pipeline should continue.',
+              retryable: true,
+            },
           })
         }
-        return NextResponse.json({ error: existingRunError.message }, { status: 500 })
+        return NextResponse.json(
+          makeApiErrorEnvelope({
+            code: 'BACKGROUND_RUNS_LOOKUP_FAILED',
+            message: existingRunError.message,
+            retryable: true,
+          }),
+          { status: 500 }
+        )
       }
 
       if (existingRun) {
@@ -229,16 +273,31 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: false,
           degraded: true,
-          error: 'Background runs queue is unavailable; fallback pipeline should continue.',
+          error: {
+            code: 'BACKGROUND_RUNS_UNAVAILABLE',
+            message: 'Background runs queue is unavailable; fallback pipeline should continue.',
+            retryable: true,
+          },
         })
       }
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(
+        makeApiErrorEnvelope({
+          code: 'BACKGROUND_RUNS_INSERT_FAILED',
+          message: error.message,
+          retryable: true,
+        }),
+        { status: 500 }
+      )
     }
 
     return NextResponse.json({ success: true, run: data }, { status: 201 })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create background run.' },
+      makeApiErrorEnvelope({
+        code: 'BACKGROUND_RUNS_CREATE_FAILED',
+        message: error instanceof Error ? error.message : 'Failed to create background run.',
+        retryable: true,
+      }),
       { status: 500 }
     )
   }

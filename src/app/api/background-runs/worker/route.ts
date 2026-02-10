@@ -7,6 +7,7 @@ import {
   type DispatchOutcome,
 } from '@/lib/background-runs/dispatcher'
 import { authorizeWorkerRequest } from '@/lib/background-runs/worker'
+import { makeApiErrorEnvelope } from '@/lib/api/error-envelope'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -50,13 +51,25 @@ async function parseWorkerRequest(request: NextRequest) {
 async function handleWorkerDispatch(request: NextRequest) {
   const workerAuthorization = authorizeWorkerRequest(request.headers)
   if (!workerAuthorization.ok) {
-    return NextResponse.json({ error: workerAuthorization.error }, { status: 401 })
+    return NextResponse.json(
+      makeApiErrorEnvelope({
+        code: 'UNAUTHORIZED_WORKER',
+        message: workerAuthorization.error,
+      }),
+      { status: 401 }
+    )
   }
 
   const parsed = await parseWorkerRequest(request)
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Invalid request', details: parsed.error.flatten().fieldErrors },
+      makeApiErrorEnvelope({
+        code: 'INVALID_REQUEST',
+        message: 'Invalid request',
+        details: {
+          fields: parsed.error.flatten().fieldErrors,
+        },
+      }),
       { status: 400 }
     )
   }
@@ -131,7 +144,11 @@ async function handleWorkerDispatch(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: message },
+      makeApiErrorEnvelope({
+        code: 'BACKGROUND_RUNS_WORKER_FAILED',
+        message,
+        retryable: true,
+      }),
       { status: 500 }
     )
   }

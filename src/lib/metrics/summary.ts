@@ -21,6 +21,17 @@ export interface MetricsSummary {
     promptToVerifiedP50Ms: number
     promptToVerifiedSamples: number
   }
+  slo: {
+    chatReplyLatencyP50Ms: number
+    chatReplyLatencySamples: number
+    chatNoReplyRate: number
+    api404Rate: number
+    api500Rate: number
+    presence404Rate: number
+    presence500Rate: number
+    backgroundRuns404Rate: number
+    backgroundRuns500Rate: number
+  }
   activityByDay: Array<{ day: string; count: number }>
 }
 
@@ -51,7 +62,20 @@ function median(values: number[]): number {
 export function buildMetricsSummary(events: ProductEventRecord[]): MetricsSummary {
   const eventCounts: Record<string, number> = {}
   const promptToVerifiedValues: number[] = []
+  const chatReplyLatencyValues: number[] = []
   const byDay: Record<string, number> = {}
+
+  let chatRequests = 0
+  let chatNoReply = 0
+  let apiRequests = 0
+  let api404 = 0
+  let api500 = 0
+  let presenceRequests = 0
+  let presence404 = 0
+  let presence500 = 0
+  let backgroundRequests = 0
+  let background404 = 0
+  let background500 = 0
 
   for (const event of events) {
     eventCounts[event.event_name] = (eventCounts[event.event_name] || 0) + 1
@@ -67,6 +91,43 @@ export function buildMetricsSummary(events: ProductEventRecord[]): MetricsSummar
       if (elapsedMs !== null) {
         promptToVerifiedValues.push(elapsedMs)
       }
+    }
+
+    if (event.event_name === 'chat.reply_latency') {
+      const data = event.event_data && typeof event.event_data === 'object'
+        ? event.event_data as Record<string, unknown>
+        : null
+      const elapsedMs = asNumber(data?.elapsedMs)
+      if (elapsedMs !== null) {
+        chatReplyLatencyValues.push(elapsedMs)
+      }
+    }
+
+    if (event.event_name === 'chat.requested') {
+      chatRequests += 1
+    }
+    if (event.event_name === 'chat.no_reply') {
+      chatNoReply += 1
+    }
+
+    if (event.event_name === 'api.project_presence.request') {
+      apiRequests += 1
+      presenceRequests += 1
+    } else if (event.event_name === 'api.project_presence.error_404') {
+      api404 += 1
+      presence404 += 1
+    } else if (event.event_name === 'api.project_presence.error_500') {
+      api500 += 1
+      presence500 += 1
+    } else if (event.event_name === 'api.background_runs.request') {
+      apiRequests += 1
+      backgroundRequests += 1
+    } else if (event.event_name === 'api.background_runs.error_404') {
+      api404 += 1
+      background404 += 1
+    } else if (event.event_name === 'api.background_runs.error_500') {
+      api500 += 1
+      background500 += 1
     }
   }
 
@@ -94,6 +155,17 @@ export function buildMetricsSummary(events: ProductEventRecord[]): MetricsSummar
     latency: {
       promptToVerifiedP50Ms: median(promptToVerifiedValues),
       promptToVerifiedSamples: promptToVerifiedValues.length,
+    },
+    slo: {
+      chatReplyLatencyP50Ms: median(chatReplyLatencyValues),
+      chatReplyLatencySamples: chatReplyLatencyValues.length,
+      chatNoReplyRate: ratio(chatNoReply, chatRequests),
+      api404Rate: ratio(api404, apiRequests),
+      api500Rate: ratio(api500, apiRequests),
+      presence404Rate: ratio(presence404, presenceRequests),
+      presence500Rate: ratio(presence500, presenceRequests),
+      backgroundRuns404Rate: ratio(background404, backgroundRequests),
+      backgroundRuns500Rate: ratio(background500, backgroundRequests),
     },
     activityByDay: Object.entries(byDay)
       .map(([day, count]) => ({ day, count }))
