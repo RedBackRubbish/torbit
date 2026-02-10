@@ -23,6 +23,18 @@ function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value)
 }
 
+function isBackgroundRunsUnavailable(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  const code = error.code || ''
+  const message = (error.message || '').toLowerCase()
+  return (
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    message.includes('background_runs') ||
+    message.includes('schema cache')
+  )
+}
+
 function isMissingRowError(code: string | undefined): boolean {
   return code === 'PGRST116'
 }
@@ -114,6 +126,14 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query
 
   if (error) {
+    if (isBackgroundRunsUnavailable(error)) {
+      return NextResponse.json({
+        success: true,
+        runs: [],
+        degraded: true,
+        warning: 'Background runs table is unavailable. Returning empty run list.',
+      })
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -160,6 +180,13 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
 
       if (existingRunError) {
+        if (isBackgroundRunsUnavailable(existingRunError)) {
+          return NextResponse.json({
+            success: false,
+            degraded: true,
+            error: 'Background runs queue is unavailable; fallback pipeline should continue.',
+          })
+        }
         return NextResponse.json({ error: existingRunError.message }, { status: 500 })
       }
 
@@ -188,6 +215,13 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
+      if (isBackgroundRunsUnavailable(error)) {
+        return NextResponse.json({
+          success: false,
+          degraded: true,
+          error: 'Background runs queue is unavailable; fallback pipeline should continue.',
+        })
+      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
