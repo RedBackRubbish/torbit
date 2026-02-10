@@ -333,7 +333,8 @@ export default function ChatPanel() {
     reader: ReadableStreamDefaultReader<Uint8Array>,
     assistantId: string,
     agentId: AgentId,
-    initialContent: string = ''
+    initialContent: string = '',
+    onActivity?: () => void
   ) => {
     const decoder = new TextDecoder()
     let buffer = ''
@@ -389,6 +390,7 @@ export default function ChatPanel() {
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
+      onActivity?.()
       const lines = buffer.split('\n\n')
       buffer = lines.pop() || ''
 
@@ -705,6 +707,8 @@ export default function ChatPanel() {
     }])
 
     let requestFailed = false
+    const controller = new AbortController()
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
 
     try {
       // Load persisted invariants to send as context
@@ -718,8 +722,12 @@ export default function ChatPanel() {
         }
       }
       
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 75000)
+      const STREAM_IDLE_TIMEOUT_MS = 75000
+      const resetStreamTimeout = () => {
+        if (timeoutId) clearTimeout(timeoutId)
+        timeoutId = setTimeout(() => controller.abort(), STREAM_IDLE_TIMEOUT_MS)
+      }
+      resetStreamTimeout()
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -736,7 +744,7 @@ export default function ChatPanel() {
           persistedInvariants,
           fileManifest: buildFileManifest(),
         }),
-      }).finally(() => clearTimeout(timeoutId))
+      })
 
       if (!response.ok) {
         let serverMessage = ''
@@ -753,7 +761,13 @@ export default function ChatPanel() {
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No response body')
 
-      const streamResult = await parseSSEStream(reader, assistantId, agentId, initialContent)
+      const streamResult = await parseSSEStream(
+        reader,
+        assistantId,
+        agentId,
+        initialContent,
+        resetStreamTimeout
+      )
       setAgentStatus(agentId, 'complete', 'Done')
       setRunStatus('Ready')
       setRunStatusDetail('Response completed')
@@ -826,6 +840,7 @@ export default function ChatPanel() {
           : m
       ))
     } finally {
+      if (timeoutId) clearTimeout(timeoutId)
       setIsLoading(false)
       setIsGenerating(false)
       setCurrentTask(null)
