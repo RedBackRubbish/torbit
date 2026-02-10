@@ -79,7 +79,13 @@ export function useProjectPresence(projectId: string | null) {
   }, [])
 
   const fetchPresence = useCallback(async () => {
-    if (!projectId || !presenceSupported) {
+    if (!projectId) {
+      setPresence([])
+      setPresenceProbeComplete(false)
+      return false
+    }
+
+    if (!presenceSupported) {
       setPresence([])
       setPresenceProbeComplete(true)
       return false
