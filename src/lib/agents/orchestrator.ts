@@ -120,8 +120,8 @@ const CODEX_FAST_MODEL = process.env.TORBIT_CODEX_FAST_MODEL || 'gpt-5-mini'
 const OPENAI_FALLBACK_MODEL = process.env.TORBIT_OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
 const KIMI_FALLBACK_MODEL = process.env.TORBIT_KIMI_FALLBACK_MODEL || 'moonshotai/kimi-k2.5'
 const KIMI_FAST_FALLBACK_MODEL = process.env.TORBIT_KIMI_FAST_FALLBACK_MODEL || KIMI_FALLBACK_MODEL
-const ANTHROPIC_OPUS_MODEL = 'claude-opus-4-6-20260206'
-const ANTHROPIC_SONNET_MODEL = 'claude-sonnet-4-5-20250929'
+const ANTHROPIC_OPUS_MODEL = process.env.TORBIT_ANTHROPIC_OPUS_MODEL || 'claude-opus-4-1-20250805'
+const ANTHROPIC_SONNET_MODEL = process.env.TORBIT_ANTHROPIC_SONNET_MODEL || 'claude-sonnet-4-20250514'
 const GOOGLE_PRO_MODEL = 'gemini-2.5-pro'
 const GOOGLE_FLASH_MODEL = 'gemini-2.5-flash'
 const CONTEXT_COMPILER_MODEL = process.env.TORBIT_CONTEXT_COMPILER_MODEL || process.env.TORBIT_GEMINI_CONTEXT_MODEL || 'gemini-3-pro-preview'
@@ -144,7 +144,9 @@ type ModelCandidate = {
 
 function normalizeAnthropicAlias(model: string): string {
   if (model === 'claude-opus-4-6') return ANTHROPIC_OPUS_MODEL
+  if (model === 'claude-opus-4-1') return ANTHROPIC_OPUS_MODEL
   if (model === 'claude-sonnet-4-5') return ANTHROPIC_SONNET_MODEL
+  if (model === 'claude-sonnet-4') return ANTHROPIC_SONNET_MODEL
   return model
 }
 

@@ -69,7 +69,8 @@ test.describe('Builder End-to-End Flow', () => {
     await input.fill('Build a status dashboard with activity feed');
     await input.press('Enter');
 
-    await expect(page).toHaveURL('/builder');
+    await page.waitForURL('**/builder', { timeout: 20000 });
+    await expect(page).toHaveURL(/\/builder$/);
     await expect(page.getByTestId('builder-layout')).toBeVisible({ timeout: 20000 });
 
     const previewTab = page.getByRole('button', { name: 'Preview' }).first();

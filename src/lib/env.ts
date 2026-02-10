@@ -41,6 +41,8 @@ const serverSchema = z.object({
   TORBIT_WORKER_MODEL: z.string().optional(),
   TORBIT_CRITICAL_MODEL: z.string().optional(),
   TORBIT_JANITOR_MODEL: z.string().optional(),
+  TORBIT_ANTHROPIC_OPUS_MODEL: z.string().optional(),
+  TORBIT_ANTHROPIC_SONNET_MODEL: z.string().optional(),
 
   // Monitoring
   SENTRY_DSN: z.string().optional(),

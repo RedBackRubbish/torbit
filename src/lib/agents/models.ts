@@ -40,16 +40,16 @@ export interface ModelConfig {
 export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'claude-opus': {
     provider: 'claude-opus',
-    model: 'claude-opus-4-6-20260206',
-    description: 'Claude Opus 4.6 - most intelligent for complex reasoning',
+    model: process.env.TORBIT_ANTHROPIC_OPUS_MODEL || 'claude-opus-4-1-20250805',
+    description: 'Claude Opus - most intelligent for complex reasoning',
     costTier: 'premium',
     inputCostPer1k: 0.015,
     outputCostPer1k: 0.075,
   },
   'claude-sonnet': {
     provider: 'claude-sonnet',
-    model: 'claude-sonnet-4-5-20250929',
-    description: 'Claude Sonnet 4.5 - fast, intelligent, great for code generation',
+    model: process.env.TORBIT_ANTHROPIC_SONNET_MODEL || 'claude-sonnet-4-20250514',
+    description: 'Claude Sonnet - fast, intelligent, great for code generation',
     costTier: 'standard',
     inputCostPer1k: 0.003,
     outputCostPer1k: 0.015,
@@ -214,7 +214,7 @@ export function getModel(provider: ModelProvider): LanguageModel {
       return openai(codexModel)
     }
     default:
-      return anthropic('claude-sonnet-4-5-20250929')
+      return anthropic(process.env.TORBIT_ANTHROPIC_SONNET_MODEL || 'claude-sonnet-4-20250514')
   }
 }
 

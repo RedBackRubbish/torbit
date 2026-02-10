@@ -72,7 +72,7 @@ Be strict about explicit requests. Be lenient about implied features. Always sug
 const DEFAULT_SUPERVISOR_MODEL = process.env.TORBIT_SUPERVISOR_MODEL
   || process.env.TORBIT_SUPERVISOR_CODEX_MODEL
   || 'gpt-5.2'
-const DEFAULT_ANTHROPIC_REVIEW_MODEL = 'claude-opus-4-6-20260206'
+const DEFAULT_ANTHROPIC_REVIEW_MODEL = process.env.TORBIT_ANTHROPIC_OPUS_MODEL || 'claude-opus-4-1-20250805'
 
 function getSupervisorReviewModel() {
   const configured = DEFAULT_SUPERVISOR_MODEL.trim()

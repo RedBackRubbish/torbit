@@ -295,6 +295,8 @@ type ConversationModelCandidate = {
   model: ReturnType<typeof openai> | ReturnType<typeof anthropic> | ReturnType<typeof google>
 }
 
+const DEFAULT_ANTHROPIC_SONNET_MODEL = process.env.TORBIT_ANTHROPIC_SONNET_MODEL || 'claude-sonnet-4-20250514'
+
 function getConversationModels(): ConversationModelCandidate[] {
   const models: ConversationModelCandidate[] = []
 
@@ -303,7 +305,10 @@ function getConversationModels(): ConversationModelCandidate[] {
   }
 
   if (process.env.ANTHROPIC_API_KEY) {
-    models.push({ label: 'anthropic:claude-sonnet-4-5', model: anthropic('claude-sonnet-4-5-20250929') })
+    models.push({
+      label: `anthropic:${DEFAULT_ANTHROPIC_SONNET_MODEL}`,
+      model: anthropic(DEFAULT_ANTHROPIC_SONNET_MODEL),
+    })
   }
 
   if (process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY) {
@@ -631,7 +636,7 @@ async function executeActionFlow(input: ExecutionOptions): Promise<AgentResult> 
 
   input.emitSupervisor('fallback_invoked', 'execution', 'Switching to fallback builder model chain.', {
     reason: secondError,
-    chosen_replacement: 'claude-sonnet-4-5-20250929',
+    chosen_replacement: DEFAULT_ANTHROPIC_SONNET_MODEL,
     strategy: 'fallback_worker_chain',
   })
 
@@ -891,8 +896,8 @@ export async function POST(req: Request) {
           supervisor: 'gpt-5.2',
           analyst: 'gemini-3-pro',
           builder: 'kimi-k2.5',
-          reviewer: 'claude-opus-4-6',
-          janitor: 'claude-sonnet-4-5',
+          reviewer: 'claude-opus-4-1',
+          janitor: 'claude-sonnet-4',
         })
 
         let guardrailPrompt = ''
