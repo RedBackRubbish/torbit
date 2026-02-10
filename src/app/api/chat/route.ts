@@ -285,10 +285,15 @@ async function runConversationReply(input: {
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
   sendChunk: (chunk: StreamChunk) => void
   emitSupervisor: ExecutionOptions['emitSupervisor']
+  userMessage: string
 }) {
   const models = getConversationModels()
   if (models.length === 0) {
-    throw new Error('No conversational model is configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY.')
+    input.sendChunk({
+      type: 'text',
+      content: buildDeterministicChatFallback(input.userMessage),
+    })
+    return
   }
 
   const systemPrompt = [
@@ -300,6 +305,7 @@ async function runConversationReply(input: {
 
   let streamed = false
   let lastError: unknown = null
+  let previousFailureMessage: string | null = null
 
   for (let index = 0; index < models.length; index += 1) {
     const candidate = models[index]
@@ -309,7 +315,11 @@ async function runConversationReply(input: {
           'fallback_invoked',
           'chat',
           'Chat fallback model selected.',
-          { intent: 'chat', chosen_replacement: candidate.label }
+          {
+            intent: 'chat',
+            reason: previousFailureMessage ?? 'previous model failed',
+            chosen_replacement: candidate.label,
+          }
         )
       }
 
@@ -336,8 +346,12 @@ async function runConversationReply(input: {
     } catch (error) {
       lastError = error
       const message = error instanceof Error ? error.message : 'Conversation stream failed.'
-      const canFallback = index < models.length - 1
-      if (canFallback && isTransientModelError(message)) {
+      previousFailureMessage = message
+      console.warn('[chat] conversation model failed', {
+        model: candidate.label,
+        error: message,
+      })
+      if (index < models.length - 1) {
         continue
       }
       break
@@ -345,8 +359,48 @@ async function runConversationReply(input: {
   }
 
   if (!streamed) {
-    throw (lastError instanceof Error ? lastError : new Error('Failed to generate chat response.'))
+    const lastErrorMessage = lastError instanceof Error
+      ? lastError.message
+      : 'Conversation providers did not return output.'
+    input.emitSupervisor(
+      'fallback_invoked',
+      'chat',
+      'Conversation providers unavailable. Returning local fallback response.',
+      {
+        intent: 'chat',
+        reason: lastErrorMessage,
+        chosen_replacement: 'local_fallback',
+      }
+    )
+    input.sendChunk({
+      type: 'text',
+      content: buildDeterministicChatFallback(input.userMessage),
+    })
   }
+}
+
+function buildDeterministicChatFallback(message: string): string {
+  const normalized = message.toLowerCase()
+
+  if (
+    normalized.includes('encouragement') ||
+    normalized.includes('overwhelm') ||
+    normalized.includes('stuck') ||
+    normalized.includes('confidence')
+  ) {
+    return [
+      'You are not behind. Keep the scope small and finish one concrete step first.',
+      '',
+      'Try this right now:',
+      '1. Define one outcome for the next 30 minutes.',
+      '2. Implement only that slice.',
+      '3. Run one quick verification (lint/test/build) and stop.',
+      '',
+      'If you want, share what you are building and I will break it into the smallest shippable steps.',
+    ].join('\n')
+  }
+
+  return 'I hit a temporary model issue, but I can still help. Send your question again or share the exact task and I will answer directly.'
 }
 
 function sanitizeLastUserMessage(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>) {
@@ -657,6 +711,7 @@ export async function POST(req: Request) {
             messages: sanitizeLastUserMessage(normalizedMessages),
             sendChunk,
             emitSupervisor,
+            userMessage: userPrompt,
           })
           close()
           return
