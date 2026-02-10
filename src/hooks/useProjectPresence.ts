@@ -8,6 +8,10 @@ export interface PresenceMember extends ProjectPresence {
   isCurrentUser: boolean
 }
 
+// Cache table support for the current runtime session so repeated mounts
+// do not keep hitting a missing endpoint and spamming 404s.
+let presenceFeatureSupportedCache: boolean | null = null
+
 function isMissingPresenceTableError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
 
@@ -34,18 +38,25 @@ export function useProjectPresence(projectId: string | null) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const [presenceSupported, setPresenceSupported] = useState(true)
+  const [presenceSupported, setPresenceSupported] = useState(presenceFeatureSupportedCache !== false)
+
+  const disablePresenceSupport = useCallback(() => {
+    presenceFeatureSupportedCache = false
+    setPresenceSupported(false)
+    setPresence([])
+    setError(null)
+  }, [])
 
   const fetchPresence = useCallback(async () => {
     if (!projectId || !presenceSupported) {
       setPresence([])
-      return
+      return false
     }
 
     const supabase = getSupabase()
     if (!supabase) {
       setPresence([])
-      return
+      return false
     }
 
     setLoading(true)
@@ -67,18 +78,18 @@ export function useProjectPresence(projectId: string | null) {
       }
 
       setPresence(data || [])
+      return true
     } catch (err) {
       if (isMissingPresenceTableError(err)) {
-        setPresence([])
-        setError(null)
-        setPresenceSupported(false)
-        return
+        disablePresenceSupport()
+        return false
       }
       setError(err instanceof Error ? err : new Error('Failed to fetch project presence.'))
+      return false
     } finally {
       setLoading(false)
     }
-  }, [presenceSupported, projectId])
+  }, [disablePresenceSupport, presenceSupported, projectId])
 
   useEffect(() => {
     if (!projectId || !presenceSupported) {
@@ -86,46 +97,59 @@ export function useProjectPresence(projectId: string | null) {
       return
     }
 
-    fetchPresence()
+    let active = true
+    let channelCleanup: (() => void) | null = null
 
-    const supabase = getSupabase()
-    if (!supabase) return
+    const bootstrapPresence = async () => {
+      const canSubscribe = await fetchPresence()
+      if (!active || !canSubscribe) return
 
-    const channel = supabase
-      .channel(`project-presence:${projectId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'project_presence',
-        filter: `project_id=eq.${projectId}`,
-      }, (payload) => {
-        const eventType = payload.eventType
-        const nextPresence = payload.new as ProjectPresence
-        const previousPresence = payload.old as ProjectPresence
+      const supabase = getSupabase()
+      if (!supabase) return
 
-        setPresence((current) => {
-          if (eventType === 'INSERT') {
-            if (current.some((item) => item.id === nextPresence.id)) {
-              return current
+      const channel = supabase
+        .channel(`project-presence:${projectId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'project_presence',
+          filter: `project_id=eq.${projectId}`,
+        }, (payload) => {
+          const eventType = payload.eventType
+          const nextPresence = payload.new as ProjectPresence
+          const previousPresence = payload.old as ProjectPresence
+
+          setPresence((current) => {
+            if (eventType === 'INSERT') {
+              if (current.some((item) => item.id === nextPresence.id)) {
+                return current
+              }
+              return [nextPresence, ...current]
             }
-            return [nextPresence, ...current]
-          }
 
-          if (eventType === 'UPDATE') {
-            return current.map((item) => item.id === nextPresence.id ? nextPresence : item)
-          }
+            if (eventType === 'UPDATE') {
+              return current.map((item) => item.id === nextPresence.id ? nextPresence : item)
+            }
 
-          if (eventType === 'DELETE') {
-            return current.filter((item) => item.id !== previousPresence.id)
-          }
+            if (eventType === 'DELETE') {
+              return current.filter((item) => item.id !== previousPresence.id)
+            }
 
-          return current
+            return current
+          })
         })
-      })
-      .subscribe()
+        .subscribe()
+
+      channelCleanup = () => {
+        supabase.removeChannel(channel)
+      }
+    }
+
+    void bootstrapPresence()
 
     return () => {
-      supabase.removeChannel(channel)
+      active = false
+      channelCleanup?.()
     }
   }, [fetchPresence, presenceSupported, projectId])
 
@@ -163,12 +187,12 @@ export function useProjectPresence(projectId: string | null) {
 
     if (upsertError) {
       if (isMissingPresenceTableError(upsertError)) {
-        setPresenceSupported(false)
+        disablePresenceSupport()
         return
       }
       throw upsertError
     }
-  }, [currentUserId, presenceSupported, projectId])
+  }, [currentUserId, disablePresenceSupport, presenceSupported, projectId])
 
   const members = useMemo<PresenceMember[]>(() => (
     presence.map((member) => ({
