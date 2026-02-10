@@ -40,6 +40,17 @@ function resolveRateLimiterForAction(action: string) {
   return strictRateLimiter
 }
 
+function isSandboxCapacityRateLimit(error: unknown): boolean {
+  const message = error instanceof Error
+    ? error.message.toLowerCase()
+    : String(error ?? '').toLowerCase()
+
+  return (
+    message.includes('maximum number of concurrent e2b sandboxes') ||
+    message.includes('rate limit exceeded')
+  )
+}
+
 function getDataRoot(): string {
   const configured = process.env.TORBIT_DATA_DIR
   if (configured && configured.trim().length > 0) {
@@ -432,6 +443,20 @@ export async function POST(request: NextRequest) {
         )
     }
   } catch (error) {
+    if (isSandboxCapacityRateLimit(error)) {
+      return NextResponse.json(
+        {
+          error: 'Live preview capacity is currently full. Please retry in about a minute.',
+          code: 'E2B_SANDBOX_RATE_LIMIT',
+          retryAfter: 60,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': '60' },
+        }
+      )
+    }
+
     console.error('E2B API error:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
