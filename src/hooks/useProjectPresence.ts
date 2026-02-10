@@ -8,9 +8,16 @@ export interface PresenceMember extends ProjectPresence {
   isCurrentUser: boolean
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 // Cache table support for the current runtime session so repeated mounts
 // do not keep hitting a missing endpoint and spamming 404s.
 let presenceFeatureSupportedCache: boolean | null = null
+let presenceFeatureProbeCompleteCache = false
+
+function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value)
+}
 
 function isMissingPresenceTableError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
@@ -20,13 +27,27 @@ function isMissingPresenceTableError(err: unknown): boolean {
     message?: string
     details?: string
     hint?: string
+    status?: number
+    statusCode?: number
+    statusText?: string
+  }
+
+  if (error.status === 404 || error.statusCode === 404) {
+    return true
   }
 
   if (error.code === '42P01' || error.code === 'PGRST205') {
     return true
   }
 
-  const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase()
+  const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''} ${error.statusText ?? ''}`.toLowerCase()
+  if (
+    text.includes('404') ||
+    text.includes('not found')
+  ) {
+    return true
+  }
+
   return (
     text.includes('project_presence') &&
     (text.includes('does not exist') || text.includes('schema cache') || text.includes('not found'))
@@ -39,23 +60,42 @@ export function useProjectPresence(projectId: string | null) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [presenceSupported, setPresenceSupported] = useState(presenceFeatureSupportedCache !== false)
+  const [presenceProbeComplete, setPresenceProbeComplete] = useState(presenceFeatureProbeCompleteCache)
 
   const disablePresenceSupport = useCallback(() => {
     presenceFeatureSupportedCache = false
+    presenceFeatureProbeCompleteCache = true
     setPresenceSupported(false)
+    setPresenceProbeComplete(true)
     setPresence([])
     setError(null)
+  }, [])
+
+  const markPresenceSupported = useCallback(() => {
+    presenceFeatureSupportedCache = true
+    presenceFeatureProbeCompleteCache = true
+    setPresenceSupported(true)
+    setPresenceProbeComplete(true)
   }, [])
 
   const fetchPresence = useCallback(async () => {
     if (!projectId || !presenceSupported) {
       setPresence([])
+      setPresenceProbeComplete(true)
+      return false
+    }
+
+    if (!isUuid(projectId)) {
+      setPresence([])
+      setError(null)
+      setPresenceProbeComplete(true)
       return false
     }
 
     const supabase = getSupabase()
     if (!supabase) {
       setPresence([])
+      setPresenceProbeComplete(true)
       return false
     }
 
@@ -78,6 +118,7 @@ export function useProjectPresence(projectId: string | null) {
       }
 
       setPresence(data || [])
+      markPresenceSupported()
       return true
     } catch (err) {
       if (isMissingPresenceTableError(err)) {
@@ -85,11 +126,12 @@ export function useProjectPresence(projectId: string | null) {
         return false
       }
       setError(err instanceof Error ? err : new Error('Failed to fetch project presence.'))
+      setPresenceProbeComplete(true)
       return false
     } finally {
       setLoading(false)
     }
-  }, [disablePresenceSupport, presenceSupported, projectId])
+  }, [disablePresenceSupport, markPresenceSupported, presenceSupported, projectId])
 
   useEffect(() => {
     if (!projectId || !presenceSupported) {
@@ -157,7 +199,8 @@ export function useProjectPresence(projectId: string | null) {
     status: ProjectPresence['status'] = 'online',
     cursor?: Json | null
   ) => {
-    if (!projectId || !presenceSupported) return
+    if (!projectId || !presenceSupported || !presenceProbeComplete) return
+    if (!isUuid(projectId)) return
 
     const supabase = getSupabase()
     if (!supabase) return
@@ -192,7 +235,7 @@ export function useProjectPresence(projectId: string | null) {
       }
       throw upsertError
     }
-  }, [currentUserId, disablePresenceSupport, presenceSupported, projectId])
+  }, [currentUserId, disablePresenceSupport, presenceProbeComplete, presenceSupported, projectId])
 
   const members = useMemo<PresenceMember[]>(() => (
     presence.map((member) => ({

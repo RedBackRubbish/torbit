@@ -56,4 +56,36 @@ describe('useProjectPresence', () => {
 
     expect(queryChain.upsert).not.toHaveBeenCalled()
   })
+
+  it('disables presence when the endpoint responds with generic 404 metadata', async () => {
+    queryChain.order.mockResolvedValueOnce({
+      data: null,
+      error: { status: 404, statusText: 'Not Found' },
+    })
+
+    const { useProjectPresence } = await import('../useProjectPresence')
+    const { result } = renderHook(() => useProjectPresence('11111111-1111-4111-8111-111111111111'))
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    await act(async () => {
+      await result.current.upsertPresence('online')
+    })
+
+    expect(mockSupabase.channel).not.toHaveBeenCalled()
+    expect(queryChain.upsert).not.toHaveBeenCalled()
+  })
+
+  it('skips presence calls for non-UUID project ids', async () => {
+    const { useProjectPresence } = await import('../useProjectPresence')
+    renderHook(() => useProjectPresence('local-project-id'))
+
+    await waitFor(() => {
+      expect(queryChain.order).not.toHaveBeenCalled()
+    })
+
+    expect(mockSupabase.from).not.toHaveBeenCalled()
+  })
 })
