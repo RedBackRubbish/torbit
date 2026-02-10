@@ -63,6 +63,10 @@ const E2BContext = createContext<E2BContextValue | null>(null)
 // Module-level flag to prevent duplicate boot logs in Strict Mode
 let hasLoggedBoot = false
 const RUNTIME_STARTUP_TIMEOUT_MS = 45000
+const ROUTE_PROBE_FETCH_TIMEOUT_MS = 20000
+const ROUTE_PROBE_COMMAND_TIMEOUT_MS = 30000
+const ROUTE_PROBE_MAX_ATTEMPTS = 4
+const ROUTE_PROBE_RETRY_DELAY_MS = 1500
 const E2B_RETRY_BUDGET: Record<string, number> = {
   makeDir: 5,
   writeFile: 5,
@@ -193,12 +197,33 @@ export function nextInstallRecoveryCommand(previousCommand: string, output: stri
   return null
 }
 
-export function createRuntimeProbeCommand(port: number): string {
+function isRetryableRouteProbeFailure(details: string): boolean {
+  const normalized = details.toLowerCase()
+  return (
+    normalized.includes('operation was aborted') ||
+    normalized.includes('timed out') ||
+    normalized.includes('timeout') ||
+    normalized.includes('fetch failed') ||
+    normalized.includes('econnrefused') ||
+    normalized.includes('socket hang up') ||
+    normalized.includes('empty-runtime-html')
+  )
+}
+
+export function createRuntimeProbeCommand(
+  port: number,
+  options?: { fetchTimeoutMs?: number }
+): string {
   const normalizedPort = Number.isFinite(port) && port > 0 ? Math.floor(port) : 3000
+  const fetchTimeoutMs = (
+    typeof options?.fetchTimeoutMs === 'number' &&
+    Number.isFinite(options.fetchTimeoutMs) &&
+    options.fetchTimeoutMs > 0
+  ) ? Math.floor(options.fetchTimeoutMs) : ROUTE_PROBE_FETCH_TIMEOUT_MS
   const script = `
 const target = 'http://127.0.0.1:${normalizedPort}';
 const controller = new AbortController();
-const timeout = setTimeout(() => controller.abort(), 10000);
+const timeout = setTimeout(() => controller.abort(), ${fetchTimeoutMs});
 
 (async () => {
   try {
@@ -216,7 +241,7 @@ const timeout = setTimeout(() => controller.abort(), 10000);
       .replace(/<[^>]+>/g, ' ')
       .replace(/\\s+/g, ' ')
       .trim();
-    const hasRenderableMarkup = /<(main|section|article|header|footer|nav|aside|h1|h2|h3|p|button|input|form|canvas|svg|img|ul|ol|table)[\\s>]/i.test(bodyWithoutScripts);
+    const hasRenderableMarkup = /<(main|section|article|header|footer|nav|aside|h1|h2|h3|p|button|input|form|canvas|svg|img|ul|ol|table|div)[\\s>]/i.test(bodyWithoutScripts);
 
     if (response.status >= 500) {
       console.error('ROUTE_PROBE_FAIL status=' + response.status);
@@ -812,15 +837,39 @@ export function E2BProvider({ children }: E2BProviderProps) {
           failedStage = 'route_probe'
           failingCommand = `route-probe:${runtimeProfile.port}`
           addLog('🔎 Probing runtime route output...', 'info')
-          const probeResult = await e2bApi('runCommand', {
-            sandboxId,
-            sandboxAccessToken,
-            command: createRuntimeProbeCommand(runtimeProfile.port),
-            timeoutMs: 20000,
-          }) as { exitCode: number; stdout: string; stderr: string }
+          let probePassed = false
+          let lastProbeDetails = ''
 
-          if (probeResult.exitCode !== 0) {
+          for (let attempt = 1; attempt <= ROUTE_PROBE_MAX_ATTEMPTS; attempt++) {
+            const probeResult = await e2bApi('runCommand', {
+              sandboxId,
+              sandboxAccessToken,
+              command: createRuntimeProbeCommand(runtimeProfile.port, {
+                fetchTimeoutMs: ROUTE_PROBE_FETCH_TIMEOUT_MS,
+              }),
+              timeoutMs: ROUTE_PROBE_COMMAND_TIMEOUT_MS,
+            }) as { exitCode: number; stdout: string; stderr: string }
+
+            if (probeResult.exitCode === 0) {
+              probePassed = true
+              break
+            }
+
             const probeDetails = probeResult.stderr || probeResult.stdout || 'Runtime route probe failed'
+            lastProbeDetails = probeDetails
+            const shouldRetry = attempt < ROUTE_PROBE_MAX_ATTEMPTS
+              && isRetryableRouteProbeFailure(probeDetails)
+
+            if (!shouldRetry) {
+              break
+            }
+
+            addLog(`⏳ Runtime warming up (${attempt}/${ROUTE_PROBE_MAX_ATTEMPTS}); retrying probe...`, 'info')
+            await new Promise((resolve) => setTimeout(resolve, ROUTE_PROBE_RETRY_DELAY_MS))
+          }
+
+          if (!probePassed) {
+            const probeDetails = lastProbeDetails || 'Runtime route probe failed'
             exactLogLine = `Runtime route probe failed: ${probeDetails.slice(0, 300)}`
             throw new Error(exactLogLine)
           }

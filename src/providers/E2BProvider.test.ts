@@ -117,6 +117,16 @@ describe('createRuntimeProbeCommand', () => {
     const command = createRuntimeProbeCommand(3000)
     expect(command).not.toContain('\\n')
   })
+
+  it('supports configurable probe timeout for slower boots', () => {
+    const command = createRuntimeProbeCommand(3000, { fetchTimeoutMs: 45000 })
+    expect(command).toContain('setTimeout(() => controller.abort(), 45000)')
+  })
+
+  it('treats div-only root markup as renderable output', () => {
+    const command = createRuntimeProbeCommand(3000)
+    expect(command).toContain('|div)')
+  })
 })
 
 describe('injectPreviewBridgeIntoNextLayout', () => {
