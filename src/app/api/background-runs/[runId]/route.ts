@@ -40,6 +40,18 @@ interface RouteParams {
   params: Promise<{ runId: string }>
 }
 
+function isBackgroundRunsUnavailable(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  const code = error.code || ''
+  const message = (error.message || '').toLowerCase()
+  return (
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    message.includes('background_runs') ||
+    message.includes('schema cache')
+  )
+}
+
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { runId } = await params
   const supabase = await createClient()
@@ -57,6 +69,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     .single()
 
   if (error) {
+    if (isBackgroundRunsUnavailable(error)) {
+      return NextResponse.json({
+        success: false,
+        degraded: true,
+        error: 'Background runs table is unavailable.',
+      })
+    }
     return NextResponse.json({ error: 'Run not found.' }, { status: 404 })
   }
 
@@ -92,6 +111,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .single()
 
     if (existingRunError || !existingRun) {
+      if (isBackgroundRunsUnavailable(existingRunError)) {
+        return NextResponse.json({
+          success: false,
+          degraded: true,
+          error: 'Background runs table is unavailable.',
+        })
+      }
       return NextResponse.json({ error: 'Run not found.' }, { status: 404 })
     }
 
@@ -135,6 +161,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .single()
 
     if (error) {
+      if (isBackgroundRunsUnavailable(error)) {
+        return NextResponse.json({
+          success: false,
+          degraded: true,
+          error: 'Background runs table is unavailable.',
+        })
+      }
       console.error('[background-runs] Update failed:', error.message)
       return NextResponse.json({ error: 'Failed to update background run.' }, { status: 500 })
     }

@@ -26,26 +26,45 @@ interface UpdateRunInput {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+let backgroundRunsSupportedCache: boolean | null = null
 
 function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value)
+}
+
+function isBackgroundRunsUnavailableError(errorMessage: string | undefined): boolean {
+  const normalized = (errorMessage || '').toLowerCase()
+  return (
+    normalized.includes('background_runs') ||
+    normalized.includes('schema cache') ||
+    normalized.includes('pgrst205') ||
+    normalized.includes('42p01')
+  )
 }
 
 export function useBackgroundRuns(projectId: string | null) {
   const [runs, setRuns] = useState<BackgroundRun[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const [backgroundRunsSupported, setBackgroundRunsSupported] = useState(backgroundRunsSupportedCache !== false)
+
+  const disableBackgroundRunsSupport = useCallback(() => {
+    backgroundRunsSupportedCache = false
+    setBackgroundRunsSupported(false)
+    setRuns([])
+    setError(null)
+  }, [])
 
   const fetchRuns = useCallback(async () => {
-    if (!projectId) {
+    if (!projectId || !backgroundRunsSupported) {
       setRuns([])
-      return
+      return false
     }
 
     if (!isUuid(projectId)) {
       setRuns([])
       setError(null)
-      return
+      return false
     }
 
     setLoading(true)
@@ -53,22 +72,38 @@ export function useBackgroundRuns(projectId: string | null) {
 
     try {
       const response = await fetch(`/api/background-runs?projectId=${encodeURIComponent(projectId)}&limit=100`)
-      const payload = await response.json() as { success?: boolean; runs?: BackgroundRun[]; error?: string }
+      const payload = await response.json() as {
+        success?: boolean
+        runs?: BackgroundRun[]
+        error?: string
+        degraded?: boolean
+      }
+
+      if (payload.degraded || isBackgroundRunsUnavailableError(payload.error)) {
+        disableBackgroundRunsSupport()
+        return false
+      }
 
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || 'Failed to fetch background runs.')
       }
 
       setRuns(payload.runs || [])
+      return true
     } catch (err) {
+      if (isBackgroundRunsUnavailableError(err instanceof Error ? err.message : '')) {
+        disableBackgroundRunsSupport()
+        return false
+      }
       setError(err instanceof Error ? err : new Error('Failed to fetch background runs.'))
+      return false
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [backgroundRunsSupported, disableBackgroundRunsSupport, projectId])
 
   useEffect(() => {
-    if (!projectId) {
+    if (!projectId || !backgroundRunsSupported) {
       setRuns([])
       return
     }
@@ -79,50 +114,67 @@ export function useBackgroundRuns(projectId: string | null) {
       return
     }
 
-    fetchRuns()
+    let active = true
+    let cleanup: (() => void) | null = null
 
-    const supabase = getSupabase()
-    if (!supabase) return
+    const bootstrap = async () => {
+      const canSubscribe = await fetchRuns()
+      if (!active || !canSubscribe) return
 
-    const channel = supabase
-      .channel(`background-runs:${projectId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'background_runs',
-        filter: `project_id=eq.${projectId}`,
-      }, (payload) => {
-        const eventType = payload.eventType
-        const nextRun = payload.new as BackgroundRun
-        const oldRun = payload.old as BackgroundRun
+      const supabase = getSupabase()
+      if (!supabase) return
 
-        setRuns((current) => {
-          if (eventType === 'INSERT') {
-            if (current.some((run) => run.id === nextRun.id)) {
-              return current
+      const channel = supabase
+        .channel(`background-runs:${projectId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'background_runs',
+          filter: `project_id=eq.${projectId}`,
+        }, (payload) => {
+          const eventType = payload.eventType
+          const nextRun = payload.new as BackgroundRun
+          const oldRun = payload.old as BackgroundRun
+
+          setRuns((current) => {
+            if (eventType === 'INSERT') {
+              if (current.some((run) => run.id === nextRun.id)) {
+                return current
+              }
+              return [nextRun, ...current]
             }
-            return [nextRun, ...current]
-          }
 
-          if (eventType === 'UPDATE') {
-            return current.map((run) => run.id === nextRun.id ? nextRun : run)
-          }
+            if (eventType === 'UPDATE') {
+              return current.map((run) => run.id === nextRun.id ? nextRun : run)
+            }
 
-          if (eventType === 'DELETE') {
-            return current.filter((run) => run.id !== oldRun.id)
-          }
+            if (eventType === 'DELETE') {
+              return current.filter((run) => run.id !== oldRun.id)
+            }
 
-          return current
+            return current
+          })
         })
-      })
-      .subscribe()
+        .subscribe()
+
+      cleanup = () => {
+        supabase.removeChannel(channel)
+      }
+    }
+
+    void bootstrap()
 
     return () => {
-      supabase.removeChannel(channel)
+      active = false
+      cleanup?.()
     }
-  }, [fetchRuns, projectId])
+  }, [backgroundRunsSupported, fetchRuns, projectId])
 
   const createRun = useCallback(async (input: CreateRunInput): Promise<BackgroundRun> => {
+    if (!backgroundRunsSupported) {
+      throw new Error('Background runs are unavailable in this workspace.')
+    }
+
     if (!projectId) {
       throw new Error('Project ID is required to create background runs.')
     }
@@ -143,7 +195,16 @@ export function useBackgroundRuns(projectId: string | null) {
       }),
     })
 
-    const payload = await response.json() as { success?: boolean; run?: BackgroundRun; error?: string }
+    const payload = await response.json() as {
+      success?: boolean
+      run?: BackgroundRun
+      error?: string
+      degraded?: boolean
+    }
+    if (payload.degraded || isBackgroundRunsUnavailableError(payload.error)) {
+      disableBackgroundRunsSupport()
+      throw new Error('Background runs are currently unavailable.')
+    }
     if (!response.ok || !payload.success || !payload.run) {
       throw new Error(payload.error || 'Failed to create background run.')
     }
@@ -158,9 +219,13 @@ export function useBackgroundRuns(projectId: string | null) {
       return [payload.run!, ...current]
     })
     return payload.run
-  }, [projectId])
+  }, [backgroundRunsSupported, disableBackgroundRunsSupport, projectId])
 
   const updateRun = useCallback(async (runId: string, input: UpdateRunInput): Promise<BackgroundRun> => {
+    if (!backgroundRunsSupported) {
+      throw new Error('Background runs are unavailable in this workspace.')
+    }
+
     const response = await fetch(`/api/background-runs/${encodeURIComponent(runId)}`, {
       method: 'PATCH',
       headers: {
@@ -169,14 +234,23 @@ export function useBackgroundRuns(projectId: string | null) {
       body: JSON.stringify(input),
     })
 
-    const payload = await response.json() as { success?: boolean; run?: BackgroundRun; error?: string }
+    const payload = await response.json() as {
+      success?: boolean
+      run?: BackgroundRun
+      error?: string
+      degraded?: boolean
+    }
+    if (payload.degraded || isBackgroundRunsUnavailableError(payload.error)) {
+      disableBackgroundRunsSupport()
+      throw new Error('Background runs are currently unavailable.')
+    }
     if (!response.ok || !payload.success || !payload.run) {
       throw new Error(payload.error || 'Failed to update background run.')
     }
 
     setRuns((current) => current.map((run) => run.id === payload.run!.id ? payload.run! : run))
     return payload.run
-  }, [])
+  }, [backgroundRunsSupported, disableBackgroundRunsSupport])
 
   const dispatchRun = useCallback(async (input?: { runId?: string; limit?: number }): Promise<{
     processed: number
@@ -193,6 +267,10 @@ export function useBackgroundRuns(projectId: string | null) {
       error?: string
     }>
   }> => {
+    if (!backgroundRunsSupported) {
+      return { processed: 0, outcomes: [] }
+    }
+
     const response = await fetch('/api/background-runs/dispatch', {
       method: 'POST',
       headers: {
@@ -221,6 +299,12 @@ export function useBackgroundRuns(projectId: string | null) {
         error?: string
       }>
       error?: string
+      degraded?: boolean
+    }
+
+    if (payload.degraded || isBackgroundRunsUnavailableError(payload.error)) {
+      disableBackgroundRunsSupport()
+      return { processed: 0, outcomes: [] }
     }
 
     if (!response.ok || !payload.success) {
@@ -231,7 +315,7 @@ export function useBackgroundRuns(projectId: string | null) {
       processed: payload.processed || 0,
       outcomes: payload.outcomes || [],
     }
-  }, [projectId])
+  }, [backgroundRunsSupported, disableBackgroundRunsSupport, projectId])
 
   return {
     runs,

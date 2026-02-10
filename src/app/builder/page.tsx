@@ -266,7 +266,7 @@ function BuilderPageContent() {
 
             <div className="flex items-center gap-1.5 border-r border-[#1f1f1f] px-2">
               {isWorking ? <TorbitSpinner size="xs" speed="fast" /> : <div className="h-1.5 w-1.5 rounded-full bg-[#333]" />}
-              <span className="hidden text-[11px] text-[#525252] md:inline">{isWorking ? 'Building...' : 'Idle'}</span>
+              <span className="hidden text-[11px] text-[#525252] md:inline">{isWorking ? 'Working' : 'Ready'}</span>
             </div>
 
             <div className="hidden items-center gap-1.5 border-r border-[#1f1f1f] px-2 xl:flex">

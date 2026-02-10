@@ -50,19 +50,19 @@ const PHASES: Record<GenerationPhase, PhaseConfig> = {
   },
   creating: {
     icon: <FolderTree className="w-4 h-4" />,
-    label: 'Creating',
+    label: 'Working',
     description: 'Building your files',
     color: '#60a5fa',
   },
   installing: {
     icon: <Package className="w-4 h-4" />,
-    label: 'Installing',
+    label: 'Working',
     description: 'Adding dependencies',
     color: '#f59e0b',
   },
   building: {
     icon: <Hammer className="w-4 h-4" />,
-    label: 'Building',
+    label: 'Reviewing',
     description: 'Compiling the app',
     color: '#f97316',
   },

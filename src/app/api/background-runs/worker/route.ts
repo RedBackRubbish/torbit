@@ -20,6 +20,16 @@ const WorkerDispatchSchema = z.object({
   staleAfterSeconds: z.coerce.number().int().min(60).max(86400).default(600),
 })
 
+function isBackgroundRunsUnavailableMessage(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes('background_runs') ||
+    normalized.includes('schema cache') ||
+    normalized.includes('42p01') ||
+    normalized.includes('pgrst205')
+  )
+}
+
 async function parseWorkerRequest(request: NextRequest) {
   if (request.method === 'GET') {
     const { searchParams } = new URL(request.url)
@@ -108,8 +118,20 @@ async function handleWorkerDispatch(request: NextRequest) {
       checkedAt: new Date().toISOString(),
     })
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to dispatch worker runs.'
+    if (isBackgroundRunsUnavailableMessage(message)) {
+      return NextResponse.json({
+        success: true,
+        degraded: true,
+        processed: 0,
+        batches: 0,
+        outcomes: [],
+        warning: 'Background runs queue is unavailable; worker skipped dispatch.',
+      })
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to dispatch worker runs.' },
+      { error: message },
       { status: 500 }
     )
   }

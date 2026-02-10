@@ -33,6 +33,7 @@ const baseRun = {
 
 describe('useBackgroundRuns', () => {
   beforeEach(() => {
+    vi.resetModules()
     vi.clearAllMocks()
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -109,5 +110,23 @@ describe('useBackgroundRuns', () => {
     })
 
     expect(result.current.runs[0]?.status).toBe('running')
+  })
+
+  it('degrades gracefully when background runs table is unavailable', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({
+      success: true,
+      runs: [],
+      degraded: true,
+    }), { status: 200 }))))
+
+    const { useBackgroundRuns } = await import('../useBackgroundRuns')
+    const { result } = renderHook(() => useBackgroundRuns('11111111-1111-4111-8111-111111111111'))
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(result.current.runs).toHaveLength(0)
+    expect(mockSupabase.channel).not.toHaveBeenCalled()
   })
 })

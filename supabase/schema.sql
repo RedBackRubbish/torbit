@@ -213,6 +213,38 @@ CREATE INDEX idx_product_events_name ON public.product_events(event_name);
 CREATE INDEX idx_product_events_occurred ON public.product_events(occurred_at DESC);
 
 -- ============================================
+-- SUPERVISOR EVENT LEDGER (run transparency)
+-- ============================================
+CREATE TABLE public.supervisor_event_ledger (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  run_id UUID NOT NULL,
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  event_type TEXT NOT NULL CHECK (event_type IN (
+    'run_started',
+    'intent_classified',
+    'route_selected',
+    'gate_started',
+    'gate_passed',
+    'gate_failed',
+    'autofix_started',
+    'autofix_succeeded',
+    'autofix_failed',
+    'fallback_invoked',
+    'run_completed'
+  )),
+  stage TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_supervisor_event_ledger_run ON public.supervisor_event_ledger(run_id, created_at);
+CREATE INDEX idx_supervisor_event_ledger_project ON public.supervisor_event_ledger(project_id, created_at DESC);
+CREATE INDEX idx_supervisor_event_ledger_user ON public.supervisor_event_ledger(user_id, created_at DESC);
+CREATE INDEX idx_supervisor_event_ledger_event ON public.supervisor_event_ledger(event_type, created_at DESC);
+
+-- ============================================
 -- RPC: Atomic Fuel Deduction
 -- ============================================
 CREATE OR REPLACE FUNCTION public.deduct_fuel(
@@ -290,6 +322,7 @@ ALTER TABLE public.project_collaborators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_presence ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.background_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.supervisor_event_ledger ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: Users can only read/update their own profile
 CREATE POLICY "Users can view own profile"
@@ -522,6 +555,29 @@ CREATE POLICY "Users can create own product events"
       OR EXISTS (
         SELECT 1 FROM public.project_collaborators
         WHERE project_collaborators.project_id = product_events.project_id
+        AND project_collaborators.user_id = auth.uid()
+      )
+    )
+  );
+
+-- Supervisor ledger: users can read/insert own run supervision events.
+CREATE POLICY "Users can view own supervisor events"
+  ON public.supervisor_event_ledger FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create own supervisor events"
+  ON public.supervisor_event_ledger FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id
+    AND (
+      EXISTS (
+        SELECT 1 FROM public.projects
+        WHERE projects.id = supervisor_event_ledger.project_id
+        AND projects.user_id = auth.uid()
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.project_collaborators
+        WHERE project_collaborators.project_id = supervisor_event_ledger.project_id
         AND project_collaborators.user_id = auth.uid()
       )
     )

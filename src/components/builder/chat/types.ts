@@ -65,7 +65,7 @@ export interface Message {
 
 // Stream chunk types from API
 export interface StreamChunk {
-  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry' | 'proof' | 'governance'
+  type: 'text' | 'tool-call' | 'tool-result' | 'error' | 'usage' | 'retry' | 'proof' | 'governance' | 'supervisor-event'
   content?: string
   toolCall?: {
     id: string
@@ -94,6 +94,14 @@ export interface StreamChunk {
     verdict: string
     intent: string
     invariants: Array<{ description: string; scope: string[]; severity: 'hard' | 'soft' }>
+  }
+  event?: {
+    event: 'run_started' | 'intent_classified' | 'route_selected' | 'gate_started' | 'gate_passed' | 'gate_failed' | 'autofix_started' | 'autofix_succeeded' | 'autofix_failed' | 'fallback_invoked' | 'run_completed'
+    timestamp: string
+    run_id: string
+    stage: string
+    summary: string
+    details: Record<string, unknown>
   }
 }
 

@@ -46,9 +46,9 @@ function PhaseLabel({ phase, filesComplete, totalFiles }: {
   totalFiles: number
 }) {
   const config: Record<GenerationPhase, { label: string; color: string }> = {
-    thinking: { label: 'Working', color: 'text-[#707070]' },
-    creating: { label: 'Updating project', color: 'text-[#707070]' },
-    installing: { label: 'Setting up', color: 'text-[#707070]' },
+    thinking: { label: 'Thinking', color: 'text-[#707070]' },
+    creating: { label: 'Working', color: 'text-[#707070]' },
+    installing: { label: 'Working', color: 'text-[#707070]' },
     building: { label: 'Reviewing', color: 'text-[#707070]' },
     ready: { label: 'Ready', color: 'text-emerald-500/70' },
   }
@@ -140,7 +140,7 @@ export function StreamingMessage({ message, isLast, isLoading }: StreamingMessag
             animate={{ opacity: [0.4, 1, 0.4] }}
             transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
           />
-          <span className="text-[12px] text-[#505050]">Working on it...</span>
+          <span className="text-[12px] text-[#505050]">Thinking...</span>
         </div>
       )}
       

@@ -130,6 +130,25 @@ function toCategoryLabel(category: BuildFailureCategory): string {
   }
 }
 
+function toStageLabel(stage: BuildFailureStage): string {
+  switch (stage) {
+    case 'boot':
+      return 'environment startup'
+    case 'sync':
+      return 'workspace sync'
+    case 'install':
+      return 'dependency install'
+    case 'runtime_start':
+      return 'runtime startup'
+    case 'host_probe':
+      return 'preview availability check'
+    case 'route_probe':
+      return 'preview route validation'
+    default:
+      return 'execution'
+  }
+}
+
 function toAutoRetryLine(failure: BuildFailure): string {
   if (!failure.autoRecoveryAttempted) return 'No'
   if (failure.autoRecoverySucceeded === true) return 'Yes (succeeded)'
@@ -144,7 +163,12 @@ export function formatBuildFailureSummary({
 }: BuildFailureSummaryInput): string {
   const fileLabel = fileCount === 1 ? 'file' : 'files'
   const categoryLabel = toCategoryLabel(failure.category)
+  const stageLabel = toStageLabel(failure.stage)
   const commandLabel = failure.command ? `\`${failure.command}\`` : '`n/a`'
+  const sanitizedExactLog = failure.exactLogLine
+    .replace(/route_probe/gi, 'preview_route_validation')
+    .replace(/host_probe/gi, 'preview_host_check')
+    .replace(/runtime_start/gi, 'runtime_startup')
 
   return [
     '**Goal**',
@@ -157,9 +181,9 @@ export function formatBuildFailureSummary({
     '- File generation completed.',
     '',
     '**What failed**',
-    `- ${categoryLabel} failure during \`${failure.stage}\`.`,
+    `- ${categoryLabel} failure during ${stageLabel}.`,
     `- Command: ${commandLabel}`,
-    `- Exact log: \`${failure.exactLogLine}\``,
+    `- Exact log: \`${sanitizedExactLog}\``,
     '',
     '**Auto-retry done?**',
     `- ${toAutoRetryLine(failure)}`,

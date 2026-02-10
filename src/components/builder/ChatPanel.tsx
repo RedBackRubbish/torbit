@@ -24,6 +24,7 @@ import {
   type BuildFailure,
 } from '@/lib/runtime/build-diagnostics'
 import { recordMetric } from '@/lib/metrics/success'
+import { formatSupervisorEventLine } from '@/lib/supervisor/events'
 
 const InspectorView = dynamic(
   () => import('./governance/InspectorView').then((module) => module.InspectorView),
@@ -56,6 +57,8 @@ export default function ChatPanel() {
   const selectedAgent: AgentId = 'architect'
   const [showVerificationDrawer, setShowVerificationDrawer] = useState(false)
   const [liveMessage, setLiveMessage] = useState('')
+  const [runStatus, setRunStatus] = useState<'Thinking' | 'Working' | 'Reviewing' | 'Ready' | 'Needs Input'>('Ready')
+  const [runStatusDetail, setRunStatusDetail] = useState<string>('')
   
   // Supervisor slide panel state
   const [showSupervisor, setShowSupervisor] = useState(false)
@@ -249,6 +252,82 @@ export default function ChatPanel() {
     }
   }, [addFile, applyUnifiedPatch, deleteFile, fileSound, normalizeBuilderPath, updateFile])
 
+  const handleSupervisorEvent = useCallback((event: {
+    event: 'run_started' | 'intent_classified' | 'route_selected' | 'gate_started' | 'gate_passed' | 'gate_failed' | 'autofix_started' | 'autofix_succeeded' | 'autofix_failed' | 'fallback_invoked' | 'run_completed'
+    timestamp: string
+    run_id: string
+    stage: string
+    summary: string
+    details: Record<string, unknown>
+  }) => {
+    const intent = typeof event.details.intent === 'string' ? event.details.intent : null
+    const isActionRun = intent ? intent !== 'chat' : true
+
+    if (isActionRun) {
+      setShowSupervisor(true)
+      const line = formatSupervisorEventLine(event)
+      setSupervisorLiveLines((previous) => {
+        if (previous[previous.length - 1] === line) return previous
+        return [...previous, line]
+      })
+    }
+
+    if (event.event === 'run_started') {
+      setRunStatus('Thinking')
+      setRunStatusDetail(event.summary)
+      setSupervisorLoading(true)
+      return
+    }
+
+    if (event.event === 'route_selected' || event.event === 'gate_started') {
+      const stage = event.stage.toLowerCase()
+      if (stage.includes('execution') || stage.includes('gate')) {
+        setRunStatus('Working')
+      } else {
+        setRunStatus('Reviewing')
+      }
+      setRunStatusDetail(event.summary)
+      return
+    }
+
+    if (event.event === 'autofix_started') {
+      setRunStatus('Reviewing')
+      setRunStatusDetail(event.summary)
+      return
+    }
+
+    if (event.event === 'gate_failed' || event.event === 'autofix_failed') {
+      setRunStatus('Needs Input')
+      setRunStatusDetail(event.summary)
+      return
+    }
+
+    if (event.event === 'fallback_invoked') {
+      setRunStatus('Working')
+      setRunStatusDetail(event.summary)
+      return
+    }
+
+    if (event.event === 'run_completed') {
+      const success = event.details.success !== false
+      setRunStatus(success ? 'Ready' : 'Needs Input')
+      setRunStatusDetail(event.summary)
+      setSupervisorLoading(false)
+
+      if (success) {
+        setTimeout(() => {
+          setShowSupervisor(false)
+        }, 2000)
+      }
+      return
+    }
+
+    if (event.event === 'gate_passed' || event.event === 'autofix_succeeded') {
+      setRunStatus('Reviewing')
+      setRunStatusDetail(event.summary)
+    }
+  }, [])
+
   // Parse SSE stream
   const parseSSEStream = useCallback(async (
     reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -352,6 +431,8 @@ export default function ChatPanel() {
                   const taskName = getTaskName(tc.name, tc.args)
                   setCurrentTask(taskName)
                   setAgentStatus(agentId, 'working', taskName)
+                  setRunStatus('Working')
+                  setRunStatusDetail(taskName)
                 }
                 
                 setMessages(prev => prev.map(m => 
@@ -461,6 +542,8 @@ export default function ChatPanel() {
 
             case 'error':
               if (chunk.error) {
+                setRunStatus('Needs Input')
+                setRunStatusDetail(chunk.error.message)
                 setMessages(prev => prev.map(m => 
                   m.id === assistantId 
                     ? { ...m, error: chunk.error, content: fullContent || '' }
@@ -471,12 +554,20 @@ export default function ChatPanel() {
 
             case 'retry':
               if (chunk.retry) {
+                setRunStatus('Reviewing')
+                setRunStatusDetail(`Retry attempt ${chunk.retry.attempt + 1}`)
                 const retryMessage = fullContent || `Retrying request (${chunk.retry.attempt + 1}/${chunk.retry.maxAttempts})...`
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, content: retryMessage, retrying: true }
                     : m
                 ))
+              }
+              break
+
+            case 'supervisor-event':
+              if (chunk.event) {
+                handleSupervisorEvent(chunk.event)
               }
               break
           }
@@ -552,7 +643,7 @@ export default function ChatPanel() {
 
     setCurrentTask(null)
     return { content: fullContent, toolCalls: Array.from(toolCalls.values()) }
-  }, [setAgentStatus, applyToolMutationToStore])
+  }, [setAgentStatus, applyToolMutationToStore, handleSupervisorEvent])
 
   // Generate initial acknowledgment - AI will stream the full response with plan
   const generateGreeting = useCallback((prompt: string): string => {
@@ -583,6 +674,8 @@ export default function ChatPanel() {
     setIsGenerating(true)
     setAgentStatus(agentId, 'thinking', isHealRequest ? 'Analyzing...' : 'Responding...')
     setCurrentTask(isHealRequest ? 'Diagnosing...' : 'Working on your request...')
+    setRunStatus('Thinking')
+    setRunStatusDetail(isHealRequest ? 'Diagnosing current issue' : 'Understanding request')
     
     // 🔊 Start generation sound
     generationSound.onStart()
@@ -662,6 +755,8 @@ export default function ChatPanel() {
 
       const streamResult = await parseSSEStream(reader, assistantId, agentId, initialContent)
       setAgentStatus(agentId, 'complete', 'Done')
+      setRunStatus('Ready')
+      setRunStatusDetail('Response completed')
       
       const mutationCalls = streamResult.toolCalls.filter((toolCall) => (
         toolCall.status === 'complete' && (
@@ -718,11 +813,13 @@ export default function ChatPanel() {
     } catch (error) {
       requestFailed = true
       setAgentStatus(agentId, 'error', 'Failed')
+      setRunStatus('Needs Input')
       // 🔊 Error sound
       generationSound.onError()
       const errorMessage = error instanceof Error && error.name === 'AbortError'
         ? 'Request timed out. Please try again.'
         : (error instanceof Error ? error.message : 'Unknown error')
+      setRunStatusDetail(errorMessage)
       setMessages(prev => prev.map(m => 
         m.id === assistantId 
           ? { ...m, content: '', error: { type: 'network', message: errorMessage, retryable: true }}
@@ -1318,6 +1415,8 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
               isBuilding={isLoading}
               currentTask={currentTask}
               hasFiles={files.length > 0}
+              statusLabel={runStatus}
+              statusDetail={runStatusDetail}
               onOpenVerification={() => setShowVerificationDrawer(true)}
             />
             
@@ -1479,6 +1578,8 @@ interface ExecutionStatusRailProps {
   isBuilding: boolean
   currentTask: string | null
   hasFiles: boolean
+  statusLabel: 'Thinking' | 'Working' | 'Reviewing' | 'Ready' | 'Needs Input'
+  statusDetail: string
   onOpenVerification?: () => void
 }
 
@@ -1491,161 +1592,59 @@ function ExecutionStatusRail({
   isBuilding,
   currentTask,
   hasFiles,
+  statusLabel,
+  statusDetail,
   onOpenVerification,
 }: ExecutionStatusRailProps) {
-  // Derive status steps with error awareness
-  const hasError = !!error
-  const runtimeErrorLabel = buildFailure
-    ? (
-      buildFailure.category === 'infra'
-        ? 'Infrastructure verification failed'
-        : buildFailure.category === 'dependency'
-          ? 'Dependency resolution failed'
-          : buildFailure.category === 'code'
-            ? 'Runtime build failed'
-            : 'Build failed'
-    )
-    : 'Build failed'
-  const recoveryActionLabel = buildFailure
-    ? (
-      buildFailure.category === 'infra'
-        ? 'Recreate sandbox'
-        : buildFailure.category === 'dependency'
-          ? 'Resolve dependencies'
-          : 'Retry build'
-    )
-    : 'Retry build'
-  
-  // Determine if we're fully complete (has files, not building, no errors, preview running)
-  const isFullyComplete = hasFiles && !isBuilding && !hasError && serverUrl
-  
-  const steps: Array<{
-    label: string
-    status: 'complete' | 'active' | 'pending' | 'error' | 'verified'
-    errorMessage?: string
-    recoveryAction?: string
-  }> = [
-    {
-      label: 'Environment verified',
-      status: hasError && !isReady ? 'error' : isReady ? 'complete' : isBooting ? 'active' : 'pending',
-      errorMessage: hasError && !isReady ? 'Environment verification failed' : undefined,
-      recoveryAction: hasError && !isReady ? 'Retry verification' : undefined,
-    },
-    {
-      label: 'Toolchain locked',
-      status: hasError && !isReady ? 'error' : isReady ? 'complete' : 'pending',
-    },
-    {
-      label: 'Dependencies pinned',
-      status: hasError ? 'error' : serverUrl ? 'complete' : isReady && !serverUrl ? 'active' : 'pending',
-      errorMessage: hasError && isReady && !serverUrl ? runtimeErrorLabel : undefined,
-      recoveryAction: hasError && isReady && !serverUrl ? recoveryActionLabel : undefined,
-    },
-    {
-      label: isBuilding ? (currentTask && currentTask !== 'Thinking...' ? currentTask : 'Updating project') : (hasFiles ? 'Artifacts ready' : 'Awaiting update'),
-      status: hasError && isReady && serverUrl ? 'error' : isBuilding ? 'active' : hasFiles ? 'complete' : 'pending',
-      errorMessage: hasError && isReady && serverUrl ? runtimeErrorLabel : undefined,
-      recoveryAction: hasError && isReady && serverUrl ? recoveryActionLabel : undefined,
-    },
-    {
-      label: isFullyComplete ? 'Verified' : (isBuilding ? 'Verification pending' : 'Awaiting verification'),
-      status: isFullyComplete ? 'verified' : 'pending',
-    },
-  ]
+  const fallbackDetail = error
+    || buildFailure?.actionableFix
+    || currentTask
+    || (isBuilding ? 'Run in progress' : null)
+    || (serverUrl ? 'Preview verified and ready' : null)
+    || (isReady ? 'Environment prepared' : isBooting ? 'Environment booting' : null)
+    || (hasFiles ? 'Artifacts generated' : null)
+    || 'Awaiting request'
 
-  // Only show relevant steps (hide pending ones after active)
-  const activeIndex = steps.findIndex(s => s.status === 'active')
-  const errorIndex = steps.findIndex(s => s.status === 'error')
-  const verifiedIndex = steps.findIndex(s => s.status === 'verified')
-  
-  let visibleSteps: typeof steps
-  
-  if (errorIndex >= 0) {
-    // Show up to and including the error
-    visibleSteps = steps.slice(0, errorIndex + 1)
-  } else if (verifiedIndex >= 0) {
-    // Show all steps when verified - user sees full completion
-    visibleSteps = steps
-  } else if (activeIndex >= 0) {
-    visibleSteps = steps.slice(0, Math.min(activeIndex + 2, steps.length))
-  } else {
-    visibleSteps = steps.filter(s => s.status === 'complete' || s.status === 'verified').slice(-3)
-  }
+  const detail = statusDetail || fallbackDetail
 
-  if (visibleSteps.length === 0) return null
-
-  // Find the error step if any
-  const errorStep = visibleSteps.find(s => s.status === 'error')
+  const toneClass = statusLabel === 'Needs Input'
+    ? 'text-red-400'
+    : statusLabel === 'Ready'
+      ? 'text-emerald-400'
+      : 'text-white/85'
 
   return (
-    <div className="space-y-1.5">
-      {visibleSteps.map((step, i) => {
-        const isClickable = (step.status === 'complete' || step.status === 'verified') && onOpenVerification
-        
-        const content = (
-          <>
-            {step.status === 'complete' && (
-              <svg className="w-3 h-3 text-white/40 group-hover:text-white/60 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-            {step.status === 'verified' && (
-              <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-              </svg>
-            )}
-            {step.status === 'active' && (
-              <motion.div
-                className="w-3 h-3 rounded-full border border-white/30 border-t-white/60"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-              />
-            )}
-            {step.status === 'pending' && (
-              <div className="w-3 h-3 rounded-full border border-white/10" />
-            )}
-            {step.status === 'error' && (
-              <svg className="w-3 h-3 text-red-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
-            <span className={`text-[11px] ${
-              step.status === 'complete' ? 'text-white/40 group-hover:text-white/60' :
-              step.status === 'verified' ? 'text-emerald-400 font-medium' :
-              step.status === 'active' ? 'text-white/60' :
-              step.status === 'error' ? 'text-red-400/70' :
-              'text-white/20'
-            } transition-colors`}>
-              {step.status === 'error' && step.errorMessage ? step.errorMessage : step.label}
-            </span>
-          </>
-        )
-        
-        return isClickable ? (
-          <button
-            key={i}
-            onClick={onOpenVerification}
-            className="flex items-center gap-2 group cursor-pointer hover:bg-white/[0.02] -mx-1 px-1 py-0.5 rounded transition-colors"
-          >
-            {content}
-          </button>
-        ) : (
-          <div key={i} className="flex items-center gap-2">
-            {content}
-          </div>
-        )
-      })}
-      
-      {/* Single recovery action for errors */}
-      {errorStep?.recoveryAction && (
-        <button 
-          className="mt-2 text-[11px] text-white/50 hover:text-white/70 transition-colors flex items-center gap-1.5 pl-5"
-          onClick={() => window.location.reload()}
-        >
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        {statusLabel === 'Ready' ? (
+          <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
-          {errorStep.recoveryAction}
+        ) : statusLabel === 'Needs Input' ? (
+          <svg className="w-3 h-3 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <motion.div
+            className="w-3 h-3 rounded-full border border-white/30 border-t-white/70"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+          />
+        )}
+        <span className={`text-[11px] font-medium ${toneClass}`}>{statusLabel}</span>
+      </div>
+
+      <p className={`text-[11px] leading-relaxed ${statusLabel === 'Needs Input' ? 'text-red-400/80' : 'text-white/55'}`}>
+        {detail}
+      </p>
+
+      {onOpenVerification && (isReady || Boolean(serverUrl)) && (
+        <button
+          type="button"
+          onClick={onOpenVerification}
+          className="text-[11px] text-white/50 hover:text-white/70 transition-colors"
+        >
+          Open verification details
         </button>
       )}
     </div>

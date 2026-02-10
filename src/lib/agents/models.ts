@@ -40,7 +40,7 @@ export interface ModelConfig {
 export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   'claude-opus': {
     provider: 'claude-opus',
-    model: 'claude-opus-4-6',
+    model: 'claude-opus-4-6-20260206',
     description: 'Claude Opus 4.6 - most intelligent for complex reasoning',
     costTier: 'premium',
     inputCostPer1k: 0.015,
@@ -72,8 +72,8 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
   },
   'gemini-pro': {
     provider: 'gemini-pro',
-    model: 'gemini-2.5-pro',
-    description: 'Gemini 2.5 Pro - most intelligent, agentic, deep reasoning',
+    model: 'gemini-3-pro-preview',
+    description: 'Gemini 3 Pro - large-context synthesis and deep reasoning',
     costTier: 'standard',
     inputCostPer1k: 0.00125,
     outputCostPer1k: 0.005,
@@ -159,30 +159,26 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
  * ═══════════════════════════════════════════════════════════════
  */
 const DEFAULT_AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  // BUILDER LAYER - Claude Sonnet 4 for complex multi-step tool calling
-  // Kimi K2.5 via OpenRouter has issues with AI SDK streaming/tool calls
-  planner: 'claude-sonnet',      // Orchestration, task decomposition
-  architect: 'claude-sonnet',    // PRIMARY BUILDER - reliable multi-step tool calling
-  backend: 'claude-sonnet',      // APIs + business logic
-  database: 'claude-sonnet',     // Schemas + queries
-  frontend: 'claude-sonnet',     // UI components
-  devops: 'gemini-flash',        // Fast config, CI/CD
-  qa: 'gemini-flash',            // Quick test cycles
-  
-  // GOVERNANCE - MUST be different brain for oversight (cognitive diversity)
-  strategist: 'gemini-pro',      // Plan VALIDATION - different perspective
-  auditor: 'claude-opus',        // Quality gate JUDGE - never grades own work
+  planner: 'kimi',
+  architect: 'gemini-pro',
+  backend: 'kimi',
+  database: 'kimi',
+  frontend: 'kimi',
+  devops: 'claude-sonnet',
+  qa: 'claude-sonnet',
+  strategist: 'gpt-5.2',
+  auditor: 'claude-opus',
 }
 
 const CODEX_AGENT_MODEL_MAP: Record<AgentId, ModelProvider> = {
-  planner: 'codex',
-  architect: 'codex',
-  backend: 'codex',
-  database: 'codex',
-  frontend: 'codex',
-  devops: 'gemini-flash',
-  qa: 'gemini-flash',
-  strategist: 'gemini-pro',
+  planner: 'kimi',
+  architect: 'gemini-pro',
+  backend: 'kimi',
+  database: 'kimi',
+  frontend: 'kimi',
+  devops: 'claude-sonnet',
+  qa: 'claude-sonnet',
+  strategist: 'gpt-5.2',
   auditor: 'claude-opus',
 }
 

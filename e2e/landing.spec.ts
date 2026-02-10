@@ -10,7 +10,7 @@ test.describe('Landing Page', () => {
   test('should display the hero section with TORBIT branding', async ({ page }) => {
     await expect(page).toHaveTitle(/Torbit/i);
 
-    const heroContent = page.locator('main');
+    const heroContent = page.locator('main').first();
     await expect(heroContent).toBeVisible();
 
     await expect(page.getByText('TORBIT', { exact: true }).first()).toBeVisible();

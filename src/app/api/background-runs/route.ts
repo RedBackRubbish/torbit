@@ -75,6 +75,16 @@ async function ensureProjectExistsForRun(
     })
 
   if (createProjectError) {
+    if (createProjectError.code === '23505') {
+      return { ok: true }
+    }
+    if (createProjectError.code === '23503') {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Profile row is missing for this account. Complete auth bootstrap and retry.',
+      }
+    }
     return { ok: false, status: 500, error: createProjectError.message }
   }
 

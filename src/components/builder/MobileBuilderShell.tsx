@@ -33,7 +33,7 @@ export default function MobileBuilderShell({
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-[11px] text-[#6b6b6b]">
             <span className={`h-1.5 w-1.5 rounded-full ${isWorking ? 'bg-emerald-400' : 'bg-[#333]'}`} />
-            <span>{isWorking ? 'Building…' : 'Idle'}</span>
+            <span>{isWorking ? 'Working' : 'Ready'}</span>
             <span className="text-[#444]">•</span>
             <span>{onlineCollaboratorCount > 0 ? `${onlineCollaboratorCount + 1} online` : 'Solo session'}</span>
           </div>

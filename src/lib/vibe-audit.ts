@@ -238,16 +238,21 @@ export function runVibeAuditOnSnapshot(
   // 4) White screen of death.
   const hasAppError = normalizedPaths.some((filePath) => filePath === 'src/app/error.tsx')
   const hasAppLoading = normalizedPaths.some((filePath) => filePath === 'src/app/loading.tsx')
+  const hasAppNotFound = normalizedPaths.some((filePath) => (
+    filePath === 'src/app/not-found.tsx' ||
+    filePath === 'src/pages/404.tsx' ||
+    filePath === 'src/pages/404.jsx'
+  ))
   const routeLoadingCount = normalizedPaths.filter((filePath) => /\/loading\.tsx$/.test(filePath)).length
-  const resilienceOk = hasAppError && (hasAppLoading || routeLoadingCount > 0)
+  const resilienceOk = hasAppError && hasAppNotFound && (hasAppLoading || routeLoadingCount > 0)
 
   if (!resilienceOk) {
     findings.push({
       id: 'resilience',
       status: 'warning',
       label: 'Resilience UX risk',
-      detail: `Fallback coverage incomplete (error boundary: ${hasAppError ? 'yes' : 'no'}, loading state: ${hasAppLoading || routeLoadingCount > 0 ? 'yes' : 'no'}).`,
-      remediation: 'Add app-level error.tsx plus loading.tsx (or route-level loading states) for all async surfaces.',
+      detail: `Fallback coverage incomplete (error: ${hasAppError ? 'yes' : 'no'}, loading: ${hasAppLoading || routeLoadingCount > 0 ? 'yes' : 'no'}, not-found: ${hasAppNotFound ? 'yes' : 'no'}).`,
+      remediation: 'Add app-level error.tsx, loading.tsx, and not-found.tsx (or route-level equivalents) for all async surfaces.',
     })
   } else {
     findings.push({
@@ -265,22 +270,30 @@ export function runVibeAuditOnSnapshot(
     filePath === 'src/pages/privacy.tsx' ||
     filePath === 'src/pages/privacy.jsx'
   ))
+  const hasTermsPage = normalizedPaths.some((filePath) => (
+    filePath === 'src/app/terms/page.tsx' ||
+    filePath === 'src/pages/terms.tsx' ||
+    filePath === 'src/pages/terms.jsx'
+  ))
 
-  if (!hasPrivacyPage) {
+  if (!hasPrivacyPage || !hasTermsPage) {
     findings.push({
       id: 'legal',
       status: 'warning',
       label: 'Legal/privacy risk',
-      detail: 'No privacy policy route detected.',
-      remediation: 'Add a standard privacy policy page at /privacy and link it from footer/auth/payment screens.',
+      detail: `Missing legal route(s): ${[
+        hasPrivacyPage ? null : '/privacy',
+        hasTermsPage ? null : '/terms',
+      ].filter(Boolean).join(', ')}.`,
+      remediation: 'Add standard legal routes at /privacy and /terms and link them from footer/auth/payment surfaces.',
     })
   } else {
     findings.push({
       id: 'legal',
       status: 'verified',
       label: 'Legal/privacy baseline',
-      detail: 'Privacy route detected.',
-      remediation: 'Keep policy updated with analytics, payments, and retention details.',
+      detail: 'Privacy and terms routes detected.',
+      remediation: 'Keep legal pages updated with analytics, billing, retention, and platform terms.',
     })
   }
 
@@ -400,16 +413,21 @@ export async function runVibeAudit(projectRoot: string): Promise<VibeAuditReport
   // 4) White screen of death: missing loading/error fallback UX.
   const hasAppError = await fileExists(path.join(projectRoot, 'src/app/error.tsx'))
   const hasAppLoading = await fileExists(path.join(projectRoot, 'src/app/loading.tsx'))
+  const hasAppNotFound = (
+    await fileExists(path.join(projectRoot, 'src/app/not-found.tsx')) ||
+    await fileExists(path.join(projectRoot, 'src/pages/404.tsx')) ||
+    await fileExists(path.join(projectRoot, 'src/pages/404.jsx'))
+  )
   const routeLoadingCount = normalizedFiles.filter((filePath) => /\/loading\.tsx$/.test(filePath)).length
-  const resilienceOk = hasAppError && (hasAppLoading || routeLoadingCount > 0)
+  const resilienceOk = hasAppError && hasAppNotFound && (hasAppLoading || routeLoadingCount > 0)
 
   if (!resilienceOk) {
     findings.push({
       id: 'resilience',
       status: 'warning',
       label: 'Resilience UX risk',
-      detail: `Fallback coverage incomplete (error boundary: ${hasAppError ? 'yes' : 'no'}, loading state: ${hasAppLoading || routeLoadingCount > 0 ? 'yes' : 'no'}).`,
-      remediation: 'Add app-level error.tsx plus loading.tsx (or route-level loading states) for all async surfaces.',
+      detail: `Fallback coverage incomplete (error: ${hasAppError ? 'yes' : 'no'}, loading: ${hasAppLoading || routeLoadingCount > 0 ? 'yes' : 'no'}, not-found: ${hasAppNotFound ? 'yes' : 'no'}).`,
+      remediation: 'Add app-level error.tsx, loading.tsx, and not-found.tsx (or route-level equivalents) for all async surfaces.',
     })
   } else {
     findings.push({
@@ -427,22 +445,30 @@ export async function runVibeAudit(projectRoot: string): Promise<VibeAuditReport
     await fileExists(path.join(projectRoot, 'src/pages/privacy.tsx')) ||
     await fileExists(path.join(projectRoot, 'src/pages/privacy.jsx'))
   )
+  const hasTermsPage = (
+    await fileExists(path.join(projectRoot, 'src/app/terms/page.tsx')) ||
+    await fileExists(path.join(projectRoot, 'src/pages/terms.tsx')) ||
+    await fileExists(path.join(projectRoot, 'src/pages/terms.jsx'))
+  )
 
-  if (!hasPrivacyPage) {
+  if (!hasPrivacyPage || !hasTermsPage) {
     findings.push({
       id: 'legal',
       status: 'warning',
       label: 'Legal/privacy risk',
-      detail: 'No privacy policy route detected.',
-      remediation: 'Add a standard privacy policy page at /privacy and link it from footer/auth/payment screens.',
+      detail: `Missing legal route(s): ${[
+        hasPrivacyPage ? null : '/privacy',
+        hasTermsPage ? null : '/terms',
+      ].filter(Boolean).join(', ')}.`,
+      remediation: 'Add standard legal routes at /privacy and /terms and link them from footer/auth/payment surfaces.',
     })
   } else {
     findings.push({
       id: 'legal',
       status: 'verified',
       label: 'Legal/privacy baseline',
-      detail: 'Privacy route detected.',
-      remediation: 'Keep policy updated with analytics, payments, and retention details.',
+      detail: 'Privacy and terms routes detected.',
+      remediation: 'Keep legal pages updated with analytics, billing, retention, and platform terms.',
     })
   }
 

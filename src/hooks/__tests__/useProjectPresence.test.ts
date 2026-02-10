@@ -35,6 +35,7 @@ vi.mock('@/lib/supabase/client', () => ({
 
 describe('useProjectPresence', () => {
   beforeEach(() => {
+    vi.resetModules()
     vi.clearAllMocks()
   })
 

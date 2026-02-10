@@ -120,12 +120,12 @@ const CODEX_FAST_MODEL = process.env.TORBIT_CODEX_FAST_MODEL || 'gpt-5-mini'
 const OPENAI_FALLBACK_MODEL = process.env.TORBIT_OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
 const KIMI_FALLBACK_MODEL = process.env.TORBIT_KIMI_FALLBACK_MODEL || 'moonshotai/kimi-k2.5'
 const KIMI_FAST_FALLBACK_MODEL = process.env.TORBIT_KIMI_FAST_FALLBACK_MODEL || KIMI_FALLBACK_MODEL
-const ANTHROPIC_OPUS_MODEL = 'claude-opus-4-6'
+const ANTHROPIC_OPUS_MODEL = 'claude-opus-4-6-20260206'
 const ANTHROPIC_SONNET_MODEL = 'claude-sonnet-4-5-20250929'
 const GOOGLE_PRO_MODEL = 'gemini-2.5-pro'
-const GOOGLE_FLASH_MODEL = 'gemini-2.0-flash'
+const GOOGLE_FLASH_MODEL = 'gemini-2.5-flash'
 const CONTEXT_COMPILER_MODEL = process.env.TORBIT_CONTEXT_COMPILER_MODEL || process.env.TORBIT_GEMINI_CONTEXT_MODEL || 'gemini-3-pro-preview'
-const SUPERVISOR_MODEL = process.env.TORBIT_SUPERVISOR_MODEL || process.env.TORBIT_SUPERVISOR_CODEX_MODEL || CODEX_PRIMARY_MODEL
+const SUPERVISOR_MODEL = process.env.TORBIT_SUPERVISOR_MODEL || process.env.TORBIT_SUPERVISOR_CODEX_MODEL || 'gpt-5.2'
 const WORKER_PRIMARY_MODEL = process.env.TORBIT_WORKER_MODEL || process.env.TORBIT_KIMI_WORKER_MODEL || KIMI_FALLBACK_MODEL
 const CRITICAL_MODEL = process.env.TORBIT_CRITICAL_MODEL || process.env.TORBIT_OPUS_MODEL || ANTHROPIC_OPUS_MODEL
 const JANITOR_MODEL = process.env.TORBIT_JANITOR_MODEL || process.env.TORBIT_SONNET_MODEL || ANTHROPIC_SONNET_MODEL
@@ -140,6 +140,35 @@ type ModelCandidate = {
   provider: 'anthropic' | 'openai' | 'google' | 'openrouter'
   label: string
   model: ReturnType<typeof anthropic> | ReturnType<typeof openai> | ReturnType<typeof google> | ReturnType<typeof openrouter>
+}
+
+function normalizeAnthropicAlias(model: string): string {
+  if (model === 'claude-opus-4-6') return ANTHROPIC_OPUS_MODEL
+  if (model === 'claude-sonnet-4-5') return ANTHROPIC_SONNET_MODEL
+  return model
+}
+
+function addConfiguredModelCandidate(input: {
+  model: string
+  addOpenAI: (label: string) => void
+  addAnthropic: (label: string) => void
+  addGoogle: (label: string) => void
+  addOpenRouter: (label: string) => void
+}) {
+  const normalized = normalizeAnthropicAlias(input.model)
+  if (normalized.startsWith('claude-')) {
+    input.addAnthropic(normalized)
+    return
+  }
+  if (normalized.startsWith('gemini-')) {
+    input.addGoogle(normalized)
+    return
+  }
+  if (normalized.includes('/')) {
+    input.addOpenRouter(normalized)
+    return
+  }
+  input.addOpenAI(normalized)
 }
 
 export type ModelRole = 'default' | 'context' | 'supervisor' | 'worker' | 'critical' | 'janitor'
@@ -244,7 +273,13 @@ function getModelCandidates(
       addAnthropic(ANTHROPIC_SONNET_MODEL)
       break
     case 'supervisor':
-      addOpenAI(SUPERVISOR_MODEL)
+      addConfiguredModelCandidate({
+        model: SUPERVISOR_MODEL,
+        addOpenAI,
+        addAnthropic,
+        addGoogle,
+        addOpenRouter,
+      })
       addOpenAI(CODEX_PRIMARY_MODEL)
       addOpenAI(OPENAI_FALLBACK_MODEL)
       addOpenRouter(KIMI_FALLBACK_MODEL)
@@ -259,13 +294,31 @@ function getModelCandidates(
       addGoogle(GOOGLE_FLASH_MODEL)
       break
     case 'critical':
-      addAnthropic(CRITICAL_MODEL)
-      addOpenAI(SUPERVISOR_MODEL)
+      addConfiguredModelCandidate({
+        model: CRITICAL_MODEL,
+        addOpenAI,
+        addAnthropic,
+        addGoogle,
+        addOpenRouter,
+      })
+      addConfiguredModelCandidate({
+        model: SUPERVISOR_MODEL,
+        addOpenAI,
+        addAnthropic,
+        addGoogle,
+        addOpenRouter,
+      })
       addOpenRouter(KIMI_FALLBACK_MODEL)
       addGoogle(GOOGLE_PRO_MODEL)
       break
     case 'janitor':
-      addAnthropic(JANITOR_MODEL)
+      addConfiguredModelCandidate({
+        model: JANITOR_MODEL,
+        addOpenAI,
+        addAnthropic,
+        addGoogle,
+        addOpenRouter,
+      })
       addOpenRouter(KIMI_FAST_FALLBACK_MODEL)
       addOpenAI(OPENAI_FALLBACK_MODEL)
       addGoogle(GOOGLE_FLASH_MODEL)

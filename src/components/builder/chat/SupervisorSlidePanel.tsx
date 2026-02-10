@@ -72,8 +72,7 @@ export function SupervisorSlidePanel({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 bg-black/20 z-40"
-            onClick={onDismiss}
+            className="pointer-events-none fixed inset-0 bg-black/20 z-40"
           />
           
           {/* Panel - slides from right */}
@@ -270,6 +269,19 @@ export function SupervisorSlidePanel({
                         </div>
                       </motion.div>
                     ))}
+                  </div>
+                </div>
+              ) : liveLines.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-[#1a1a1a] bg-[#101010] p-3">
+                    <p className="text-[11px] uppercase tracking-wider text-[#565656] mb-2">Supervisor Stream</p>
+                    <div className="space-y-1 max-h-[420px] overflow-y-auto pr-1">
+                      {liveLines.map((line, index) => (
+                        <p key={`${line}-${index}`} className="text-[12px] text-[#8b8b8b] leading-relaxed">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : null}

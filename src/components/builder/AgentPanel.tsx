@@ -17,7 +17,7 @@ const STATUS_STYLES = {
     ring: 'border-white/10',
     bg: 'bg-white/5',
     text: 'text-white/30',
-    label: 'Standby',
+    label: 'Ready',
   },
   thinking: {
     ring: 'border-yellow-500/50',
@@ -35,13 +35,13 @@ const STATUS_STYLES = {
     ring: 'border-[#00ff41]',
     bg: 'bg-[#00ff41]/20',
     text: 'text-[#00ff41]',
-    label: 'Done',
+    label: 'Ready',
   },
   error: {
     ring: 'border-red-500/50',
     bg: 'bg-red-500/10',
     text: 'text-red-500',
-    label: 'Error',
+    label: 'Needs Input',
   },
 }
 

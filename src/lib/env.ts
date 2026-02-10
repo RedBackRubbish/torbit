@@ -36,6 +36,11 @@ const serverSchema = z.object({
   // Workers / cron
   TORBIT_WORKER_TOKEN: z.string().optional(),
   CRON_SECRET: z.string().optional(),
+  TORBIT_SUPERVISOR_MODEL: z.string().optional(),
+  TORBIT_CONTEXT_COMPILER_MODEL: z.string().optional(),
+  TORBIT_WORKER_MODEL: z.string().optional(),
+  TORBIT_CRITICAL_MODEL: z.string().optional(),
+  TORBIT_JANITOR_MODEL: z.string().optional(),
 
   // Monitoring
   SENTRY_DSN: z.string().optional(),
@@ -89,4 +94,25 @@ export function hasAnyAIProvider(): boolean {
     process.env.OPENAI_API_KEY ||
     process.env.OPENROUTER_API_KEY
   )
+}
+
+/**
+ * Runtime guard for production/preview servers.
+ * Keeps local tests flexible while enforcing deploy-time correctness.
+ */
+export function assertRuntimeConfig(): void {
+  validateServerEnv()
+  validateClientEnv()
+
+  if (process.env.NODE_ENV === 'test') {
+    return
+  }
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    throw new Error('Missing Supabase runtime env: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required.')
+  }
+
+  if (!hasAnyAIProvider()) {
+    throw new Error('No AI provider configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or OPENROUTER_API_KEY.')
+  }
 }
