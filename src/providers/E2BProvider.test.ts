@@ -7,6 +7,7 @@ import {
   normalizeRuntimePath,
   nextInstallRecoveryCommand,
   resolveRuntimeProfile,
+  shouldAllowSoftRuntimeValidationFailure,
 } from './E2BProvider'
 
 describe('resolveRuntimeProfile', () => {
@@ -126,6 +127,19 @@ describe('createRuntimeProbeCommand', () => {
   it('treats div-only root markup as renderable output', () => {
     const command = createRuntimeProbeCommand(3000)
     expect(command).toContain('|div)')
+  })
+})
+
+describe('shouldAllowSoftRuntimeValidationFailure', () => {
+  it('allows transient runtime probe failures to degrade to soft validation', () => {
+    expect(shouldAllowSoftRuntimeValidationFailure('runtime_validation_fail fetch failed')).toBe(true)
+    expect(shouldAllowSoftRuntimeValidationFailure('runtime_validation_fail timed out')).toBe(true)
+  })
+
+  it('rejects hard compile/runtime errors from soft validation fallback', () => {
+    expect(shouldAllowSoftRuntimeValidationFailure('Module not found: Cannot find module')).toBe(false)
+    expect(shouldAllowSoftRuntimeValidationFailure('SyntaxError: Unexpected token')).toBe(false)
+    expect(shouldAllowSoftRuntimeValidationFailure('TypeError: Cannot read properties of undefined')).toBe(false)
   })
 })
 

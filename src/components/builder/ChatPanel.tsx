@@ -815,7 +815,7 @@ export default function ChatPanel() {
         }
       }
       
-      const STREAM_IDLE_TIMEOUT_MS = 75000
+      const STREAM_IDLE_TIMEOUT_MS = 4 * 60 * 1000
       const resetStreamTimeout = () => {
         if (timeoutId) clearTimeout(timeoutId)
         timeoutId = setTimeout(() => controller.abort(), STREAM_IDLE_TIMEOUT_MS)

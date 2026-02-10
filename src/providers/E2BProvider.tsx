@@ -63,15 +63,26 @@ const E2BContext = createContext<E2BContextValue | null>(null)
 // Module-level flag to prevent duplicate boot logs in Strict Mode
 let hasLoggedBoot = false
 const RUNTIME_STARTUP_TIMEOUT_MS = 45000
-const ROUTE_PROBE_FETCH_TIMEOUT_MS = 20000
-const ROUTE_PROBE_COMMAND_TIMEOUT_MS = 30000
-const ROUTE_PROBE_MAX_ATTEMPTS = 4
-const ROUTE_PROBE_RETRY_DELAY_MS = 1500
+const HOST_PROBE_REQUEST_TIMEOUT_MS = 6000
+const HOST_PROBE_MAX_RETRIES = 1
+const ROUTE_PROBE_FETCH_TIMEOUT_MS = 8000
+const ROUTE_PROBE_COMMAND_TIMEOUT_MS = 20000
+const ROUTE_PROBE_MAX_ATTEMPTS = 3
+const ROUTE_PROBE_RETRY_DELAY_MS = 1000
+const DEFAULT_E2B_ACTION_TIMEOUT_MS = 30000
+const E2B_ACTION_TIMEOUT_MS: Record<string, number> = {
+  create: 45000,
+  makeDir: 20000,
+  writeFile: 25000,
+  readFile: 20000,
+  getHost: 12000,
+  kill: 15000,
+}
 const E2B_RETRY_BUDGET: Record<string, number> = {
   makeDir: 5,
   writeFile: 5,
   readFile: 3,
-  getHost: 8,
+  getHost: 1,
 }
 
 interface RuntimeProfile {
@@ -210,6 +221,21 @@ function isRetryableRouteProbeFailure(details: string): boolean {
   )
 }
 
+export function shouldAllowSoftRuntimeValidationFailure(details: string): boolean {
+  const normalized = details.toLowerCase()
+  if (
+    normalized.includes('module not found') ||
+    normalized.includes('cannot find module') ||
+    normalized.includes('syntaxerror') ||
+    normalized.includes('typeerror') ||
+    normalized.includes('referenceerror')
+  ) {
+    return false
+  }
+
+  return isRetryableRouteProbeFailure(details)
+}
+
 function sanitizeRuntimeValidationDetails(details: string): string {
   return details
     .replace(/route_probe_fail/gi, 'runtime_validation_fail')
@@ -320,9 +346,18 @@ interface E2BErrorPayload {
   retryAfter?: number
 }
 
+interface E2BApiRequestOptions {
+  maxRetries?: number
+  requestTimeoutMs?: number
+}
+
 function shouldRetryE2BRequest(action: string, status: number, message: string): boolean {
   if (!(action in E2B_RETRY_BUDGET)) {
     return false
+  }
+
+  if (status === 408) {
+    return true
   }
 
   if (status === 429) {
@@ -334,7 +369,15 @@ function shouldRetryE2BRequest(action: string, status: number, message: string):
   }
 
   const normalized = message.toLowerCase()
-  return normalized.includes('rate limit') || normalized.includes('too many requests')
+  return (
+    normalized.includes('rate limit') ||
+    normalized.includes('too many requests') ||
+    normalized.includes('timed out') ||
+    normalized.includes('timeout') ||
+    normalized.includes('aborted') ||
+    normalized.includes('fetch failed') ||
+    normalized.includes('network')
+  )
 }
 
 function resolveRetryDelayMs(
@@ -356,7 +399,11 @@ function resolveRetryDelayMs(
 }
 
 // API helper for E2B operations
-async function e2bApi(action: string, params: Record<string, unknown> = {}) {
+async function e2bApi(
+  action: string,
+  params: Record<string, unknown> = {},
+  options: E2BApiRequestOptions = {}
+) {
   const headers: HeadersInit = { 'Content-Type': 'application/json' }
   const supabase = getSupabase()
   if (supabase) {
@@ -366,14 +413,68 @@ async function e2bApi(action: string, params: Record<string, unknown> = {}) {
     }
   }
 
-  const maxRetries = E2B_RETRY_BUDGET[action] ?? 0
+  const configuredMaxRetries = (
+    typeof options.maxRetries === 'number' &&
+    Number.isFinite(options.maxRetries) &&
+    options.maxRetries >= 0
+  ) ? Math.floor(options.maxRetries) : (E2B_RETRY_BUDGET[action] ?? 0)
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch('/api/e2b', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ action, ...params }),
-    })
+  for (let attempt = 0; attempt <= configuredMaxRetries; attempt++) {
+    const requestedTimeoutMs = (
+      action === 'runCommand' &&
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+    ) ? Math.floor(params.timeoutMs) : null
+
+    const overrideTimeoutMs = (
+      typeof options.requestTimeoutMs === 'number' &&
+      Number.isFinite(options.requestTimeoutMs) &&
+      options.requestTimeoutMs > 0
+    ) ? Math.floor(options.requestTimeoutMs) : null
+
+    const requestTimeoutMs = overrideTimeoutMs ?? (
+      requestedTimeoutMs
+        ? Math.min(Math.max(requestedTimeoutMs + 15000, 45000), 6 * 60 * 1000)
+        : (E2B_ACTION_TIMEOUT_MS[action] || DEFAULT_E2B_ACTION_TIMEOUT_MS)
+    )
+
+    let response: Response
+
+    try {
+      const controller = new AbortController()
+      const timeoutHandle = setTimeout(() => controller.abort(), requestTimeoutMs)
+
+      try {
+        response = await fetch('/api/e2b', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ action, ...params }),
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeoutHandle)
+      }
+    } catch (err) {
+      const isTimeout = err instanceof Error && err.name === 'AbortError'
+      const message = isTimeout
+        ? `E2B ${action} request timed out after ${requestTimeoutMs}ms`
+        : (err instanceof Error ? err.message : 'E2B network request failed')
+      const status = isTimeout ? 504 : 500
+      const canRetry = attempt < configuredMaxRetries && shouldRetryE2BRequest(action, status, message)
+
+      if (canRetry) {
+        const delayMs = Math.min(4000, 250 * (2 ** attempt)) + Math.floor(Math.random() * 150)
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+        continue
+      }
+
+      throw new E2BApiError(
+        message,
+        status,
+        isTimeout ? 'E2B_REQUEST_TIMEOUT' : 'E2B_NETWORK_ERROR'
+      )
+    }
 
     if (response.ok) {
       return response.json()
@@ -394,7 +495,7 @@ async function e2bApi(action: string, params: Record<string, unknown> = {}) {
       // Response body may be empty/non-JSON.
     }
 
-    const canRetry = attempt < maxRetries && shouldRetryE2BRequest(action, response.status, message)
+    const canRetry = attempt < configuredMaxRetries && shouldRetryE2BRequest(action, response.status, message)
     if (!canRetry) {
       throw new E2BApiError(message, response.status, code)
     }
@@ -824,11 +925,18 @@ export function E2BProvider({ children }: E2BProviderProps) {
 
         while (!host && (Date.now() - buildStart) < RUNTIME_STARTUP_TIMEOUT_MS) {
           try {
-            const hostResult = await e2bApi('getHost', {
-              sandboxId,
-              sandboxAccessToken,
-              port: runtimeProfile.port,
-            })
+            const hostResult = await e2bApi(
+              'getHost',
+              {
+                sandboxId,
+                sandboxAccessToken,
+                port: runtimeProfile.port,
+              },
+              {
+                maxRetries: HOST_PROBE_MAX_RETRIES,
+                requestTimeoutMs: HOST_PROBE_REQUEST_TIMEOUT_MS,
+              }
+            )
             if (hostResult.host) {
               host = hostResult.host as string
               break
@@ -879,6 +987,19 @@ export function E2BProvider({ children }: E2BProviderProps) {
 
           if (!probePassed) {
             const probeDetails = lastProbeDetails || 'Runtime validation failed'
+            if (shouldAllowSoftRuntimeValidationFailure(probeDetails)) {
+              addLog(
+                `⚠️ Runtime validation was inconclusive (${probeDetails.slice(0, 140)}). Opening preview anyway for direct inspection.`,
+                'warning'
+              )
+              setServerUrl(host)
+              setError(null)
+              setBuildFailure(null)
+              lastSyncedHashRef.current = filesFingerprint
+              addLog(`✅ Preview ready (soft validation): ${host}`, 'success')
+              return
+            }
+
             exactLogLine = `Runtime validation failed: ${probeDetails.slice(0, 300)}`
             throw new Error(exactLogLine)
           }
