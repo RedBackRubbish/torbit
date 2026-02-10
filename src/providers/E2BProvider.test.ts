@@ -112,6 +112,11 @@ describe('createRuntimeProbeCommand', () => {
     const command = createRuntimeProbeCommand(Number.NaN)
     expect(command).toContain('http://127.0.0.1:3000')
   })
+
+  it('does not emit literal newline escape tokens that break node -e parsing', () => {
+    const command = createRuntimeProbeCommand(3000)
+    expect(command).not.toContain('\\n')
+  })
 })
 
 describe('injectPreviewBridgeIntoNextLayout', () => {

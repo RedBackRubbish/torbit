@@ -241,7 +241,15 @@ const timeout = setTimeout(() => controller.abort(), 10000);
 })();
 `.trim()
 
-  return `node -e ${JSON.stringify(script)}`
+  // `node -e` receives one argv string; literal "\n" tokens break parsing in some shells.
+  // Compact to a single line so the eval payload is shell-safe.
+  const compactScript = script
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ')
+
+  return `node -e ${JSON.stringify(compactScript)}`
 }
 
 export function injectPreviewBridgeIntoNextLayout(layoutContent: string): string {
