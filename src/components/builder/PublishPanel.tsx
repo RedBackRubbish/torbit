@@ -1081,39 +1081,35 @@ export function PublishPanel() {
         disabled={!hasFiles}
         aria-label="Publish your mobile app. Export, TestFlight, App Store Connect, and Android pipeline."
         aria-disabled={!hasFiles}
-        className="group relative flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden
-          bg-gradient-to-r from-[#c0c0c0] via-[#e8e8e8] to-[#c0c0c0] text-black
-          hover:from-white hover:via-[#f5f5f5] hover:to-white
-          shadow-[0_1px_2px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.4)]
-          hover:shadow-[0_4px_12px_rgba(192,192,192,0.3),inset_0_1px_0_rgba(255,255,255,0.6)]
+        className="group flex items-center gap-2 px-3.5 py-1.5 text-[12px] font-medium tracking-wide rounded-lg border border-[#2a2a2a] hover:border-[#404040] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed
+          bg-[#141414] text-[#e0e0e0] hover:bg-[#1f1f1f] hover:text-white
           active:scale-[0.98]"
       >
-        <Rocket className="w-4 h-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
+        <Rocket className="w-3.5 h-3.5 text-[#808080] group-hover:text-blue-400 transition-colors" aria-hidden="true" />
         Publish
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
       </button>
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="publish-dialog-title"
         >
           <div
             ref={dialogRef}
-            className="w-full max-w-lg mx-4 bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
+            className="w-full max-w-lg mx-4 bg-[#0a0a0a] border border-[#1f1f1f] rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7)] overflow-hidden"
           >
-            <div className="flex items-center justify-between p-4 border-b border-neutral-800">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1a1a1a]">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-neutral-900 rounded-lg" aria-hidden="true">
-                  <Rocket className="w-5 h-5 text-[#c0c0c0]" />
+                <div className="w-9 h-9 rounded-xl bg-[#111] border border-[#222] flex items-center justify-center" aria-hidden="true">
+                  <Rocket className="w-4 h-4 text-[#808080]" />
                 </div>
                 <div>
-                  <h2 id="publish-dialog-title" className="text-white font-semibold">
+                  <h2 id="publish-dialog-title" className="text-[#e8e8e8] text-[14px] font-semibold">
                     {completeHeading}
                   </h2>
-                  <p className="text-neutral-500 text-sm">
+                  <p className="text-[#505050] text-[12px]">
                     {completeSubheading}
                   </p>
                 </div>
@@ -1121,21 +1117,21 @@ export function PublishPanel() {
               <button
                 onClick={closePanel}
                 aria-label="Close publish dialog"
-                className="p-2 hover:bg-neutral-800 rounded-lg transition-colors"
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-[#505050] hover:bg-[#1a1a1a] hover:text-[#a0a0a0] transition-colors"
               >
-                <X className="w-5 h-5 text-neutral-400" aria-hidden="true" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
             <div className="p-4 space-y-4">
               {activeReleaseRun && (
-                <div className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl space-y-3">
+                <div className="p-3.5 bg-[#0f0f0f] border border-[#1a1a1a] rounded-xl space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-neutral-200 text-sm font-medium">Release Rail · {releaseRailTitle}</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">{getReleaseRailSummary(activeReleaseRun)}</p>
+                      <p className="text-[#d0d0d0] text-[13px] font-medium">Release Rail · {releaseRailTitle}</p>
+                      <p className="text-[10px] text-[#505050] mt-0.5">{getReleaseRailSummary(activeReleaseRun)}</p>
                     </div>
-                    <span className={`px-2 py-0.5 text-[10px] uppercase rounded border ${getReleaseRailStatusClass(activeReleaseRun.status)}`}>
+                    <span className={`px-2 py-0.5 text-[9px] uppercase tracking-wider rounded border ${getReleaseRailStatusClass(activeReleaseRun.status)}`}>
                       {activeReleaseRun.status}
                     </span>
                   </div>
@@ -1225,207 +1221,145 @@ export function PublishPanel() {
 
               {status === 'idle' && (
                 <>
-                  <div className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl space-y-2">
+                  <div className="p-3.5 bg-[#0f0f0f] border border-[#1a1a1a] rounded-xl space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <p className="text-neutral-300 text-sm font-medium">Pipeline Environment</p>
-                      <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Server check</span>
+                      <p className="text-[#b0b0b0] text-[12px] font-medium">Pipeline Environment</p>
+                      <span className="text-[9px] text-[#404040] uppercase tracking-widest">Server</span>
                     </div>
 
                     {diagnosticsLoading ? (
-                      <p className="text-neutral-500 text-xs">Checking environment variables...</p>
+                      <p className="text-[#505050] text-[11px]">Checking environment...</p>
                     ) : diagnosticsError ? (
-                      <p className="text-amber-400 text-xs">{diagnosticsError}</p>
+                      <p className="text-amber-400 text-[11px]">{diagnosticsError}</p>
                     ) : diagnostics ? (
-                      <div className="space-y-1.5 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-neutral-400">EXPO_TOKEN (required)</span>
-                          <span className={diagnostics.expoTokenConfigured ? 'text-emerald-400' : 'text-red-400'}>
-                            {diagnostics.expoTokenConfigured ? 'Configured' : 'Missing'}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-neutral-400">iOS Submit Auth</span>
-                          <span className={diagnostics.iosSubmitAuthConfigured ? 'text-emerald-400' : 'text-amber-400'}>
-                            {diagnostics.iosSubmitAuthConfigured ? 'Configured' : 'Not detected'}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-neutral-400">Android Submit Auth</span>
-                          <span className={diagnostics.googleServiceAccountConfigured ? 'text-emerald-400' : 'text-amber-400'}>
-                            {diagnostics.googleServiceAccountConfigured ? 'Configured' : 'Not detected'}
-                          </span>
-                        </div>
+                      <div className="space-y-2 text-[11px]">
+                        {[
+                          { label: 'Expo Token', ok: diagnostics.expoTokenConfigured, required: true },
+                          { label: 'iOS Submit Auth', ok: diagnostics.iosSubmitAuthConfigured, required: false },
+                          { label: 'Android Submit Auth', ok: diagnostics.googleServiceAccountConfigured, required: false },
+                        ].map(({ label, ok, required }) => (
+                          <div key={label} className="flex items-center justify-between">
+                            <span className="text-[#606060]">{label}{required ? ' *' : ''}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-500' : required ? 'bg-red-500' : 'bg-[#333]'}`} />
+                              <span className={ok ? 'text-emerald-400/80' : required ? 'text-red-400/80' : 'text-[#505050]'}>
+                                {ok ? 'Ready' : required ? 'Missing' : 'Not set'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
 
                         {diagnostics.warnings.length > 0 && (
-                          <p className="text-amber-400/80 text-[11px] leading-relaxed pt-1 border-t border-neutral-800">
+                          <p className="text-amber-400/60 text-[10px] leading-relaxed pt-1.5 border-t border-[#1a1a1a]">
                             {diagnostics.warnings[0]}
                           </p>
                         )}
                       </div>
                     ) : (
-                      <p className="text-neutral-500 text-xs">Diagnostics unavailable.</p>
+                      <p className="text-[#505050] text-[11px]">Diagnostics unavailable.</p>
                     )}
                   </div>
 
-                  <button
-                    onClick={() => void handleStartAction('xcode')}
-                    disabled={xcodeAvailability.disabled}
-                    title={xcodeAvailability.reason}
-                    className="w-full flex items-center gap-4 p-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl transition-colors text-left disabled:opacity-50"
-                  >
-                    <div className="p-3 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl">
-                      <Apple className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{ACTION_META.xcode.title}</span>
-                        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">{ACTION_META.xcode.badge}</span>
-                      </div>
-                      <p className="text-neutral-400 text-sm mt-0.5">{ACTION_META.xcode.description}</p>
-                      {xcodeInlineWarning && (
-                        <p className={`mt-1 text-[11px] flex items-center gap-1 ${
-                          xcodeInlineWarning.tone === 'error' ? 'text-red-400' : 'text-amber-400'
-                        }`}>
-                          <AlertTriangle className="w-3 h-3" />
-                          {xcodeInlineWarning.message}
-                        </p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-neutral-500" />
-                  </button>
+                  {/* Action cards */}
+                  <div className="space-y-2">
+                    {([
+                      { action: 'xcode' as PublishAction, availability: xcodeAvailability, warning: xcodeInlineWarning, icon: Apple, accent: 'blue' },
+                      { action: 'testflight' as PublishAction, availability: testflightAvailability, warning: testflightInlineWarning, icon: TestTube, accent: 'emerald' },
+                      { action: 'appstore-connect' as PublishAction, availability: appStoreAvailability, warning: appStoreInlineWarning, icon: Store, accent: 'fuchsia' },
+                      { action: 'android' as PublishAction, availability: androidAvailability, warning: androidInlineWarning, icon: Smartphone, accent: 'orange' },
+                    ] as const).map(({ action, availability, warning, icon: Icon, accent }) => {
+                      const meta = ACTION_META[action]
+                      const accentMap = {
+                        blue: { icon: 'from-blue-500/20 to-blue-600/10 border-blue-500/20 group-hover:border-blue-500/40', badge: 'bg-blue-500/10 text-blue-400', iconColor: 'text-blue-400' },
+                        emerald: { icon: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/20 group-hover:border-emerald-500/40', badge: 'bg-emerald-500/10 text-emerald-400', iconColor: 'text-emerald-400' },
+                        fuchsia: { icon: 'from-fuchsia-500/20 to-fuchsia-600/10 border-fuchsia-500/20 group-hover:border-fuchsia-500/40', badge: 'bg-fuchsia-500/10 text-fuchsia-400', iconColor: 'text-fuchsia-400' },
+                        orange: { icon: 'from-orange-500/20 to-orange-600/10 border-orange-500/20 group-hover:border-orange-500/40', badge: 'bg-orange-500/10 text-orange-400', iconColor: 'text-orange-400' },
+                      } as const
+                      const colors = accentMap[accent]
 
-                  <button
-                    onClick={() => void handleStartAction('testflight')}
-                    disabled={testflightAvailability.disabled}
-                    title={testflightAvailability.reason}
-                    className="w-full flex items-center gap-4 p-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl transition-colors text-left disabled:opacity-50"
-                  >
-                    <div className="p-3 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl">
-                      <TestTube className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{ACTION_META.testflight.title}</span>
-                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-full">{ACTION_META.testflight.badge}</span>
-                      </div>
-                      <p className="text-neutral-400 text-sm mt-0.5">{ACTION_META.testflight.description}</p>
-                      {testflightInlineWarning && (
-                        <p className={`mt-1 text-[11px] flex items-center gap-1 ${
-                          testflightInlineWarning.tone === 'error' ? 'text-red-400' : 'text-amber-400'
-                        }`}>
-                          <AlertTriangle className="w-3 h-3" />
-                          {testflightInlineWarning.message}
-                        </p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-neutral-500" />
-                  </button>
+                      return (
+                        <button
+                          key={action}
+                          onClick={() => void handleStartAction(action)}
+                          disabled={availability.disabled}
+                          title={availability.reason}
+                          className="w-full flex items-center gap-3.5 p-3.5 bg-[#0f0f0f] hover:bg-[#151515] border border-[#1a1a1a] hover:border-[#2a2a2a] rounded-xl transition-all text-left disabled:opacity-40 disabled:cursor-not-allowed group"
+                        >
+                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colors.icon} border flex items-center justify-center flex-shrink-0 transition-colors`}>
+                            <Icon className={`w-5 h-5 ${colors.iconColor}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[13px] font-medium text-[#d0d0d0] group-hover:text-white transition-colors">{meta.title}</span>
+                              <span className={`px-1.5 py-0.5 text-[10px] rounded ${colors.badge}`}>{meta.badge}</span>
+                            </div>
+                            <p className="text-[11px] text-[#505050] mt-0.5">{meta.description}</p>
+                            {warning && (
+                              <p className={`mt-1 text-[10px] flex items-center gap-1 ${
+                                warning.tone === 'error' ? 'text-red-400' : 'text-amber-400'
+                              }`}>
+                                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                                <span className="truncate">{warning.message}</span>
+                              </p>
+                            )}
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-[#333] group-hover:text-[#666] transition-colors flex-shrink-0" />
+                        </button>
+                      )
+                    })}
+                  </div>
 
-                  <button
-                    onClick={() => void handleStartAction('appstore-connect')}
-                    disabled={appStoreAvailability.disabled}
-                    title={appStoreAvailability.reason}
-                    className="w-full flex items-center gap-4 p-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl transition-colors text-left disabled:opacity-50"
-                  >
-                    <div className="p-3 bg-gradient-to-br from-fuchsia-600 to-fuchsia-700 rounded-xl">
-                      <Store className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{ACTION_META['appstore-connect'].title}</span>
-                        <span className="px-2 py-0.5 bg-fuchsia-500/20 text-fuchsia-400 text-xs rounded-full">{ACTION_META['appstore-connect'].badge}</span>
-                      </div>
-                      <p className="text-neutral-400 text-sm mt-0.5">{ACTION_META['appstore-connect'].description}</p>
-                      {appStoreInlineWarning && (
-                        <p className={`mt-1 text-[11px] flex items-center gap-1 ${
-                          appStoreInlineWarning.tone === 'error' ? 'text-red-400' : 'text-amber-400'
-                        }`}>
-                          <AlertTriangle className="w-3 h-3" />
-                          {appStoreInlineWarning.message}
-                        </p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-neutral-500" />
-                  </button>
-
-                  <button
-                    onClick={() => void handleStartAction('android')}
-                    disabled={androidAvailability.disabled}
-                    title={androidAvailability.reason}
-                    className="w-full flex items-center gap-4 p-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl transition-colors text-left disabled:opacity-50"
-                  >
-                    <div className="p-3 bg-gradient-to-br from-orange-600 to-orange-700 rounded-xl">
-                      <Smartphone className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{ACTION_META.android.title}</span>
-                        <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded-full">{ACTION_META.android.badge}</span>
-                      </div>
-                      <p className="text-neutral-400 text-sm mt-0.5">{ACTION_META.android.description}</p>
-                      {androidInlineWarning && (
-                        <p className={`mt-1 text-[11px] flex items-center gap-1 ${
-                          androidInlineWarning.tone === 'error' ? 'text-red-400' : 'text-amber-400'
-                        }`}>
-                          <AlertTriangle className="w-3 h-3" />
-                          {androidInlineWarning.message}
-                        </p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-neutral-500" />
-                  </button>
-
-                  <div className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl space-y-2">
-                    <p className="text-neutral-300 text-sm font-medium">Android Track</p>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3.5 bg-[#0f0f0f] border border-[#1a1a1a] rounded-xl space-y-2.5">
+                    <p className="text-[#b0b0b0] text-[12px] font-medium">Android Track</p>
+                    <div className="grid grid-cols-2 gap-1.5">
                       {ANDROID_TRACK_OPTIONS.map((option) => (
                         <button
                           key={option.value}
                           onClick={() => setAndroidTrack(option.value)}
                           type="button"
-                          className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                          className={`rounded-lg border px-3 py-2 text-left transition-all ${
                             androidTrack === option.value
-                              ? 'border-orange-400 bg-orange-500/10'
-                              : 'border-neutral-700 bg-neutral-950 hover:border-neutral-600'
+                              ? 'border-orange-500/30 bg-orange-500/5'
+                              : 'border-[#1a1a1a] bg-[#080808] hover:border-[#2a2a2a]'
                           }`}
                         >
-                          <p className={`text-xs font-medium ${androidTrack === option.value ? 'text-orange-300' : 'text-neutral-300'}`}>
+                          <p className={`text-[11px] font-medium ${androidTrack === option.value ? 'text-orange-300' : 'text-[#808080]'}`}>
                             {option.label}
                           </p>
-                          <p className="text-[10px] text-neutral-500 mt-0.5">{option.hint}</p>
+                          <p className="text-[10px] text-[#404040] mt-0.5">{option.hint}</p>
                         </button>
                       ))}
                     </div>
-                    <p className="text-[11px] text-neutral-500">
-                      Android action uses submit profile <code className="text-neutral-300">android-{androidTrack}</code>.
+                    <p className="text-[10px] text-[#404040]">
+                      Submit profile: <code className="text-[#707070] font-mono">android-{androidTrack}</code>
                     </p>
                   </div>
 
-                  <div className="pt-2 border-t border-neutral-800">
-                    <p className="text-neutral-600 text-xs uppercase tracking-wider px-1 mb-2">Export Mode</p>
+                  <div className="pt-3 border-t border-[#1a1a1a]">
+                    <p className="text-[10px] text-[#4a4a4a] uppercase tracking-widest px-1 mb-2">Export Mode</p>
 
-                    <div className="flex items-center gap-3 p-3 bg-neutral-900 border border-neutral-700 rounded-lg mb-2">
-                      <div className="w-4 h-4 rounded-full border-2 border-blue-500 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <div className="flex items-center gap-3 p-3 bg-[#0f0f0f] border border-[#1a1a1a] rounded-lg mb-1.5">
+                      <div className="w-3.5 h-3.5 rounded-full border-2 border-blue-500 flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                       </div>
                       <div className="flex-1">
-                        <span className="text-neutral-300 text-sm font-medium">Expo</span>
-                        <span className="text-neutral-500 text-xs ml-2">Recommended</span>
+                        <span className="text-[#c0c0c0] text-[12px] font-medium">Expo</span>
+                        <span className="text-[#505050] text-[10px] ml-2">Recommended</span>
                       </div>
                     </div>
 
                     <button
                       disabled
                       onClick={() => recordMetric('feature_interest_capacitor')}
-                      className="group w-full flex items-center gap-3 p-3 bg-neutral-900/50 border border-neutral-800 rounded-lg opacity-50 cursor-not-allowed relative"
+                      className="w-full flex items-center gap-3 p-3 bg-[#080808] border border-[#151515] rounded-lg opacity-40 cursor-not-allowed"
                       title="Native shell export with audited permissions. Available after launch."
                     >
-                      <div className="w-4 h-4 rounded-full border-2 border-neutral-600" />
+                      <div className="w-3.5 h-3.5 rounded-full border-2 border-[#333]" />
                       <div className="flex-1 text-left">
-                        <span className="text-neutral-500 text-sm font-medium">Capacitor</span>
-                        <span className="text-neutral-600 text-xs ml-2">Native shell</span>
+                        <span className="text-[#505050] text-[12px] font-medium">Capacitor</span>
+                        <span className="text-[#404040] text-[10px] ml-2">Native shell</span>
                       </div>
-                      <span className="text-[10px] text-neutral-600 uppercase tracking-wide">Soon</span>
+                      <span className="text-[9px] text-[#404040] uppercase tracking-widest">Soon</span>
                     </button>
                   </div>
                 </>
@@ -1646,18 +1580,18 @@ export function PublishPanel() {
                     </ol>
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex gap-2.5">
                     <button
                       onClick={closePanel}
-                      className="flex-1 py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-medium rounded-xl transition-colors"
+                      className="flex-1 py-2.5 bg-[#141414] hover:bg-[#1f1f1f] border border-[#2a2a2a] text-[#c0c0c0] text-[13px] font-medium rounded-xl transition-colors"
                     >
                       Done
                     </button>
                     <button
                       onClick={() => void handleRunAgain()}
-                      className="flex items-center justify-center gap-2 px-6 py-3 bg-[#c0c0c0] hover:bg-white text-black font-medium rounded-xl transition-colors"
+                      className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#1a1a1a] hover:bg-[#222] border border-[#333] text-white text-[13px] font-medium rounded-xl transition-colors"
                     >
-                      {result.action === 'xcode' ? <Download className="w-4 h-4" /> : <Rocket className="w-4 h-4" />}
+                      {result.action === 'xcode' ? <Download className="w-3.5 h-3.5" /> : <Rocket className="w-3.5 h-3.5" />}
                       {result.action === 'xcode' ? 'Download Again' : 'Run Again'}
                     </button>
                   </div>
@@ -1666,16 +1600,16 @@ export function PublishPanel() {
 
               {status === 'error' && (
                 <div className="py-8 flex flex-col items-center gap-4">
-                  <div className="p-4 bg-red-500/10 rounded-2xl">
-                    <X className="w-8 h-8 text-red-500" />
+                  <div className="w-12 h-12 rounded-2xl bg-red-500/5 border border-red-500/10 flex items-center justify-center">
+                    <X className="w-6 h-6 text-red-400" />
                   </div>
                   <div className="text-center">
-                    <p className="text-white font-medium">{buildFailureTitle(selectedAction)}</p>
-                    <p className="text-neutral-400 text-sm mt-1">{error || 'An unexpected error occurred'}</p>
+                    <p className="text-[#e0e0e0] text-[14px] font-medium">{buildFailureTitle(selectedAction)}</p>
+                    <p className="text-[#606060] text-[12px] mt-1 max-w-sm">{error || 'An unexpected error occurred'}</p>
                   </div>
                   <button
                     onClick={resetPanel}
-                    className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg transition-colors"
+                    className="px-5 py-2 bg-[#141414] hover:bg-[#1f1f1f] border border-[#2a2a2a] text-[#c0c0c0] text-[12px] font-medium rounded-lg transition-colors"
                   >
                     Try Again
                   </button>
