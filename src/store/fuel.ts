@@ -7,6 +7,10 @@ import { immer } from 'zustand/middleware/immer'
 // "If the Auditor rejects it, you don't pay for the Build"
 // ============================================
 
+/** When true, all fuel checks are bypassed (for testing / dev) */
+const FUEL_DISABLED = typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_FUEL_DISABLED === 'true'
+const DEFAULT_FUEL = FUEL_DISABLED ? 999999 : 1000
+
 export type FuelTier = 'standard' | 'pro' | 'enterprise'
 
 export interface FuelTransaction {
@@ -126,9 +130,9 @@ const TIER_CONFIG = {
 export const useFuelStore = create<FuelState & FuelActions>()(
   persist(
     immer((set, get) => ({
-      // Initial state
-      currentFuel: 1000,
-      maxFuel: 1000,
+      // Initial state (overridden when NEXT_PUBLIC_FUEL_DISABLED=true)
+      currentFuel: DEFAULT_FUEL,
+      maxFuel: DEFAULT_FUEL,
       tier: 'standard' as FuelTier,
       ghostUsage: 0,
       estimatedRange: null,
@@ -350,6 +354,7 @@ export const useFuelStore = create<FuelState & FuelActions>()(
       },
 
       canAfford: (amount) => {
+        if (FUEL_DISABLED) return true
         return get().currentFuel >= amount
       },
       
@@ -372,6 +377,13 @@ export const useFuelStore = create<FuelState & FuelActions>()(
         tier: state.tier,
         transactions: state.transactions.slice(0, 100), // Keep last 100
       }),
+      onRehydrateStorage: () => (state) => {
+        // When fuel is disabled, override persisted balance so gauge shows full
+        if (FUEL_DISABLED && state) {
+          state.currentFuel = DEFAULT_FUEL
+          state.maxFuel = DEFAULT_FUEL
+        }
+      },
     }
   )
 )
