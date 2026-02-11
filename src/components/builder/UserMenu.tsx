@@ -10,7 +10,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuthContext } from '@/providers/AuthProvider'
 import { 
   User, 
   LogOut, 
@@ -23,7 +23,7 @@ import {
 
 export function UserMenu() {
   const router = useRouter()
-  const { user, profile, signOut, loading } = useAuth()
+  const { user, profile, signOut, loading } = useAuthContext()
   const [isOpen, setIsOpen] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)

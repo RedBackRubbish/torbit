@@ -131,7 +131,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       
-      console.log('[AuthProvider] Session loaded:', session?.user?.email ?? 'no user')
       setSession(session)
       setUser(session?.user ?? null)
       
@@ -162,7 +161,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (event, session) => {
         if (!active) return
         
-        console.log('[AuthProvider] Auth state changed:', event, session?.user?.email)
         setSession(session)
         setUser(session?.user ?? null)
         

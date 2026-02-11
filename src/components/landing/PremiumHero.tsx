@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuthContext } from '@/providers/AuthProvider'
 import { getCapabilityContext } from '@/lib/integrations/capabilities'
 import { HeroHeader } from './premium/HeroHeader'
 import { IntegrationMarquee } from './premium/IntegrationMarquee'
@@ -17,7 +17,7 @@ import { useCapabilitySelection } from './premium/useCapabilitySelection'
  */
 export default function PremiumHero() {
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useAuthContext()
 
   const [prompt, setPrompt] = useState('')
   const [platform, setPlatform] = useState<'web' | 'ios'>('web')
@@ -292,10 +292,10 @@ export default function PremiumHero() {
             <h2 className="mb-4 text-2xl font-light text-white/80 md:text-3xl">Ship something you can defend.</h2>
             <p className="mb-8 text-white/40">You don&apos;t need to trust AI anymore. TORBIT proves itself.</p>
             <a
-              href={isLoggedIn ? '/dashboard' : '/login'}
+              href={isLoggedIn ? '/builder' : '/login'}
               className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 font-medium text-black transition-all hover:shadow-[0_0_40px_rgba(255,255,255,0.2)]"
             >
-              {isLoggedIn ? 'Go to Dashboard' : 'Build with Guarantees'}
+              {isLoggedIn ? 'Start Building' : 'Build with Guarantees'}
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>

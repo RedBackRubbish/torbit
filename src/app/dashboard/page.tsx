@@ -60,7 +60,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login')
+      router.replace('/login?next=/dashboard')
     }
   }, [authLoading, user, router])
 
@@ -106,7 +106,7 @@ export default function DashboardPage() {
     )
   }
 
-  const handleNewProject = () => router.push('/')
+  const handleNewProject = () => router.push('/builder')
   const handleOpenProject = (projectId: string) => {
     sessionStorage.setItem('torbit_project_id', projectId)
     router.push('/builder')

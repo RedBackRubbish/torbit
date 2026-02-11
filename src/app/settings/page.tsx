@@ -11,7 +11,7 @@ import { motion } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuthContext } from '@/providers/AuthProvider'
 import { useBilling } from '@/hooks/useBilling'
 import { 
   User, 
@@ -50,7 +50,7 @@ function SettingsPageLoading() {
 function SettingsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, profile, loading: authLoading } = useAuth()
+  const { user, profile, loading: authLoading } = useAuthContext()
   const { status: billingStatus, loading: billingLoading, openPortal } = useBilling()
   const [activeTab, setActiveTab] = useState<SettingsTab>('account')
   const [saving, setSaving] = useState(false)
@@ -75,7 +75,7 @@ function SettingsPageContent() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login')
+      router.replace('/login?next=/settings')
     }
   }, [user, authLoading, router])
 

@@ -85,7 +85,6 @@ export function useAuth() {
         }
 
         if (session?.user) {
-          console.log('[useAuth] Session found:', session.user.email)
           setState(s => ({ 
             ...s, 
             user: session.user, 
@@ -105,7 +104,6 @@ export function useAuth() {
             setState(s => ({ ...s, profile: profile as Profile | null }))
           }
         } else {
-          console.log('[useAuth] No session')
           setState(s => ({ ...s, loading: false }))
           clearSafetyTimer()
         }
@@ -130,8 +128,6 @@ export function useAuth() {
     const { data: { subscription } } = sb.auth.onAuthStateChange(
       async (event, session) => {
         if (cancelled) return
-        
-        console.log('[useAuth] Auth changed:', event, session?.user?.email)
         
         if (session?.user) {
           setState(s => ({ 

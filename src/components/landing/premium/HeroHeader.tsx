@@ -35,12 +35,17 @@ export function HeroHeader({ showContent, isLoggedIn }: HeroHeaderProps) {
           <div className="hidden h-4 w-px bg-white/10 sm:block" />
 
           {isLoggedIn ? (
-            <Link
-              href="/dashboard"
-              className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-all hover:bg-white/90"
-            >
-              Dashboard
-            </Link>
+            <>
+              <Link href="/dashboard" className="text-sm text-white/50 transition-colors hover:text-white">
+                Dashboard
+              </Link>
+              <Link
+                href="/builder"
+                className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-all hover:bg-white/90"
+              >
+                Start Building
+              </Link>
+            </>
           ) : (
             <>
               <Link href="/login" className="text-sm text-white/50 transition-colors hover:text-white">
