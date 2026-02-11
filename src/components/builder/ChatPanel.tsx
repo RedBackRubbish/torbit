@@ -302,7 +302,8 @@ export default function ChatPanel() {
     }
 
     if (isActionRun) {
-      setShowSupervisor(true)
+      // Collect supervisor lines silently — panel only opens at
+      // build-end verification or auto-heal, not during the build.
       const line = formatSupervisorEventLine(event)
       setSupervisorLiveLines((previous) => {
         if (previous[previous.length - 1] === line) return previous
@@ -313,7 +314,6 @@ export default function ChatPanel() {
     if (event.event === 'run_started') {
       setRunStatus('Thinking')
       setRunStatusDetail(event.summary)
-      setSupervisorLoading(true)
       updateDiagnostics({
         lastErrorClass: null,
         recoveryAction: 'Run started. Monitoring execution gates.',
