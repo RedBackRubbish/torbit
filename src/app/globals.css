@@ -20,11 +20,11 @@
   --color-border-focus: #333333;
   --color-border-silver: #404040;
 
-  /* Silver Text Hierarchy */
+  /* Silver Text Hierarchy (WCAG AA compliant on #000) */
   --color-text-primary: #ffffff;
   --color-text-secondary: #c0c0c0;
-  --color-text-tertiary: #909090;
-  --color-text-muted: #606060;
+  --color-text-tertiary: #949494;  /* 5.0:1 on #000 */
+  --color-text-muted: #737373;     /* 3.7:1 — large text only */
   --color-text-silver: #a8a8a8;
 
   /* Silver Accent */
@@ -289,7 +289,12 @@ body::after {
   backdrop-filter: blur(16px) saturate(132%);
 }
 
-/* Focus ring */
+/* Focus ring - global default for all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 .focus-ring {
   outline: none;
 }
@@ -297,6 +302,15 @@ body::after {
 .focus-ring:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Gradient text */

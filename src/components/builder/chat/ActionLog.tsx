@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Check, 
@@ -138,16 +139,16 @@ function ActionItem({ toolCall, isLast }: { toolCall: ToolCall; isLast: boolean 
       {/* Action content */}
       <div className="flex items-center gap-1.5 py-0.5 min-w-0">
         <span className={`flex-shrink-0 ${
-          isError ? 'text-red-400' : 
+          isError ? 'text-red-400' :
           isRunning ? 'text-[#808080]' :
-          'text-[#505050]'
+          'text-[#737373]'
         }`}>
           {meta.icon}
         </span>
         <span className={`text-[12px] truncate ${
-          isError ? 'text-red-400' : 
+          isError ? 'text-red-400' :
           isRunning ? 'text-[#a0a0a0]' :
-          'text-[#606060]'
+          'text-[#808080]'
         }`}>
           {meta.label}
         </span>
@@ -159,17 +160,32 @@ function ActionItem({ toolCall, isLast }: { toolCall: ToolCall; isLast: boolean 
 /**
  * ActionLog - Connected-line timeline of actions
  */
+const COLLAPSE_THRESHOLD = 5
+
 export function ActionLog({ toolCalls, isLoading, className = '' }: ActionLogProps) {
+  const [expanded, setExpanded] = useState(false)
+  const [recentlyFinished, setRecentlyFinished] = useState(false)
+  const wasLoadingRef = useRef(isLoading)
+
+  // Keep log expanded for 3s after stream finishes so user can see what happened
+  useEffect(() => {
+    if (wasLoadingRef.current && !isLoading) {
+      setRecentlyFinished(true)
+      const timer = setTimeout(() => setRecentlyFinished(false), 3000)
+      return () => clearTimeout(timer)
+    }
+    wasLoadingRef.current = isLoading
+  }, [isLoading])
+
   if (toolCalls.length === 0 && !isLoading) return null
-  
+
   // For reads, collapse into a single "Explore - N files" entry when > 2
   const reads = toolCalls.filter(tc => tc.name === 'readFile')
   const nonReads = toolCalls.filter(tc => tc.name !== 'readFile')
-  
+
   const displayItems: ToolCall[] = []
-  
+
   if (reads.length > 2) {
-    // Show a synthetic "Explore" entry
     const allComplete = reads.every(tc => tc.status === 'complete')
     displayItems.push({
       id: 'explore-group',
@@ -180,9 +196,9 @@ export function ActionLog({ toolCalls, isLoading, className = '' }: ActionLogPro
   } else {
     displayItems.push(...reads)
   }
-  
+
   displayItems.push(...nonReads)
-  
+
   // Sort by original order
   const originalOrder = toolCalls.map(tc => tc.id)
   displayItems.sort((a, b) => {
@@ -190,7 +206,12 @@ export function ActionLog({ toolCalls, isLoading, className = '' }: ActionLogPro
     const bIdx = b.id === 'explore-group' ? 0 : originalOrder.indexOf(b.id)
     return aIdx - bIdx
   })
-  
+
+  // Collapse completed actions when there are many, but keep expanded during loading and briefly after
+  const shouldCollapse = !isLoading && !recentlyFinished && displayItems.length > COLLAPSE_THRESHOLD && !expanded
+  const visibleItems = shouldCollapse ? displayItems.slice(-3) : displayItems
+  const hiddenCount = shouldCollapse ? displayItems.length - 3 : 0
+
   return (
     <div className={`py-1 ${className}`}>
       {/* Loading placeholder */}
@@ -201,15 +222,26 @@ export function ActionLog({ toolCalls, isLoading, className = '' }: ActionLogPro
             animate={{ opacity: [0.4, 1, 0.4] }}
             transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
           />
-          <span className="text-[12px] text-[#505050]">Working...</span>
+          <span className="text-[12px] text-[#737373]">Working...</span>
         </div>
       )}
-      
-      {displayItems.map((tc, i) => (
-        <ActionItem 
-          key={tc.id} 
-          toolCall={tc} 
-          isLast={i === displayItems.length - 1}
+
+      {/* Collapsed summary */}
+      {hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="flex items-center gap-2 pl-4 py-0.5 text-[11px] text-[#606060] hover:text-[#909090] transition-colors"
+        >
+          <div className="w-[7px] h-[7px] rounded-full bg-[#252525]" />
+          <span>{hiddenCount} more action{hiddenCount !== 1 ? 's' : ''}...</span>
+        </button>
+      )}
+
+      {visibleItems.map((tc, i) => (
+        <ActionItem
+          key={tc.id}
+          toolCall={tc}
+          isLast={i === visibleItems.length - 1}
         />
       ))}
     </div>
@@ -239,7 +271,7 @@ export function ActionIndicator({ toolCalls, isLoading }: { toolCalls: ToolCall[
         </div>
       )}
       {completed > 0 && (
-        <div className="flex items-center gap-1 text-[#505050]">
+        <div className="flex items-center gap-1 text-[#737373]">
           <Check className="w-3 h-3" />
           <span>{completed}</span>
         </div>

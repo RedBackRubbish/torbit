@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 interface MarkdownRendererProps {
   content: string
@@ -26,6 +26,40 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
   return <div className={className}>{rendered}</div>
 }
 
+function CollapsibleCode({ code, lang }: { code: string; lang: string }) {
+  const [open, setOpen] = useState(false)
+  const lineCount = code.split('\n').length
+  const preview = code.split('\n').slice(0, 3).join('\n')
+
+  return (
+    <div className="my-2 rounded-lg border border-[#1a1a1a] bg-[#0a0a0a] overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-[#808080] hover:text-[#a0a0a0] transition-colors"
+      >
+        <svg
+          className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+        <span className="font-mono">{lang || 'code'}</span>
+        <span className="text-[#404040]">{lineCount} lines</span>
+      </button>
+      {open && (
+        <pre className="px-3 pb-3 text-[12px] text-[#a0a0a0] font-mono leading-relaxed overflow-x-auto max-h-[300px]">
+          <code>{code}</code>
+        </pre>
+      )}
+      {!open && (
+        <pre className="px-3 pb-2 text-[11px] text-[#404040] font-mono leading-relaxed overflow-hidden max-h-[48px]">
+          <code>{preview}</code>
+        </pre>
+      )}
+    </div>
+  )
+}
+
 function parseAndRender(content: string): React.ReactNode {
   if (!content?.trim()) return null
   
@@ -35,6 +69,8 @@ function parseAndRender(content: string): React.ReactNode {
   let listType: 'check' | 'bullet' | null = null
   let key = 0
   let inCodeBlock = false
+  let codeBlockLines: string[] = []
+  let codeBlockLang = ''
   
   const flushList = () => {
     if (listItems.length > 0) {
@@ -52,12 +88,28 @@ function parseAndRender(content: string): React.ReactNode {
     const line = lines[i]
     const trimmed = line.trim()
     
-    // Skip code blocks entirely
+    // Render code blocks in collapsible sections
     if (trimmed.startsWith('```')) {
-      inCodeBlock = !inCodeBlock
+      if (!inCodeBlock) {
+        inCodeBlock = true
+        codeBlockLines = []
+        codeBlockLang = trimmed.slice(3).trim() || ''
+        continue
+      } else {
+        inCodeBlock = false
+        flushList()
+        const code = codeBlockLines.join('\n')
+        const lang = codeBlockLang
+        elements.push(<CollapsibleCode key={`code-${key++}`} code={code} lang={lang} />)
+        codeBlockLines = []
+        codeBlockLang = ''
+        continue
+      }
+    }
+    if (inCodeBlock) {
+      codeBlockLines.push(line)
       continue
     }
-    if (inCodeBlock) continue
     
     // Empty line
     if (!trimmed) {

@@ -11,6 +11,7 @@ interface ChatInputProps {
   intentMode: 'auto' | 'chat' | 'action'
   onIntentModeChange: (mode: 'auto' | 'chat' | 'action') => void
   currentStep?: number
+  hasMessages?: boolean
 }
 
 /**
@@ -23,6 +24,7 @@ export function ChatInput({
   onSubmit,
   intentMode,
   onIntentModeChange,
+  hasMessages = false,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -56,15 +58,16 @@ export function ChatInput({
     >
       <div className="mb-2 flex items-center gap-2" role="radiogroup" aria-label="Prompt mode">
         {([
-          { value: 'auto', label: 'Auto' },
-          { value: 'chat', label: 'Chat' },
-          { value: 'action', label: 'Action' },
+          { value: 'auto', label: 'Smart', hint: 'Routes automatically' },
+          { value: 'chat', label: 'Reply', hint: 'Text reply only' },
+          { value: 'action', label: 'Execute', hint: 'Build immediately' },
         ] as const).map((mode) => (
           <button
             key={mode.value}
             type="button"
             role="radio"
             aria-checked={intentMode === mode.value}
+            title={mode.hint}
             disabled={isLoading}
             onClick={() => onIntentModeChange(mode.value)}
             className={`rounded-md px-2.5 py-1 text-[11px] transition-colors ${
@@ -76,8 +79,8 @@ export function ChatInput({
             {mode.label}
           </button>
         ))}
-        <span className="text-[11px] text-[#505050]">
-          {intentMode === 'chat' ? 'Reply only' : intentMode === 'action' ? 'Execute now' : 'Smart routing'}
+        <span className="text-[11px] text-[#737373]">
+          {intentMode === 'chat' ? 'Text reply only' : intentMode === 'action' ? 'Build immediately' : 'Routes automatically'}
         </span>
       </div>
 
@@ -88,7 +91,7 @@ export function ChatInput({
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a follow-up..."
+            placeholder={hasMessages ? 'Ask a follow-up...' : 'Describe what you want to build...'}
             aria-label="Describe what you want Torbit to produce"
             disabled={isLoading}
             rows={1}

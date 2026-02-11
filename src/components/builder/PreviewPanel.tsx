@@ -197,12 +197,12 @@ export default function PreviewPanel() {
       return () => cancelAnimationFrame(frameId)
     }
     
-    // Auto-collapse 1.5s after environment is ready
+    // Auto-collapse 4s after environment is ready (gives time to scan output)
     if (wasBootingRef.current && isReady && !isBooting) {
       wasBootingRef.current = false
       const timeout = setTimeout(() => {
         setShowRuntimeLog(false)
-      }, 1500)
+      }, 4000)
       return () => clearTimeout(timeout)
     }
   }, [terminalLines.length, isBooting, isReady])

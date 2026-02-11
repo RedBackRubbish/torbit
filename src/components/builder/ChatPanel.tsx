@@ -1560,6 +1560,7 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
             onSubmit={handleSubmit}
             intentMode={intentMode}
             onIntentModeChange={setIntentMode}
+            hasMessages={messages.length > 0}
           />
         )}
       </AnimatePresence>

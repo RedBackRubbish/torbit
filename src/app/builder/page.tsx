@@ -252,7 +252,7 @@ function BuilderPageContent() {
             <Link
               href="/dashboard"
               aria-label="Go to dashboard"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[#525252] transition-all hover:bg-[#141414] hover:text-[#fafafa]"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[#525252] transition-all hover:bg-[#141414] hover:text-[#fafafa] focus-ring"
               title="Dashboard"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -266,12 +266,12 @@ function BuilderPageContent() {
 
             <div className="flex items-center gap-1.5 border-r border-[#1f1f1f] px-2">
               {isWorking ? <TorbitSpinner size="xs" speed="fast" /> : <div className="h-1.5 w-1.5 rounded-full bg-[#333]" />}
-              <span className="hidden text-[11px] text-[#525252] md:inline">{isWorking ? 'Working' : 'Ready'}</span>
+              <span className="hidden text-[11px] text-[#737373] md:inline">{isWorking ? 'Working' : 'Ready'}</span>
             </div>
 
             <div className="hidden items-center gap-1.5 border-r border-[#1f1f1f] px-2 xl:flex">
               <span className={`h-1.5 w-1.5 rounded-full ${onlineCollaboratorCount > 0 ? 'bg-emerald-500' : 'bg-[#333]'}`} />
-              <span className="text-[11px] text-[#525252]">
+              <span className="text-[11px] text-[#737373]">
                 {onlineCollaboratorCount > 0 ? `${onlineCollaboratorCount + 1} collaborators online` : 'Solo session'}
               </span>
             </div>
@@ -289,10 +289,11 @@ function BuilderPageContent() {
 
             <button
               onClick={() => setShowTasks((value) => !value)}
-              className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition-all focus-ring ${
                 showTasks ? 'bg-[#1f1f1f] text-[#fafafa]' : 'text-[#525252] hover:bg-[#141414] hover:text-[#a1a1a1]'
               }`}
               title="Tasks"
+              aria-label={showTasks ? 'Close tasks panel' : 'Open tasks panel'}
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
