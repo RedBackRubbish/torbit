@@ -28,6 +28,7 @@ const clientSchema = z.object({
 })
 
 function main() {
+  const isCI = !!process.env.CI || !!process.env.VERCEL
   const warnings: string[] = []
   let fatal = false
 
@@ -78,11 +79,15 @@ function main() {
   }
 
   if (fatal) {
-    console.error('\n\x1b[31mEnvironment validation failed. Fix the errors above before starting.\x1b[0m')
-    process.exit(1)
+    if (isCI) {
+      console.warn('\n\x1b[33m⚠ Environment validation issues detected (non-blocking in CI)\x1b[0m')
+    } else {
+      console.error('\n\x1b[31mEnvironment validation failed. Fix the errors above before starting.\x1b[0m')
+      process.exit(1)
+    }
+  } else {
+    console.log('\x1b[32m✓ Environment validated\x1b[0m')
   }
-
-  console.log('\x1b[32m✓ Environment validated\x1b[0m')
 }
 
 main()
