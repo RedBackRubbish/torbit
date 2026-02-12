@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/types'
+import { withAuth } from '@/lib/middleware/auth'
 
 export const runtime = 'nodejs'
 
@@ -33,13 +34,8 @@ function isMissingProductEventsTableError(error: {
   )
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request, { user }) => {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
-  }
 
   try {
     const body = await request.json()
@@ -87,4 +83,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

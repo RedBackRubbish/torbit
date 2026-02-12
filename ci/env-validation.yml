@@ -1,0 +1,84 @@
+# ===========================================================================
+# CI Step: Environment Contract Validation
+#
+# Verifies that the app fails loudly at boot when required environment
+# variables are missing or malformed.
+#
+# Usage — paste this into your GitHub Actions workflow:
+#
+#   jobs:
+#     ci:
+#       steps:
+#         - uses: actions/checkout@v4
+#         - uses: pnpm/action-setup@v4
+#         - uses: actions/setup-node@v4
+#           with:
+#             node-version: 22
+#             cache: pnpm
+#         - run: pnpm install --frozen-lockfile
+#         # ... then include the steps below:
+# ===========================================================================
+
+# --- 1. Unit tests for the env contract itself ---
+- name: Run env contract tests
+  run: pnpm vitest run src/lib/env.contract.test.ts
+  env:
+    NODE_ENV: test
+
+# --- 2. Boot-time validation: missing vars MUST fail ---
+# Runs a tiny inline script that imports assertEnvContract('server')
+# with NODE_ENV=production and NO env vars set. If the process exits 0,
+# something is wrong — the contract didn't enforce.
+- name: Assert boot fails on missing env
+  run: |
+    set +e
+    node --import tsx -e "
+      process.env.NODE_ENV = 'production';
+      const { assertEnvContract } = await import('./src/lib/env.contract.ts');
+      try {
+        assertEnvContract('server');
+        console.error('ERROR: assertEnvContract did not throw — contract is broken');
+        process.exit(1);
+      } catch (e) {
+        console.log('Boot correctly failed:', e.message.split('\n')[0]);
+        process.exit(0);
+      }
+    "
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -ne 0 ]; then
+      echo "::error::Env contract did not reject missing variables"
+      exit 1
+    fi
+  env:
+    # Deliberately empty — no secrets injected
+    NODE_ENV: production
+
+# --- 3. Boot-time validation: valid vars MUST pass ---
+# Verifies that the contract passes when all required vars are present.
+- name: Assert boot passes with valid env
+  run: |
+    node --import tsx -e "
+      process.env.NODE_ENV = 'production';
+      const { assertEnvContract } = await import('./src/lib/env.contract.ts');
+      assertEnvContract('server');
+      console.log('Boot validation passed');
+    "
+  env:
+    NODE_ENV: production
+    NEXT_PUBLIC_SUPABASE_URL: https://ci-test.supabase.co
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiJ9.ci-test
+    ANTHROPIC_API_KEY: sk-ant-ci-placeholder
+
+# --- 4. Edge contract: must also pass ---
+- name: Assert edge boot passes with valid env
+  run: |
+    node --import tsx -e "
+      process.env.NODE_ENV = 'production';
+      const { assertEnvContract } = await import('./src/lib/env.contract.ts');
+      assertEnvContract('edge');
+      console.log('Edge boot validation passed');
+    "
+  env:
+    NODE_ENV: production
+    NEXT_PUBLIC_SUPABASE_URL: https://ci-test.supabase.co
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiJ9.ci-test

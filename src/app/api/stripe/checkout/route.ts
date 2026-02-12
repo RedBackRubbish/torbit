@@ -1,33 +1,25 @@
 /**
  * TORBIT - Stripe Checkout API
- * 
+ *
  * Creates Stripe Checkout sessions for subscriptions and fuel purchases.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe, getSubscriptionPriceId, getFuelPackPriceId } from '@/lib/billing/stripe'
-import type { CheckoutRequest, CheckoutResponse, SubscriptionTier } from '@/lib/billing/types'
+import type { CheckoutRequest, SubscriptionTier } from '@/lib/billing/types'
 import { FUEL_PACKS, TIER_CONFIG } from '@/lib/billing/types'
+import { withAuth } from '@/lib/middleware/auth'
 
-export async function POST(request: NextRequest): Promise<NextResponse<CheckoutResponse>> {
+export const POST = withAuth(async (request, { user }) => {
   try {
-    // 1. Authenticate user
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // 2. Parse request
+    // 1. Parse request
     const body: CheckoutRequest = await request.json()
     const { mode, tier, fuelPackId } = body
 
-    // 3. Get or create Stripe customer
+    // 2. Get or create Stripe customer
     const stripe = getStripe()
     let stripeCustomerId: string
 
@@ -59,7 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutR
         })
     }
 
-    // 4. Build checkout session based on mode
+    // 3. Build checkout session based on mode
     const origin = request.headers.get('origin') || 'http://localhost:3000'
     const successUrl = `${origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`
     const cancelUrl = `${origin}/dashboard?checkout=canceled`
@@ -179,11 +171,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutR
   } catch (error) {
     console.error('Checkout error:', error)
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Checkout failed' 
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Checkout failed'
       },
       { status: 500 }
     )
   }
-}
+})

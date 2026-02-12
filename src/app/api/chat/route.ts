@@ -7,13 +7,13 @@ import { openai } from '@ai-sdk/openai'
 import { AGENT_TOOLS, type AgentId } from '@/lib/tools/definitions'
 import { createOrchestrator, type AgentResult } from '@/lib/agents/orchestrator'
 import { chatRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
-import { getAuthenticatedUser } from '@/lib/supabase/auth'
+import { withAuth } from '@/lib/middleware/auth'
 import { resolveScopedProjectId } from '@/lib/projects/project-id'
 import { classifyIntent, isActionIntent, resolveIntent, type IntentMode } from '@/lib/intent/classifier'
 import { runVibeAudit } from '@/lib/vibe-audit'
 import { runVibeAutofix } from '@/lib/vibe-autofix'
 import { makeSupervisorEvent, type SupervisorEvent } from '@/lib/supervisor/events'
-import { assertRuntimeConfig } from '@/lib/env'
+import { assertEnvContract } from '@/lib/env.contract'
 import { isTransientModelError } from '@/lib/supervisor/fallback'
 import {
   rankConversationProviders,
@@ -661,22 +661,7 @@ async function executeActionFlow(input: ExecutionOptions): Promise<AgentResult> 
   return thirdAttempt
 }
 
-export async function POST(req: Request) {
-  assertRuntimeConfig()
-
-  const clientIP = getClientIP(req)
-  const rateLimitResult = await chatRateLimiter.check(clientIP)
-  if (!rateLimitResult.success) {
-    return rateLimitResponse(rateLimitResult)
-  }
-
-  const user = await getAuthenticatedUser(req)
-  if (!user) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized. Please log in to use the chat.' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    )
-  }
+const authedChatHandler = withAuth(async (req, { user }) => {
 
   let parsedBody: z.infer<typeof ChatRequestSchema>
   try {
@@ -1053,4 +1038,16 @@ export async function POST(req: Request) {
       Connection: 'keep-alive',
     },
   })
+})
+
+export async function POST(req: Request) {
+  assertEnvContract('server')
+
+  const clientIP = getClientIP(req)
+  const rateLimitResult = await chatRateLimiter.check(clientIP)
+  if (!rateLimitResult.success) {
+    return rateLimitResponse(rateLimitResult)
+  }
+
+  return authedChatHandler(req)
 }

@@ -1,0 +1,88 @@
+name: Env Contract Validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  env-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run env contract tests
+        run: pnpm vitest run src/lib/env.contract.test.ts
+        env:
+          NODE_ENV: test
+
+      - name: Assert boot fails on missing env
+        run: |
+          set +e
+          node --import tsx -e "
+            process.env.NODE_ENV = 'production';
+            const { assertEnvContract } = await import('./src/lib/env.contract.ts');
+            try {
+              assertEnvContract('server');
+              console.error('ERROR: assertEnvContract did not throw — contract is broken');
+              process.exit(1);
+            } catch (e) {
+              console.log('Boot correctly failed:', e.message.split('\n')[0]);
+              process.exit(0);
+            }
+          "
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "::error::Env contract did not reject missing variables"
+            exit 1
+          fi
+        env:
+          NODE_ENV: production
+
+      - name: Assert boot passes with valid env
+        run: |
+          node --import tsx -e "
+            process.env.NODE_ENV = 'production';
+            const { assertEnvContract } = await import('./src/lib/env.contract.ts');
+            assertEnvContract('server');
+            console.log('Boot validation passed');
+          "
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-test.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiJ9.ci-test
+          ANTHROPIC_API_KEY: sk-ant-ci-placeholder
+
+      - name: Assert edge boot passes with valid env
+        run: |
+          node --import tsx -e "
+            process.env.NODE_ENV = 'production';
+            const { assertEnvContract } = await import('./src/lib/env.contract.ts');
+            assertEnvContract('edge');
+            console.log('Edge boot validation passed');
+          "
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-test.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiJ9.ci-test

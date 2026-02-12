@@ -10,8 +10,8 @@ vi.mock('@/lib/rate-limit', () => ({
   rateLimitResponse: vi.fn(),
 }))
 
-vi.mock('@/lib/env', () => ({
-  assertRuntimeConfig: vi.fn(),
+vi.mock('@/lib/env.contract', () => ({
+  assertEnvContract: vi.fn(),
 }))
 
 // Stub heavy AI SDK / orchestrator imports so the module loads without provider keys
@@ -66,7 +66,7 @@ describe('/api/chat', () => {
   })
 
   it('rejects invalid JSON with 400', async () => {
-    ;(getAuthenticatedUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'user-1' })
+    ;(getAuthenticatedUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'user-1', email: 'test@torbit.dev' })
 
     const req = new Request('http://localhost/api/chat', {
       method: 'POST',
@@ -79,7 +79,7 @@ describe('/api/chat', () => {
   })
 
   it('rejects empty messages array with 400', async () => {
-    ;(getAuthenticatedUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'user-1' })
+    ;(getAuthenticatedUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'user-1', email: 'test@torbit.dev' })
 
     const req = new Request('http://localhost/api/chat', {
       method: 'POST',
@@ -95,7 +95,7 @@ describe('/api/chat', () => {
   })
 
   it('rejects malformed message schema with 400', async () => {
-    ;(getAuthenticatedUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'user-1' })
+    ;(getAuthenticatedUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'user-1', email: 'test@torbit.dev' })
 
     const req = new Request('http://localhost/api/chat', {
       method: 'POST',

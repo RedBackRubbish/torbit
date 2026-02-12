@@ -2,7 +2,7 @@ import { generateObject } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
-import { getAuthenticatedUser } from '@/lib/supabase/auth'
+import { withAuth } from '@/lib/middleware/auth'
 
 export const maxDuration = 60
 
@@ -108,18 +108,7 @@ function buildSupervisorResponse(object: SupervisorResponseObject) {
   }
 }
 
-export async function POST(req: Request) {
-  // ========================================================================
-  // AUTHENTICATION - Verify user is logged in
-  // ========================================================================
-  const user = await getAuthenticatedUser(req)
-  if (!user) {
-    return Response.json(
-      { error: 'Unauthorized. Please log in.' },
-      { status: 401 }
-    )
-  }
-
+export const POST = withAuth(async (req, { user }) => {
   try {
     // ========================================================================
     // REQUEST VALIDATION - Validate and parse request body
@@ -256,4 +245,4 @@ ${safeFilesCreated.length > 10 ? `... and ${safeFilesCreated.length - 10} more` 
       { status: 500 }
     )
   }
-}
+})

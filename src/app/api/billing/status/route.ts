@@ -6,23 +6,12 @@
  */
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { getBillingStatus, checkAndProcessDailyRefill } from '@/lib/billing/utils'
+import { withAuth } from '@/lib/middleware/auth'
 
-export async function GET(): Promise<NextResponse> {
+export const GET = withAuth(async (_req, { user }) => {
   try {
-    // 1. Authenticate user
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // 2. Check for daily refill eligibility (free tier)
+    // 1. Check for daily refill eligibility (free tier)
     const refillResult = await checkAndProcessDailyRefill(user.id)
 
     // 3. Get full billing status
@@ -43,11 +32,11 @@ export async function GET(): Promise<NextResponse> {
   } catch (error) {
     console.error('Billing status error:', error)
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to get billing status' 
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get billing status'
       },
       { status: 500 }
     )
   }
-}
+})

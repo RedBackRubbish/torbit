@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { buildMetricsSummary } from '@/lib/metrics/summary'
+import { withAuth } from '@/lib/middleware/auth'
 
 export const runtime = 'nodejs'
 
@@ -10,14 +11,8 @@ const QuerySchema = z.object({
   projectId: z.string().uuid().optional(),
 })
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request) => {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
-  }
-
   const url = new URL(request.url)
   const parsed = QuerySchema.safeParse({
     days: url.searchParams.get('days') || undefined,
@@ -60,4 +55,4 @@ export async function GET(request: NextRequest) {
     },
     summary,
   })
-}
+})

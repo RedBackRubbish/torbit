@@ -1,30 +1,22 @@
 /**
  * TORBIT - Stripe Customer Portal API
- * 
+ *
  * Creates a session for the Stripe Customer Portal where users can:
  * - Update payment method
  * - View invoices
  * - Cancel/modify subscription
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/billing/stripe'
+import { withAuth } from '@/lib/middleware/auth'
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export const POST = withAuth(async (request, { user }) => {
   try {
-    // 1. Authenticate user
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // 2. Get Stripe customer ID
+    // 1. Get Stripe customer ID
     const { data: customerRecord } = await supabase
       .from('stripe_customers')
       .select('stripe_customer_id')
@@ -38,7 +30,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    // 3. Create portal session
+    // 2. Create portal session
     const stripe = getStripe()
     const origin = request.headers.get('origin') || 'http://localhost:3000'
 
@@ -55,11 +47,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     console.error('Portal error:', error)
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to create portal session' 
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create portal session'
       },
       { status: 500 }
     )
   }
-}
+})

@@ -14,6 +14,9 @@ import { updateSession } from '@/lib/supabase/middleware'
 import {
   isE2EAuthenticatedRequest,
 } from '@/lib/e2e-auth'
+import { assertEnvContract } from '@/lib/env.contract'
+
+assertEnvContract('edge')
 
 // Routes that require authentication
 const protectedRoutes = ['/builder', '/dashboard']
