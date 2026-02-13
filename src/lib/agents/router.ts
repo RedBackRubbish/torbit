@@ -1,89 +1,91 @@
 /**
- * KIMI INTELLIGENT ROUTER
+ * TORBIT — Deterministic Agent Router
  *
- * Uses Kimi K2.5 (Moonshot AI) as the master router/orchestrator.
- * Kimi K2.5 excels at:
- * - Task decomposition and complexity assessment
- * - Multi-step agentic tool use
- * - 256K context for understanding full codebase
- * - Native multimodal (vision) for UI/design tasks
- * - Strong reasoning for architectural decisions
+ * Routes user requests to the correct agent using:
+ *   1. Intent classification (chat | create | edit | debug | deploy)
+ *   2. Governance kernel permissions (AGENT_ALLOWED_INTENTS)
+ *   3. Domain keyword scoring (no LLM calls, no stochastic behavior)
  *
- * API: OpenAI-compatible (https://api.moonshot.cn/v1)
- * Model: kimi-k2.5 (1T params, 32B active MoE, 256K context)
+ * Every routing decision is logged as a machine-readable audit entry.
+ * Ambiguous routes throw rather than silently defaulting.
  */
 
-import { z } from 'zod'
-import type { AgentId } from '../tools/definitions'
-import { createKimiClient, type KimiModel } from '../providers/kimi'
+import type { AgentId } from '@/lib/tools/definitions'
+import type { IntentKind } from '@/lib/intent/classifier'
+import { classifyIntent, isActionIntent } from '@/lib/intent/classifier'
+import { AGENT_ALLOWED_INTENTS, isReadOnlyAgent } from '@/lib/governance/kernel'
 
 // ============================================
-// ROUTING TYPES
+// TYPES
 // ============================================
 
-export const TaskComplexitySchema = z.enum(['trivial', 'simple', 'moderate', 'complex', 'architectural'])
-export type TaskComplexity = z.infer<typeof TaskComplexitySchema>
-
-export const TaskCategorySchema = z.enum([
-  'code-generation',
-  'code-review',
-  'refactoring',
-  'debugging',
-  'testing',
-  'documentation',
-  'architecture',
-  'ui-design',
-  'api-design',
-  'database',
-  'devops',
-  'general-query',
-])
-export type TaskCategory = z.infer<typeof TaskCategorySchema>
-
+/**
+ * The output of the deterministic routing algorithm.
+ * Every field is derived from rules, never from an LLM.
+ */
 export interface RoutingDecision {
   /** Which agent should handle this task */
   targetAgent: AgentId
-  /** Preferred model tier based on complexity */
+  /** The classified intent of the user's request */
+  intent: IntentKind
+  /** Preferred model tier based on intent and critical path */
   modelTier: 'opus' | 'sonnet' | 'flash'
-  /** Assessed task complexity */
-  complexity: TaskComplexity
-  /** Primary task category */
-  category: TaskCategory
-  /** Whether this requires multimodal (vision) processing */
-  requiresVision: boolean
-  /** Whether this should use thinking mode (for complex reasoning) */
-  useThinking: boolean
-  /** Reasoning for the decision */
+  /** Whether the request touches auth/payment/security surfaces */
+  isCriticalPath: boolean
+  /** Deterministic explanation of why this agent was selected */
   reasoning: string
-  /** Confidence score (0-1) */
-  confidence: number
-  /** Suggested sub-tasks if task should be decomposed */
-  subtasks?: string[]
-  /** Whether this was escalated due to low confidence */
-  escalated?: boolean
-  /** Effort level for Opus tasks (low/medium/high) */
-  effort?: 'low' | 'medium' | 'high'
-  /** Whether this is a critical security path */
-  isCriticalPath?: boolean
+  /** Which domain keywords matched in the prompt */
+  signals: string[]
 }
 
-// ============================================
-// CONFIDENCE & ESCALATION THRESHOLDS
-// ============================================
+/**
+ * Machine-readable audit record for every routing decision.
+ * Surfaced to the supervisor panel for traceability.
+ */
+export interface RoutingAuditEntry {
+  /** ISO-8601 timestamp */
+  timestamp: string
+  /** User prompt, truncated to 200 characters */
+  prompt: string
+  /** Classified intent */
+  intent: IntentKind
+  /** Candidate agents that were eligible */
+  candidates: AgentId[]
+  /** The agent that was ultimately selected */
+  selected: AgentId
+  /** Domain keywords that influenced the decision */
+  signals: string[]
+  /** Whether a critical path upgrade was applied */
+  isCriticalPath: boolean
+  /** Final model tier */
+  modelTier: 'opus' | 'sonnet' | 'flash'
+}
 
-export const CONFIDENCE_THRESHOLDS = {
-  /** Below this, escalate to Planner for clarification */
-  ESCALATION: 0.7,
-  /** Above this, high confidence - proceed normally */
-  HIGH: 0.85,
-  /** Above this, perfect confidence - use faster model */
-  PERFECT: 0.95,
-} as const
+/**
+ * Error thrown when the router cannot unambiguously select an agent.
+ * The orchestrator should surface this to the user for clarification.
+ */
+export class AmbiguousRoutingError extends Error {
+  public readonly intent: IntentKind
+  public readonly tiedAgents: AgentId[]
+
+  constructor(intent: IntentKind, tiedAgents: AgentId[]) {
+    super(
+      `Cannot unambiguously route intent "${intent}". ` +
+      `Tied agents: ${tiedAgents.join(', ')}. ` +
+      `Add domain-specific keywords to disambiguate.`
+    )
+    this.name = 'AmbiguousRoutingError'
+    this.intent = intent
+    this.tiedAgents = tiedAgents
+  }
+}
 
 // ============================================
 // CRITICAL PATH DETECTION
 // ============================================
 
+/** Patterns that flag security-sensitive requests. */
 export const CRITICAL_PATH_PATTERNS = [
   /\b(auth|authentication|login|signup|password|session|jwt|oauth)\b/i,
   /\b(payment|stripe|checkout|billing|subscription|credit.?card)\b/i,
@@ -92,423 +94,293 @@ export const CRITICAL_PATH_PATTERNS = [
   /\b(pii|gdpr|hipaa|compliance|audit.?log|vulnerabilit\w*)\b/i,
 ]
 
-/**
- * Check if a task is on a critical security path
- */
+/** Check if a prompt touches a critical security path. */
 export function isCriticalPath(prompt: string): boolean {
   return CRITICAL_PATH_PATTERNS.some(pattern => pattern.test(prompt))
 }
 
-export interface RouterConfig {
-  /** Enable thinking mode for complex tasks (slower but more accurate) */
-  enableThinking?: boolean
-  /** Timeout for router decisions (ms) */
-  timeout?: number
-  /** Fallback model tier if router fails */
-  fallbackTier?: 'opus' | 'sonnet' | 'flash'
-  /** Use fast routing (kimi-k2-turbo) vs accurate routing (kimi-k2.5) */
-  fastMode?: boolean
-}
-
 // ============================================
-// ROUTING PROMPT
+// DOMAIN SIGNAL MAP
 // ============================================
 
-const ROUTER_SYSTEM_PROMPT = `You are Kimi, the intelligent router for TORBIT - an AI-powered development platform.
-
-Your job is to analyze incoming user requests and determine:
-1. Which specialized agent should handle the task
-2. What model tier (opus/sonnet/flash) is appropriate based on complexity
-3. Whether the task requires vision/multimodal capabilities
-4. Whether the task needs deep thinking (reasoning chains)
-
-AVAILABLE AGENTS:
-- architect: High-level design, system architecture, multi-file planning, complex refactors
-- frontend: React/Next.js components, UI implementation, styling, client-side logic
-- backend: API routes, server logic, business rules, integrations
-- database: Schema design, migrations, queries, data modeling
-- devops: CI/CD, deployment, infrastructure, containerization
-- qa: Testing, E2E, unit tests, quality assurance
-- planner: Breaking down features into actionable tasks
-- auditor: Code review, security audit, performance analysis
-
-MODEL TIER SELECTION:
-- opus: Architecture planning, complex multi-file refactors, debugging tricky issues, security-critical code
-- sonnet: Standard code generation, single-file edits, moderate complexity tasks
-- flash: Quick queries, simple lookups, formatting, straightforward tasks
-
-COMPLEXITY LEVELS:
-- trivial: Single-line changes, simple lookups, formatting
-- simple: Single-file edits, straightforward implementations
-- moderate: Multi-file changes, some design decisions needed
-- complex: Architectural changes, tricky debugging, security-sensitive
-- architectural: System-wide redesigns, new subsystems, major refactors
-
-RESPOND IN JSON FORMAT:
-{
-  "targetAgent": "<agent-id>",
-  "modelTier": "<opus|sonnet|flash>",
-  "complexity": "<trivial|simple|moderate|complex|architectural>",
-  "category": "<category>",
-  "requiresVision": <boolean>,
-  "useThinking": <boolean>,
-  "reasoning": "<brief explanation>",
-  "confidence": <0-1>,
-  "subtasks": ["<optional subtask list for complex tasks>"]
-}`
-
-// ============================================
-// KIMI ROUTER CLASS
-// ============================================
-
-export class KimiRouter {
-  private config: Required<RouterConfig>
-
-  constructor(config: RouterConfig = {}) {
-    this.config = {
-      enableThinking: config.enableThinking ?? true,
-      timeout: config.timeout ?? 10000,
-      fallbackTier: config.fallbackTier ?? 'sonnet',
-      fastMode: config.fastMode ?? false,
-    }
-  }
-
-  /**
-   * Analyze a user request and determine routing
-   */
-  async route(userPrompt: string, context?: {
-    hasImages?: boolean
-    codebaseSize?: 'small' | 'medium' | 'large'
-    previousAgents?: AgentId[]
-  }): Promise<RoutingDecision> {
-    // Quick heuristics for obvious cases (skip API call)
-    const quickDecision = this.quickRoute(userPrompt, context)
-    if (quickDecision) {
-      return quickDecision
-    }
-
-    // Use Kimi K2.5 for intelligent routing
-    try {
-      const client = createKimiClient()
-      const model: KimiModel = this.config.fastMode ? 'kimi-k2-turbo-preview' : 'kimi-k2.5'
-
-      const contextInfo = context ? `
-Context:
-- Has images/designs: ${context.hasImages ?? false}
-- Codebase size: ${context.codebaseSize ?? 'unknown'}
-- Previously involved agents: ${context.previousAgents?.join(', ') || 'none'}
-` : ''
-
-      const response = await client.chat.completions.create({
-        model,
-        messages: [
-          { role: 'system', content: ROUTER_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `Analyze this request and determine routing:\n\n"${userPrompt}"${contextInfo}`,
-          },
-        ],
-        response_format: { type: 'json_object' },
-        ...(this.config.enableThinking && !this.config.fastMode
-          ? {} // thinking is enabled by default for kimi-k2.5
-          : { extra_body: { thinking: { type: 'disabled' } } }),
-      })
-
-      const content = response.choices[0]?.message?.content
-      if (!content) {
-        return this.fallbackDecision(userPrompt)
-      }
-
-      const parsed = JSON.parse(content) as RoutingDecision
-      return this.validateDecision(parsed, userPrompt)
-    } catch (error) {
-      console.error('[KimiRouter] Routing failed, using fallback:', error)
-      return this.fallbackDecision(userPrompt)
-    }
-  }
-
-  /**
-   * Quick routing for obvious cases (no API call needed)
-   */
-  private quickRoute(
-    prompt: string,
-    context?: { hasImages?: boolean }
-  ): RoutingDecision | null {
-    // Vision tasks
-    if (context?.hasImages || /screenshot|image|design|figma|mockup|ui\s*\/\s*ux/i.test(prompt)) {
-      return {
-        targetAgent: 'frontend',
-        modelTier: 'opus',
-        complexity: 'moderate',
-        category: 'ui-design',
-        requiresVision: true,
-        useThinking: true,
-        reasoning: 'Task involves visual content - routing to frontend with vision',
-        confidence: 0.9,
-      }
-    }
-
-    // Trivial/Flash-tier tasks
-    if (/^(what is|explain|describe|list|show me|how do i)\s/i.test(prompt) && prompt.length < 100) {
-      return {
-        targetAgent: 'architect',
-        modelTier: 'flash',
-        complexity: 'trivial',
-        category: 'general-query',
-        requiresVision: false,
-        useThinking: false,
-        reasoning: 'Simple informational query',
-        confidence: 0.95,
-      }
-    }
-
-    // Testing tasks
-    if (/\b(tests?|specs?|e2e|unit tests?|playwright|vitest|jest)\b/i.test(prompt)) {
-      return {
-        targetAgent: 'qa',
-        modelTier: 'sonnet',
-        complexity: 'moderate',
-        category: 'testing',
-        requiresVision: false,
-        useThinking: false,
-        reasoning: 'Testing-related task',
-        confidence: 0.85,
-      }
-    }
-
-    // DevOps tasks
-    if (/\b(deploy|docker|kubernetes|k8s|ci\/cd|github actions|vercel|aws)\b/i.test(prompt)) {
-      return {
-        targetAgent: 'devops',
-        modelTier: 'sonnet',
-        complexity: 'moderate',
-        category: 'devops',
-        requiresVision: false,
-        useThinking: false,
-        reasoning: 'DevOps/infrastructure task',
-        confidence: 0.85,
-      }
-    }
-
-    // Database tasks
-    if (/\b(database|schema|migration|sql|prisma|drizzle|postgres|mongo)\b/i.test(prompt)) {
-      return {
-        targetAgent: 'database',
-        modelTier: 'sonnet',
-        complexity: 'moderate',
-        category: 'database',
-        requiresVision: false,
-        useThinking: false,
-        reasoning: 'Database-related task',
-        confidence: 0.85,
-      }
-    }
-
-    // Architecture tasks (complex)
-    if (/\b(architect|design|system|refactor entire|restructure|rewrite)\b/i.test(prompt)) {
-      return {
-        targetAgent: 'architect',
-        modelTier: 'opus',
-        complexity: 'architectural',
-        category: 'architecture',
-        requiresVision: false,
-        useThinking: true,
-        reasoning: 'Architectural planning task - requires deep thinking',
-        confidence: 0.8,
-      }
-    }
-
-    // No quick match - need full routing
-    return null
-  }
-
-  /**
-   * Fallback decision when routing fails
-   */
-  private fallbackDecision(prompt: string): RoutingDecision {
-    // Basic keyword matching for fallback
-    let targetAgent: AgentId = 'architect'
-    let category: TaskCategory = 'code-generation'
-
-    if (/component|page|ui|react|css|tailwind/i.test(prompt)) {
-      targetAgent = 'frontend'
-      category = 'code-generation'
-    } else if (/api|endpoint|route|server/i.test(prompt)) {
-      targetAgent = 'backend'
-      category = 'api-design'
-    } else if (/test|spec/i.test(prompt)) {
-      targetAgent = 'qa'
-      category = 'testing'
-    }
-
-    return {
-      targetAgent,
-      modelTier: this.config.fallbackTier,
-      complexity: 'moderate',
-      category,
-      requiresVision: false,
-      useThinking: false,
-      reasoning: 'Fallback routing - Kimi router unavailable',
-      confidence: 0.5,
-    }
-  }
-
-  /**
-   * Validate and sanitize parsed decision
-   */
-  private validateDecision(parsed: Partial<RoutingDecision>, prompt: string): RoutingDecision {
-    const validAgents: AgentId[] = ['architect', 'frontend', 'backend', 'database', 'devops', 'qa', 'planner', 'auditor']
-    const validTiers = ['opus', 'sonnet', 'flash'] as const
-    const validComplexity: TaskComplexity[] = ['trivial', 'simple', 'moderate', 'complex', 'architectural']
-
-    const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.7
-    const criticalPath = isCriticalPath(prompt)
-    
-    // Escalate to Planner if confidence is too low
-    if (confidence < CONFIDENCE_THRESHOLDS.ESCALATION) {
-      return {
-        targetAgent: 'planner',
-        modelTier: 'opus',
-        complexity: 'complex',
-        category: parsed.category ?? 'code-generation',
-        requiresVision: parsed.requiresVision ?? false,
-        useThinking: true,
-        reasoning: `Low confidence (${(confidence * 100).toFixed(0)}%) - escalating to Planner for clarification`,
-        confidence,
-        escalated: true,
-        effort: 'medium',
-      }
-    }
-
-    // Determine effort level based on complexity
-    let effort: 'low' | 'medium' | 'high' = 'medium'
-    if (parsed.complexity === 'architectural') {
-      effort = 'high'
-    } else if (parsed.complexity === 'trivial' || parsed.complexity === 'simple') {
-      effort = 'low'
-    }
-
-    // Force Sonnet for critical paths (backend security)
-    let modelTier = validTiers.includes(parsed.modelTier as typeof validTiers[number])
-      ? (parsed.modelTier as 'opus' | 'sonnet' | 'flash')
-      : this.config.fallbackTier
-    
-    if (criticalPath && modelTier === 'flash') {
-      modelTier = 'sonnet' // Upgrade Flash to Sonnet for critical paths
-    }
-
-    return {
-      targetAgent: validAgents.includes(parsed.targetAgent as AgentId)
-        ? (parsed.targetAgent as AgentId)
-        : 'architect',
-      modelTier,
-      complexity: validComplexity.includes(parsed.complexity as TaskComplexity)
-        ? (parsed.complexity as TaskComplexity)
-        : 'moderate',
-      category: parsed.category ?? 'code-generation',
-      requiresVision: parsed.requiresVision ?? false,
-      useThinking: parsed.useThinking ?? false,
-      reasoning: parsed.reasoning ?? 'Decision made by Kimi router',
-      confidence,
-      subtasks: Array.isArray(parsed.subtasks) ? parsed.subtasks : undefined,
-      effort,
-      isCriticalPath: criticalPath,
-    }
-  }
-
-  /**
-   * Decompose a complex task into subtasks
-   */
-  async decompose(userPrompt: string): Promise<{
-    subtasks: Array<{
-      description: string
-      targetAgent: AgentId
-      priority: number
-      dependencies: number[]
-    }>
-    reasoning: string
-  }> {
-    try {
-      const client = createKimiClient()
-
-      const response = await client.chat.completions.create({
-        model: 'kimi-k2.5',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a task decomposition expert. Break down the user's request into atomic subtasks.
-
-Each subtask should:
-1. Be completable by a single agent
-2. Have clear dependencies
-3. Be prioritized (1 = highest priority)
-
-AVAILABLE AGENTS: architect, frontend, backend, database, devops, qa, planner, auditor
-
-RESPOND IN JSON:
-{
-  "subtasks": [
-    {
-      "description": "<what needs to be done>",
-      "targetAgent": "<agent-id>",
-      "priority": <1-10>,
-      "dependencies": [<indices of dependent subtasks>]
-    }
+/**
+ * Keyword patterns that associate a prompt with a specific agent's domain.
+ * Each entry is a pair of [regex, weight]. Higher weight = stronger signal.
+ */
+const DOMAIN_SIGNALS: Record<AgentId, Array<[RegExp, number]>> = {
+  frontend: [
+    [/\bcomponents?\b/i, 2],
+    [/\bpages?\b/i, 1],
+    [/\b(ui|ux)\b/i, 2],
+    [/\b(css|tailwind|style|styling)\b/i, 2],
+    [/\blayout\b/i, 1],
+    [/\bdesign\b/i, 1],
+    [/\bresponsive\b/i, 1],
+    [/\banimation\b/i, 1],
+    [/\b(svelte|react|vue)\b/i, 2],
+    [/\b(button|modal|sidebar|navbar|header|footer|card|form)\b/i, 2],
   ],
-  "reasoning": "<explanation of decomposition>"
-}`,
-          },
-          { role: 'user', content: `Decompose this request:\n\n"${userPrompt}"` },
-        ],
-        response_format: { type: 'json_object' },
-      })
+  backend: [
+    [/\bapi\b/i, 2],
+    [/\bendpoints?\b/i, 2],
+    [/\broutes?\b/i, 1],
+    [/\bservers?\b/i, 1],
+    [/\b(auth|authentication)\b/i, 2],
+    [/\bmiddleware\b/i, 2],
+    [/\bwebhooks?\b/i, 2],
+    [/\bcrons?\b/i, 1],
+    [/\b(rest|graphql|trpc)\b/i, 2],
+  ],
+  database: [
+    [/\bschemas?\b/i, 2],
+    [/\bmigrations?\b/i, 2],
+    [/\bsql\b/i, 2],
+    [/\btables?\b/i, 2],
+    [/\bquer(y|ies)\b/i, 2],
+    [/\bseeds?\b/i, 1],
+    [/\b(prisma|drizzle|supabase)\b/i, 2],
+    [/\b(postgres|mongo|sqlite)\b/i, 2],
+    [/\b(foreign.?key|index|constraint)\b/i, 1],
+  ],
+  devops: [
+    [/\bdeploy(ment)?\b/i, 2],
+    [/\bdocker\b/i, 2],
+    [/\b(ci|cd|ci\/cd)\b/i, 2],
+    [/\bgithub.?actions?\b/i, 2],
+    [/\b(vercel|netlify|railway)\b/i, 2],
+    [/\binfrastructure\b/i, 1],
+    [/\b(kubernetes|k8s)\b/i, 2],
+    [/\b(aws|gcp|azure)\b/i, 1],
+  ],
+  qa: [
+    [/\btests?\b/i, 2],
+    [/\bspecs?\b/i, 2],
+    [/\be2e\b/i, 2],
+    [/\bcoverage\b/i, 1],
+    [/\b(playwright|vitest|jest)\b/i, 2],
+    [/\bassertions?\b/i, 1],
+    [/\bunit.?tests?\b/i, 2],
+    [/\bintegration.?tests?\b/i, 2],
+  ],
+  architect: [
+    [/\barchitects?\b/i, 2],
+    [/\bdesign.?system\b/i, 2],
+    [/\brefactor\b/i, 2],
+    [/\brestructure\b/i, 2],
+    [/\brewrite\b/i, 2],
+    [/\bsystem.?design\b/i, 2],
+    [/\b(monorepo|microservices?)\b/i, 2],
+  ],
+  planner: [
+    [/\bplan(ning)?\b/i, 2],
+    [/\bbreak.?down\b/i, 2],
+    [/\bdecompose\b/i, 2],
+    [/\bprioritize\b/i, 1],
+    [/\broadmap\b/i, 2],
+    [/\bstrategy\b/i, 1],
+    [/\btask.?list\b/i, 1],
+  ],
+  strategist: [],
+  auditor: [],
+}
 
-      const content = response.choices[0]?.message?.content
-      if (!content) {
-        return { subtasks: [], reasoning: 'Failed to decompose task' }
+// ============================================
+// AUDIT LOG
+// ============================================
+
+const auditLog: RoutingAuditEntry[] = []
+const MAX_AUDIT_LOG = 200
+
+function recordAuditEntry(entry: RoutingAuditEntry): void {
+  auditLog.push(entry)
+  if (auditLog.length > MAX_AUDIT_LOG) {
+    auditLog.shift()
+  }
+}
+
+/** Return a shallow copy of the routing audit log. */
+export function getRoutingAuditLog(): readonly RoutingAuditEntry[] {
+  return [...auditLog]
+}
+
+/** Reset the audit log. **Test-only.** */
+export function _resetRoutingAuditLog(): void {
+  auditLog.length = 0
+}
+
+// ============================================
+// MODEL TIER SELECTION
+// ============================================
+
+/** Default model tier per intent kind. */
+const INTENT_MODEL_TIER: Record<IntentKind, 'opus' | 'sonnet' | 'flash'> = {
+  chat: 'flash',
+  create: 'sonnet',
+  edit: 'sonnet',
+  debug: 'sonnet',
+  deploy: 'sonnet',
+}
+
+// ============================================
+// DEFAULT AGENT FALLBACKS
+// ============================================
+
+/**
+ * When intent allows many agents and no domain signal matches,
+ * these defaults prevent ambiguity for common intents.
+ */
+const INTENT_DEFAULT_AGENT: Partial<Record<IntentKind, AgentId>> = {
+  create: 'architect',
+  edit: 'architect',
+  debug: 'architect',
+  deploy: 'devops',
+}
+
+// ============================================
+// ROUTING ALGORITHM
+// ============================================
+
+/**
+ * Route a user prompt to the best-fit agent.
+ *
+ * Algorithm:
+ *   1. Classify the intent (chat/create/edit/debug/deploy).
+ *   2. Get all agents allowed for that intent from the governance kernel.
+ *   3. For action intents, exclude read-only agents.
+ *   4. Score each candidate by domain keyword match.
+ *   5. Select the highest-scoring agent. On ties or zero matches,
+ *      use the intent default or throw `AmbiguousRoutingError`.
+ *   6. Apply critical-path model tier upgrade.
+ *   7. Record a `RoutingAuditEntry`.
+ *
+ * @throws {AmbiguousRoutingError} when no agent can be selected
+ */
+export function routeRequest(
+  prompt: string,
+  context?: { intent?: IntentKind },
+): RoutingDecision {
+  const intent = context?.intent ?? classifyIntent(prompt)
+  const normalized = prompt.toLowerCase()
+
+  // Step 2: eligible agents for this intent
+  const allCandidates = (Object.keys(AGENT_ALLOWED_INTENTS) as AgentId[])
+    .filter(agent => AGENT_ALLOWED_INTENTS[agent].includes(intent))
+
+  // Step 3: for action intents, exclude read-only agents
+  const candidates = isActionIntent(intent)
+    ? allCandidates.filter(agent => !isReadOnlyAgent(agent))
+    : allCandidates
+
+  if (candidates.length === 0) {
+    throw new AmbiguousRoutingError(intent, allCandidates)
+  }
+
+  // Step 4: score each candidate by domain signals
+  const scores = new Map<AgentId, number>()
+  const matchedSignals: string[] = []
+
+  for (const agent of candidates) {
+    let score = 0
+    for (const [pattern, weight] of DOMAIN_SIGNALS[agent]) {
+      if (pattern.test(normalized)) {
+        score += weight
+        const keyword = normalized.match(pattern)?.[0]
+        if (keyword && !matchedSignals.includes(keyword)) {
+          matchedSignals.push(keyword)
+        }
       }
+    }
+    scores.set(agent, score)
+  }
 
-      return JSON.parse(content)
-    } catch (error) {
-      console.error('[KimiRouter] Decomposition failed:', error)
-      return { subtasks: [], reasoning: 'Decomposition failed - router error' }
+  // Step 5: find the winner
+  let maxScore = -1
+  const topAgents: AgentId[] = []
+  for (const [agent, score] of scores) {
+    if (score > maxScore) {
+      maxScore = score
+      topAgents.length = 0
+      topAgents.push(agent)
+    } else if (score === maxScore) {
+      topAgents.push(agent)
     }
   }
-}
 
-// ============================================
-// CONVENIENCE FUNCTIONS
-// ============================================
+  let selected: AgentId
 
-let defaultRouter: KimiRouter | null = null
-
-/**
- * Get or create the default router instance
- */
-export function getRouter(config?: RouterConfig): KimiRouter {
-  if (!defaultRouter || config) {
-    defaultRouter = new KimiRouter(config)
+  if (topAgents.length === 1 && maxScore > 0) {
+    // Clear winner
+    selected = topAgents[0]
+  } else if (maxScore === 0 && INTENT_DEFAULT_AGENT[intent]) {
+    // No domain signals matched — use intent default
+    selected = INTENT_DEFAULT_AGENT[intent]!
+    matchedSignals.length = 0
+  } else if (topAgents.length > 1 && maxScore > 0) {
+    // Tie — check if there's an intent default among the tied agents
+    const defaultAgent = INTENT_DEFAULT_AGENT[intent]
+    if (defaultAgent && topAgents.includes(defaultAgent)) {
+      selected = defaultAgent
+    } else {
+      throw new AmbiguousRoutingError(intent, topAgents)
+    }
+  } else {
+    // Zero signals, no intent default
+    throw new AmbiguousRoutingError(intent, candidates)
   }
-  return defaultRouter
+
+  // Step 6: model tier + critical path
+  const critical = isCriticalPath(prompt)
+  let modelTier = INTENT_MODEL_TIER[intent]
+  if (critical && modelTier === 'flash') {
+    modelTier = 'sonnet'
+  }
+
+  const reasoning = buildReasoning(intent, selected, matchedSignals, critical)
+
+  const decision: RoutingDecision = {
+    targetAgent: selected,
+    intent,
+    modelTier,
+    isCriticalPath: critical,
+    reasoning,
+    signals: matchedSignals,
+  }
+
+  // Step 7: audit
+  recordAuditEntry({
+    timestamp: new Date().toISOString(),
+    prompt: prompt.length > 200 ? prompt.slice(0, 200) + '…' : prompt,
+    intent,
+    candidates,
+    selected,
+    signals: matchedSignals,
+    isCriticalPath: critical,
+    modelTier,
+  })
+
+  return decision
 }
 
-/**
- * Quick route a request
- */
-export async function routeRequest(
-  prompt: string,
-  context?: Parameters<KimiRouter['route']>[1]
-): Promise<RoutingDecision> {
-  return getRouter().route(prompt, context)
-}
+// ============================================
+// HELPERS
+// ============================================
 
-/**
- * Check if Kimi API is configured (via OpenRouter or direct Moonshot)
- */
-export function isKimiConfigured(): boolean {
-  return Boolean(
-    process.env.OPENROUTER_API_KEY || 
-    process.env.KIMI_API_KEY || 
-    process.env.MOONSHOT_API_KEY
-  )
+function buildReasoning(
+  intent: IntentKind,
+  agent: AgentId,
+  signals: string[],
+  critical: boolean,
+): string {
+  const parts: string[] = [
+    `Intent "${intent}" → agent "${agent}"`,
+  ]
+  if (signals.length > 0) {
+    parts.push(`domain signals: [${signals.join(', ')}]`)
+  } else {
+    parts.push('via intent default (no domain signals)')
+  }
+  if (critical) {
+    parts.push('critical path detected')
+  }
+  return parts.join('; ')
 }

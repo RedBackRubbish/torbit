@@ -1,242 +1,343 @@
 /**
- * Tests for Kimi K2.5 Intelligent Router
+ * Tests for Deterministic Agent Router
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { KimiRouter, CONFIDENCE_THRESHOLDS, CRITICAL_PATH_PATTERNS, isCriticalPath } from '../router'
+import { describe, it, expect, beforeEach } from 'vitest'
+import {
+  routeRequest,
+  isCriticalPath,
+  getRoutingAuditLog,
+  AmbiguousRoutingError,
+  CRITICAL_PATH_PATTERNS,
+  _resetRoutingAuditLog,
+} from '../router'
+import type { RoutingDecision } from '../router'
 
-// Mock the Kimi provider
-vi.mock('../../providers/kimi', () => ({
-  createKimiClient: vi.fn(() => ({
-    chat: {
-      completions: {
-        create: vi.fn(async () => ({
-          choices: [{
-            message: {
-              content: JSON.stringify({
-                targetAgent: 'architect',
-                modelTier: 'sonnet',
-                complexity: 'moderate',
-                category: 'code-generation',
-                requiresVision: false,
-                useThinking: false,
-                reasoning: 'Mocked router response',
-                confidence: 0.8,
-              }),
-            },
-          }],
-        })),
-      },
-    },
-  })),
-}))
+beforeEach(() => {
+  _resetRoutingAuditLog()
+})
 
-describe('KimiRouter', () => {
-  let router: KimiRouter
+// ============================================
+// Intent → Agent routing
+// ============================================
 
-  beforeEach(() => {
-    router = new KimiRouter({
-      enableThinking: false,
-      fastMode: true,
-    })
+describe('routeRequest — intent-based routing', () => {
+  it('routes "create" intent with frontend signals to frontend', () => {
+    const result = routeRequest('create a new button component')
+    expect(result.targetAgent).toBe('frontend')
+    expect(result.intent).toBe('create')
+    expect(result.signals).toContain('component')
   })
 
-  afterEach(() => {
-    vi.clearAllMocks()
+  it('routes "create" intent with backend signals to backend', () => {
+    const result = routeRequest('create a REST API endpoint for users')
+    expect(result.targetAgent).toBe('backend')
+    expect(result.intent).toBe('create')
+    expect(result.signals).toContain('api')
   })
 
-  describe('quickRoute - Fast Path Decisions', () => {
-    it('should route vision tasks to frontend with opus tier', async () => {
-      const result = await router.route('implement this Figma design', {
-        hasImages: true,
-      })
-
-      expect(result.targetAgent).toBe('frontend')
-      expect(result.modelTier).toBe('opus')
-      expect(result.requiresVision).toBe(true)
-      expect(result.category).toBe('ui-design')
-      expect(result.confidence).toBeGreaterThan(0.8)
-    })
-
-    it('should route screenshot analysis to frontend', async () => {
-      const result = await router.route('analyze this screenshot and fix the layout')
-
-      expect(result.targetAgent).toBe('frontend')
-      expect(result.requiresVision).toBe(true)
-    })
-
-    it('should route simple queries to flash tier', async () => {
-      const result = await router.route('what is useState?')
-
-      expect(result.modelTier).toBe('flash')
-      expect(result.complexity).toBe('trivial')
-      expect(result.category).toBe('general-query')
-    })
-
-    it('should route testing tasks to qa agent', async () => {
-      const result = await router.route('write unit tests for the auth module')
-
-      expect(result.targetAgent).toBe('qa')
-      expect(result.category).toBe('testing')
-    })
-
-    it('should route devops tasks correctly', async () => {
-      const result = await router.route('set up GitHub Actions for CI/CD')
-
-      expect(result.targetAgent).toBe('devops')
-      expect(result.category).toBe('devops')
-    })
-
-    it('should route database tasks correctly', async () => {
-      const result = await router.route('create a Prisma schema for user authentication')
-
-      expect(result.targetAgent).toBe('database')
-      expect(result.category).toBe('database')
-    })
-
-    it('should route architecture tasks with opus and thinking', async () => {
-      const result = await router.route('architect a new microservices system')
-
-      expect(result.targetAgent).toBe('architect')
-      expect(result.modelTier).toBe('opus')
-      expect(result.complexity).toBe('architectural')
-      expect(result.useThinking).toBe(true)
-    })
+  it('routes "create" intent with database signals to database', () => {
+    const result = routeRequest('create a Prisma schema for products')
+    expect(result.targetAgent).toBe('database')
+    expect(result.intent).toBe('create')
   })
 
-  describe('Complexity Assessment', () => {
-    it('should classify simple queries as trivial', async () => {
-      const result = await router.route('explain React hooks')
-
-      expect(result.complexity).toBe('trivial')
-    })
-
-    it('should classify refactoring as architectural', async () => {
-      const result = await router.route('refactor entire authentication system')
-
-      expect(result.complexity).toBe('architectural')
-    })
+  it('routes "create" intent with no domain signals to architect (default)', () => {
+    const result = routeRequest('build a complete e-commerce solution')
+    expect(result.targetAgent).toBe('architect')
+    expect(result.signals).toHaveLength(0)
   })
 
-  describe('Model Tier Selection', () => {
-    it('should use opus for architectural tasks', async () => {
-      const result = await router.route('design the system architecture')
-
-      expect(result.modelTier).toBe('opus')
-    })
-
-    it('should use flash for trivial queries', async () => {
-      const result = await router.route('what is a Promise?')
-
-      expect(result.modelTier).toBe('flash')
-    })
-
-    it('should use sonnet for moderate tasks', async () => {
-      const result = await router.route('write a test for the login function')
-
-      expect(result.modelTier).toBe('sonnet')
-    })
+  it('routes "deploy" intent to devops', () => {
+    const result = routeRequest('deploy to Vercel production')
+    expect(result.targetAgent).toBe('devops')
+    expect(result.intent).toBe('deploy')
   })
 
-  describe('Fallback Behavior', () => {
-    it('should return valid decision for unknown prompt patterns', async () => {
-      // This won't match quick route patterns, but will use fallback
-      // since we're mocking the API
-      const result = await router.route('foobar baz qux')
-
-      expect(result.targetAgent).toBeDefined()
-      expect(result.modelTier).toBeDefined()
-      expect(result.confidence).toBeGreaterThan(0)
-    })
+  it('routes "debug" intent with test signals to qa', () => {
+    const result = routeRequest('debug the failing unit tests')
+    expect(result.targetAgent).toBe('qa')
+    expect(result.intent).toBe('debug')
   })
 
-  describe('Multimodal Detection', () => {
-    it('should detect UI/UX keywords as requiring vision', async () => {
-      const result = await router.route('match this mockup exactly')
+  it('routes "edit" intent with frontend signals to frontend', () => {
+    const result = routeRequest('update the sidebar component styling')
+    expect(result.targetAgent).toBe('frontend')
+    expect(result.intent).toBe('edit')
+  })
 
-      expect(result.requiresVision).toBe(true)
-    })
+  it('routes "edit" intent with architect signals to architect', () => {
+    const result = routeRequest('refactor the authentication module')
+    expect(result.targetAgent).toBe('architect')
+    expect(result.intent).toBe('edit')
+  })
 
-    it('should not require vision for pure code tasks', async () => {
-      const result = await router.route('write a test for the API endpoint')
-
-      expect(result.requiresVision).toBe(false)
-    })
+  it('routes "chat" intent with domain signals to the matching agent', () => {
+    const result = routeRequest('how does the Prisma schema work?')
+    expect(result.targetAgent).toBe('database')
+    expect(result.intent).toBe('chat')
   })
 })
 
-describe('RoutingDecision Validation', () => {
-  const router = new KimiRouter()
+// ============================================
+// Domain signal scoring
+// ============================================
 
-  it('should validate agent IDs', async () => {
-    const result = await router.route('deploy to production')
-
-    const validAgents = ['architect', 'frontend', 'backend', 'database', 'devops', 'qa', 'planner', 'auditor']
-    expect(validAgents).toContain(result.targetAgent)
+describe('routeRequest — domain signal scoring', () => {
+  it('picks the agent with the highest total signal weight', () => {
+    // "sql migration schema" = 6 points for database, 0 for others
+    const result = routeRequest('add sql migration for the new schema')
+    expect(result.targetAgent).toBe('database')
   })
 
-  it('should validate model tiers', async () => {
-    const result = await router.route('build a component')
-
-    expect(['opus', 'sonnet', 'flash']).toContain(result.modelTier)
+  it('records matched keywords in signals array', () => {
+    const result = routeRequest('create a React component with Tailwind styling')
+    expect(result.signals.length).toBeGreaterThan(0)
+    expect(result.signals).toContain('react')
   })
 
-  it('should include reasoning', async () => {
-    const result = await router.route('create a button component')
+  it('handles prompts with signals for multiple agents by picking highest', () => {
+    // "component" (frontend: 2) vs "api" (backend: 2) vs "test" (qa: 2)
+    // plus "button" (frontend: 2) → frontend wins with 4
+    const result = routeRequest('add a button component')
+    expect(result.targetAgent).toBe('frontend')
+  })
+})
 
-    expect(result.reasoning).toBeDefined()
+// ============================================
+// Ambiguous routing
+// ============================================
+
+describe('routeRequest — ambiguous routing', () => {
+  it('throws AmbiguousRoutingError when chat intent has no domain signals and no default', () => {
+    expect(() => routeRequest('hello there')).toThrow(AmbiguousRoutingError)
+  })
+
+  it('AmbiguousRoutingError contains intent and tied agents', () => {
+    try {
+      routeRequest('hello there')
+      expect.unreachable('should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(AmbiguousRoutingError)
+      const ambiguous = err as AmbiguousRoutingError
+      expect(ambiguous.intent).toBe('chat')
+      expect(ambiguous.tiedAgents.length).toBeGreaterThan(1)
+    }
+  })
+
+  it('uses intent default to break ties when available', () => {
+    // "create" has default → architect, so zero-signal create prompts don't throw
+    const result = routeRequest('generate something new from scratch')
+    expect(result.targetAgent).toBe('architect')
+  })
+})
+
+// ============================================
+// Read-only agent exclusion
+// ============================================
+
+describe('routeRequest — read-only agent exclusion', () => {
+  it('excludes strategist from action intents', () => {
+    const result = routeRequest('create a new Svelte component')
+    expect(result.targetAgent).not.toBe('strategist')
+  })
+
+  it('excludes auditor from action intents', () => {
+    const result = routeRequest('edit the API endpoint')
+    expect(result.targetAgent).not.toBe('auditor')
+  })
+
+  it('includes read-only agents for chat intent if they have domain signals', () => {
+    // strategist and auditor have no domain signals, so they won't win,
+    // but they should be in the candidate list for chat
+    const result = routeRequest('how does the database schema work?')
+    expect(result.intent).toBe('chat')
+    // Should route to database (has signals), not strategist/auditor
+    expect(result.targetAgent).toBe('database')
+  })
+})
+
+// ============================================
+// Critical path detection
+// ============================================
+
+describe('isCriticalPath', () => {
+  it('detects authentication as critical', () => {
+    expect(isCriticalPath('implement user authentication')).toBe(true)
+    expect(isCriticalPath('add OAuth login')).toBe(true)
+  })
+
+  it('detects payment as critical', () => {
+    expect(isCriticalPath('integrate Stripe payments')).toBe(true)
+    expect(isCriticalPath('add billing subscription')).toBe(true)
+  })
+
+  it('detects security as critical', () => {
+    expect(isCriticalPath('fix security vulnerability')).toBe(true)
+    expect(isCriticalPath('implement RBAC permissions')).toBe(true)
+  })
+
+  it('does NOT flag non-critical paths', () => {
+    expect(isCriticalPath('create a landing page')).toBe(false)
+    expect(isCriticalPath('add a button component')).toBe(false)
+  })
+
+  it('has patterns for auth, payment, security, admin, compliance', () => {
+    expect(CRITICAL_PATH_PATTERNS.length).toBeGreaterThanOrEqual(5)
+  })
+})
+
+describe('routeRequest — critical path model tier upgrade', () => {
+  it('upgrades chat model tier from flash to sonnet on critical path', () => {
+    // "how does authentication work?" → chat intent (flash) + critical path → sonnet
+    const result = routeRequest('how does the auth middleware work?')
+    expect(result.intent).toBe('chat')
+    expect(result.isCriticalPath).toBe(true)
+    expect(result.modelTier).toBe('sonnet')
+  })
+
+  it('keeps sonnet for action intents on critical path (no downgrade)', () => {
+    const result = routeRequest('add authentication middleware')
+    expect(result.modelTier).toBe('sonnet')
+    expect(result.isCriticalPath).toBe(true)
+  })
+})
+
+// ============================================
+// Model tier selection
+// ============================================
+
+describe('routeRequest — model tier', () => {
+  it('uses flash for chat intent', () => {
+    const result = routeRequest('how does the Prisma schema work?')
+    expect(result.modelTier).toBe('flash')
+  })
+
+  it('uses sonnet for create intent', () => {
+    const result = routeRequest('create a new button component')
+    expect(result.modelTier).toBe('sonnet')
+  })
+
+  it('uses sonnet for edit intent', () => {
+    const result = routeRequest('refactor the authentication module')
+    expect(result.modelTier).toBe('sonnet')
+  })
+
+  it('uses sonnet for deploy intent', () => {
+    const result = routeRequest('deploy to Vercel production')
+    expect(result.modelTier).toBe('sonnet')
+  })
+})
+
+// ============================================
+// RoutingDecision shape
+// ============================================
+
+describe('RoutingDecision shape', () => {
+  it('contains all required fields', () => {
+    const result = routeRequest('create a new Svelte component')
+    expect(result).toHaveProperty('targetAgent')
+    expect(result).toHaveProperty('intent')
+    expect(result).toHaveProperty('modelTier')
+    expect(result).toHaveProperty('isCriticalPath')
+    expect(result).toHaveProperty('reasoning')
+    expect(result).toHaveProperty('signals')
+  })
+
+  it('reasoning is a non-empty string', () => {
+    const result = routeRequest('create a Docker deployment')
     expect(typeof result.reasoning).toBe('string')
     expect(result.reasoning.length).toBeGreaterThan(0)
   })
 
-  it('should include confidence score', async () => {
-    const result = await router.route('write documentation')
-
-    expect(typeof result.confidence).toBe('number')
-    expect(result.confidence).toBeGreaterThanOrEqual(0)
-    expect(result.confidence).toBeLessThanOrEqual(1)
+  it('signals is an array', () => {
+    const result = routeRequest('build a React form component')
+    expect(Array.isArray(result.signals)).toBe(true)
   })
 })
 
-describe('Confidence Thresholds', () => {
-  it('should have correct threshold values', () => {
-    expect(CONFIDENCE_THRESHOLDS.ESCALATION).toBe(0.7)
-    expect(CONFIDENCE_THRESHOLDS.HIGH).toBe(0.85)
-    expect(CONFIDENCE_THRESHOLDS.PERFECT).toBe(0.95)
+// ============================================
+// Audit log
+// ============================================
+
+describe('routing audit log', () => {
+  it('records every successful routing decision', () => {
+    expect(getRoutingAuditLog()).toHaveLength(0)
+    routeRequest('create a Svelte component')
+    routeRequest('deploy to Vercel')
+    expect(getRoutingAuditLog()).toHaveLength(2)
   })
 
-  it('should have thresholds in ascending order', () => {
-    expect(CONFIDENCE_THRESHOLDS.ESCALATION).toBeLessThan(CONFIDENCE_THRESHOLDS.HIGH)
-    expect(CONFIDENCE_THRESHOLDS.HIGH).toBeLessThan(CONFIDENCE_THRESHOLDS.PERFECT)
+  it('audit entry contains all required fields', () => {
+    routeRequest('create a new API endpoint')
+    const log = getRoutingAuditLog()
+    expect(log).toHaveLength(1)
+    const entry = log[0]
+    expect(entry).toHaveProperty('timestamp')
+    expect(entry).toHaveProperty('prompt')
+    expect(entry).toHaveProperty('intent')
+    expect(entry).toHaveProperty('candidates')
+    expect(entry).toHaveProperty('selected')
+    expect(entry).toHaveProperty('signals')
+    expect(entry).toHaveProperty('isCriticalPath')
+    expect(entry).toHaveProperty('modelTier')
+  })
+
+  it('truncates prompt to 200 characters', () => {
+    const longPrompt = 'create a component ' + 'x'.repeat(300)
+    routeRequest(longPrompt)
+    const log = getRoutingAuditLog()
+    expect(log[0].prompt.length).toBeLessThanOrEqual(201) // 200 + ellipsis char
+  })
+
+  it('caps at 200 entries', () => {
+    for (let i = 0; i < 250; i++) {
+      routeRequest('deploy to Vercel')
+    }
+    expect(getRoutingAuditLog()).toHaveLength(200)
+  })
+
+  it('returns a copy, not the internal array', () => {
+    routeRequest('deploy to Vercel')
+    const a = getRoutingAuditLog()
+    const b = getRoutingAuditLog()
+    expect(a).not.toBe(b)
+    expect(a).toEqual(b)
+  })
+
+  it('does NOT record entries for ambiguous routes that throw', () => {
+    try { routeRequest('hello there') } catch { /* expected */ }
+    expect(getRoutingAuditLog()).toHaveLength(0)
+  })
+
+  it('is cleared by _resetRoutingAuditLog', () => {
+    routeRequest('deploy to Vercel')
+    expect(getRoutingAuditLog()).toHaveLength(1)
+    _resetRoutingAuditLog()
+    expect(getRoutingAuditLog()).toHaveLength(0)
   })
 })
 
-describe('Critical Path Detection', () => {
-  it('should have patterns for auth, payment, and security', () => {
-    expect(CRITICAL_PATH_PATTERNS.length).toBeGreaterThanOrEqual(3)
-  })
+// ============================================
+// Context override
+// ============================================
 
-  it('should detect authentication as critical path', () => {
-    expect(isCriticalPath('implement user authentication')).toBe(true)
-    expect(isCriticalPath('add OAuth login')).toBe(true)
-    expect(isCriticalPath('create auth middleware')).toBe(true)
+describe('routeRequest — context override', () => {
+  it('accepts an explicit intent override via context', () => {
+    // "hello" would classify as chat, but we force deploy
+    const result = routeRequest('deploy to Vercel', { intent: 'deploy' })
+    expect(result.intent).toBe('deploy')
+    expect(result.targetAgent).toBe('devops')
   })
+})
 
-  it('should detect payment as critical path', () => {
-    expect(isCriticalPath('integrate Stripe payments')).toBe(true)
-    expect(isCriticalPath('add credit card checkout')).toBe(true)
-    expect(isCriticalPath('implement billing system')).toBe(true)
-  })
+// ============================================
+// Integration test stubs
+// ============================================
 
-  it('should detect security as critical path', () => {
-    expect(isCriticalPath('add encryption to user data')).toBe(true)
-    expect(isCriticalPath('implement RBAC permissions')).toBe(true)
-    expect(isCriticalPath('fix security vulnerability')).toBe(true)
-  })
-
-  it('should NOT flag non-critical paths', () => {
-    expect(isCriticalPath('create a landing page')).toBe(false)
-    expect(isCriticalPath('add a button component')).toBe(false)
-    expect(isCriticalPath('refactor utility functions')).toBe(false)
-  })
+describe('integration stubs — orchestrator → router', () => {
+  it.todo('routes a create request through orchestrator.smartExecute')
+  it.todo('routes a deploy request through orchestrator.orchestrate')
+  it.todo('orchestrator handles AmbiguousRoutingError gracefully')
+  it.todo('routing audit log is populated after full orchestration cycle')
 })

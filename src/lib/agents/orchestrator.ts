@@ -1,14 +1,11 @@
 /**
  * TORBIT ORCHESTRATOR
- * 
+ *
  * The central nervous system that wires agents to the Vercel AI SDK.
  * This file handles tool execution, agent routing, and the audit pipeline.
- * 
- * NOW WITH KIMI K2.5 INTELLIGENT ROUTING:
- * - Task complexity assessment
- * - Smart agent selection
- * - Multimodal detection (vision tasks)
- * - Thinking mode for complex problems
+ *
+ * Routing is deterministic via the governance-backed router — no LLM calls
+ * for agent selection. See `router.ts` for the algorithm.
  */
 
 import { streamText, stepCountIs } from 'ai'
@@ -22,7 +19,7 @@ import path from 'node:path'
 import type { AgentId } from '../tools/definitions'
 import { executeTool, createExecutionContext, type ToolExecutionContext } from '../tools/executor'
 import { createAgentTools } from '../tools/ai-sdk-tools'
-import { KimiRouter, type RoutingDecision, isKimiConfigured } from './router'
+import { routeRequest, type RoutingDecision, AmbiguousRoutingError } from './router'
 import { checkCircuitBreaker, calculateFuelCost, type ModelTier as FuelModelTier } from '@/store/fuel'
 import { parseGovernanceOutput, formatGovernanceForAgent, formatInvariantsForQA, type GovernanceObject } from './governance'
 
@@ -49,10 +46,6 @@ export interface OrchestrationConfig {
   enableAudit?: boolean
   enableTicketSync?: boolean
   mcpServers?: Array<{ name: string; url: string }>
-  /** Enable Kimi K2.5 intelligent routing (default: true if API key configured) */
-  enableKimiRouter?: boolean
-  /** Use fast routing mode (kimi-k2-turbo) for quicker decisions */
-  fastRouting?: boolean
 }
 
 export interface AgentResult {
@@ -467,26 +460,16 @@ const UNFEASIBLE_PATTERNS = [
 export class TorbitOrchestrator {
   private context: ToolExecutionContext
   private config: OrchestrationConfig
-  private kimiRouter: KimiRouter | null = null
-  
+
   // Circuit breaker state for this orchestration session
   private sessionStartTime: number = Date.now()
   private sessionRetries: number = 0
   private sessionFuelSpent: number = 0
-  
+
   constructor(config: OrchestrationConfig) {
     this.config = config
     this.context = createExecutionContext(config.projectId, config.userId)
-    
-    // Initialize Kimi router if configured
-    const useKimi = config.enableKimiRouter ?? isKimiConfigured()
-    if (useKimi && isKimiConfigured()) {
-      this.kimiRouter = new KimiRouter({
-        fastMode: config.fastRouting ?? false,
-        enableThinking: true,
-      })
-    }
-    
+
     // Initialize MCP connections if provided
     if (config.mcpServers) {
       for (const server of config.mcpServers) {
@@ -553,20 +536,20 @@ export class TorbitOrchestrator {
   }
   
   /**
-   * Get routing decision from Kimi (or use legacy routing)
+   * Get routing decision using deterministic intent-based router
    */
-  private async getRoutingDecision(
+  private getRoutingDecision(
     prompt: string,
-    context?: { hasImages?: boolean }
-  ): Promise<RoutingDecision | null> {
-    if (!this.kimiRouter) {
-      return null
-    }
-    
+    context?: { intent?: IntentKind }
+  ): RoutingDecision | null {
     try {
-      return await this.kimiRouter.route(prompt, context)
+      return routeRequest(prompt, context)
     } catch (error) {
-      console.warn('[Orchestrator] Kimi routing failed, using legacy routing:', error)
+      if (error instanceof AmbiguousRoutingError) {
+        console.warn('[Orchestrator] Ambiguous routing:', error.message)
+        return null
+      }
+      console.warn('[Orchestrator] Routing failed:', error)
       return null
     }
   }
@@ -1471,12 +1454,11 @@ ${persistedInvariants ? `\n═══ PREVIOUSLY ESTABLISHED INVARIANTS ═══
       reason: 'Before executing user request',
     }, this.context)
     
-    // 2. Get routing decision from Kimi (if available)
-    const routing = await this.getRoutingDecision(userPrompt, context)
+    // 2. Get routing decision using deterministic router
+    const routing = this.getRoutingDecision(userPrompt, context)
     
-    // 3. Plan with Architect (using Kimi-recommended model tier if available)
-    const planModelTier = routing?.complexity === 'architectural' ? 'opus' : 
-                          routing?.modelTier ?? 'opus'
+    // 3. Plan with Architect (using routing model tier if available)
+    const planModelTier = routing?.modelTier ?? 'opus'
     const plan = await this.executeAgent('architect', `
       Plan the implementation for this user request:
       "${userPrompt}"
@@ -1487,8 +1469,8 @@ ${persistedInvariants ? `\n═══ PREVIOUSLY ESTABLISHED INVARIANTS ═══
     
     // 3.5 ARCHITECT INTEGRITY CHECK - Strategist validates structure before Backend builds
     // GATED: Only runs for moderate+ complexity to avoid latency on trivial tasks
-    const routedComplexity = routing?.complexity ?? preflightResult.estimatedComplexity
-    const needsGovernance = ['moderate', 'complex', 'architectural'].includes(routedComplexity)
+    const estimatedComplexity = preflightResult.estimatedComplexity
+    const needsGovernance = ['moderate', 'complex', 'architectural'].includes(estimatedComplexity)
     let governance: GovernanceObject | null = null
     
     if (plan.success && needsGovernance) {
@@ -1536,40 +1518,21 @@ ${persistedInvariants ? `\n═══ PREVIOUSLY ESTABLISHED INVARIANTS ═══
       // APPROVED: continue to execution
     }
     
-    // 4. Execute with appropriate agents (Kimi-routed or heuristic fallback)
+    // 4. Execute with appropriate agent from routing decision
     const execution: AgentResult[] = []
     
     if (routing) {
-      // Use Kimi's routing decision
+      // Use deterministic routing decision
       const result = await this.executeAgent(
         routing.targetAgent,
         userPrompt,
         { modelTier: routing.modelTier }
       )
       execution.push(result)
-      
-      // If Kimi decomposed into subtasks, execute them
-      if (routing.subtasks && routing.subtasks.length > 1) {
-        for (const subtask of routing.subtasks.slice(1)) { // First one already done
-          const subtaskRouting = await this.getRoutingDecision(subtask)
-          if (subtaskRouting) {
-            const subtaskResult = await this.executeAgent(
-              subtaskRouting.targetAgent,
-              subtask,
-              { modelTier: subtaskRouting.modelTier }
-            )
-            execution.push(subtaskResult)
-          }
-        }
-      }
     } else {
-      // Legacy heuristic routing
-      if (userPrompt.toLowerCase().includes('component') || 
-          userPrompt.toLowerCase().includes('page') ||
-          userPrompt.toLowerCase().includes('ui')) {
-        const frontendResult = await this.executeAgent('frontend', userPrompt)
-        execution.push(frontendResult)
-      }
+      // Fallback if routing fails (ambiguous path) — use architect
+      const result = await this.executeAgent('architect', userPrompt)
+      execution.push(result)
     }
     
     // 5. Run audit pipeline (unless explicitly disabled)
@@ -1664,7 +1627,7 @@ ${persistedInvariants ? `\n═══ PREVIOUSLY ESTABLISHED INVARIANTS ═══
     prompt: string,
     context?: { hasImages?: boolean }
   ): Promise<AgentResult & { routing?: RoutingDecision }> {
-    const routing = await this.getRoutingDecision(prompt, context)
+    const routing = this.getRoutingDecision(prompt, context)
     
     if (routing) {
       const result = await this.executeAgent(
@@ -1863,12 +1826,7 @@ Rules:
     return this.context
   }
   
-  /**
-   * Check if Kimi routing is enabled
-   */
-  isKimiRoutingEnabled(): boolean {
-    return this.kimiRouter !== null
-  }
+
 }
 
 // ============================================
