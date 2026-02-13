@@ -43,6 +43,7 @@ export interface ToolCall {
   args: Record<string, unknown>
   agentId: AgentId
   requestId?: string
+  correlationId?: string
 }
 
 /**
@@ -66,6 +67,7 @@ export interface AuditLogEntry {
   toolName: ToolName
   action: 'allowed' | 'denied' | 'sanitized' | 'error'
   reason?: string
+  correlationId?: string
   argsSnapshot?: Record<string, unknown>
   sanitizedArgs?: Record<string, unknown>
   result?: string
@@ -516,6 +518,7 @@ export class ToolFirewall {
     const startTime = Date.now()
     const auditId = this.generateAuditId()
     const { agentId, name: toolName, args } = toolCall
+    const correlationFromCall = (toolCall && (toolCall as any).correlationId) || undefined
 
     // Check permission
     if (!this.canExecuteTool(agentId, toolName)) {
@@ -524,6 +527,7 @@ export class ToolFirewall {
         timestamp: new Date().toISOString(),
         agentId,
         toolName,
+        correlationId: correlationFromCall,
         action: 'denied',
         reason: 'Tool not allowed for agent',
         argsSnapshot: this.redactArgs(args),
@@ -547,6 +551,7 @@ export class ToolFirewall {
         timestamp: new Date().toISOString(),
         agentId,
         toolName,
+        correlationId: correlationFromCall,
         action: 'denied',
         reason: `Argument validation failed: ${errors.join(', ')}`,
         argsSnapshot: this.redactArgs(args),
@@ -569,6 +574,7 @@ export class ToolFirewall {
         timestamp: new Date().toISOString(),
         agentId,
         toolName,
+        correlationId: correlationFromCall,
         action: 'denied',
         reason: `Restriction violation: ${restrictionCheck.reason}`,
         argsSnapshot: this.redactArgs(args),
@@ -594,6 +600,7 @@ export class ToolFirewall {
         timestamp: new Date().toISOString(),
         agentId,
         toolName,
+        correlationId: correlationFromCall,
         action,
         argsSnapshot: this.redactArgs(args),
         sanitizedArgs: errors.length > 0 ? sanitized : undefined,
@@ -613,6 +620,7 @@ export class ToolFirewall {
         timestamp: new Date().toISOString(),
         agentId,
         toolName,
+        correlationId: correlationFromCall,
         action: 'error',
         reason: error instanceof Error ? error.message : 'Unknown error',
         argsSnapshot: this.redactArgs(args),
@@ -654,6 +662,36 @@ export class ToolFirewall {
    */
   private recordAudit(entry: AuditLogEntry): void {
     if (!this.config.enableAudit) return
+
+    // Attach correlation id when available (lazy require to avoid circulars)
+    try {
+      if (!entry.correlationId) {
+        // Try common require paths to avoid depending on resolver configuration in tests
+        let getCorrelationId: any = null
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          getCorrelationId = require('@/lib/observability/correlation').getCorrelationId
+        } catch (_) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            getCorrelationId = require('../observability/correlation').getCorrelationId
+          } catch (_) {
+            // last resort: try relative path from repo root
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              getCorrelationId = require('../../lib/observability/correlation').getCorrelationId
+            } catch (_) {
+              getCorrelationId = null
+            }
+          }
+        }
+
+        const cid = getCorrelationId ? getCorrelationId() : undefined
+        if (cid) entry.correlationId = cid
+      }
+    } catch (e) {
+      // ignore missing correlation helper
+    }
 
     this.auditLog.push(entry)
     if (this.auditLog.length > this.config.auditLogCapacity) {

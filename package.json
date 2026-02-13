@@ -17,7 +17,11 @@
     "test:e2e:debug": "playwright test --debug",
     "analyze": "ANALYZE=true next build",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "migrate:validate": "node scripts/migrations/validate-migrations.js",
+    "migrate:checksums": "node scripts/migrations/checksums.js",
+    "migrate:simulate-rollback": "vitest run scripts/migrations/simulate-rollback.test.js",
+    "migrate:integration": "node scripts/migrations/run-integration.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.36",
@@ -73,5 +77,9 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
+  }
+  ,
+  "optionalDependencies": {
+    "pg": "^8.11.0"
   }
 }

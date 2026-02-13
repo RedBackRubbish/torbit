@@ -1,0 +1,23 @@
+name: Validate Migrations
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate migrations
+        run: node scripts/migrations/validate-migrations.js
+      - name: Run migration unit tests
+        run: npm test -- scripts/migrations --run

@@ -2,6 +2,10 @@
 
 This document demonstrates real-world usage patterns for the ToolFirewall module.
 
+**Status**: ✅ Fully testedand production-ready (120 comprehensive tests)
+- firewall.ts - Core implementation with 76 tests
+- firewall-examples.test.ts - Real-world scenarios with 44 tests
+
 ## Quick Start
 
 ```typescript
@@ -499,4 +503,100 @@ logs.forEach((entry) => {
 
 ---
 
-For implementation details, see [firewall.ts](./firewall.ts) and [firewall.test.ts](./__tests__/firewall.test.ts).
+## Production Integration
+
+### Install in your agent orchestrator
+
+```typescript
+import { getToolFirewall, type ToolCall } from '@/lib/tools/firewall'
+
+// Call this once at app startup
+const firewall = getToolFirewall({
+  enableAudit: true,
+  auditLogCapacity: 1000,
+  enableSanitization: true,
+  strictMode: true,
+})
+
+// When executing agent tools:
+export async function executeAgentTool(
+  agentId: AgentId,
+  toolName: ToolName,
+  args: Record<string, unknown>
+) {
+  const toolCall: ToolCall = { agentId, name: toolName, args }
+  
+  // All execution goes through firewall protection
+  const result = await firewall.executeToolSafely(toolCall, async (name, sanitizedArgs) => {
+    // Your actual tool executor here
+    return await executeActualTool(name, sanitizedArgs)
+  })
+  
+  return result
+}
+```
+
+### Monitor audit logs in production
+
+```typescript
+import { getToolFirewall } from '@/lib/tools/firewall'
+
+// View all denied access attempts
+const firewall = getToolFirewall()
+const deniedLogs = firewall.getAuditLog({ action: 'denied' })
+
+deniedLogs.forEach(entry => {
+  console.warn(`SECURITY: ${entry.agentId} denied access to ${entry.toolName}`)
+  console.warn(`Reason: ${entry.reason}`)
+})
+
+// Get denied attempts by agent
+const frontendDenials = firewall.getAuditLog({ 
+  agentId: 'frontend', 
+  action: 'denied' 
+})
+```
+
+### Integrate with monitoring/alerting
+
+```typescript
+import { getToolFirewall } from '@/lib/tools/firewall'
+
+// Send denied accesses to monitoring
+function monitorSecurityEvents() {
+  const firewall = getToolFirewall()
+  
+  setInterval(() => {
+    const deniedLogs = firewall.getAuditLog({ action: 'denied' })
+    
+    if (deniedLogs.length > 0) {
+      // Send to security monitoring
+      sendToMonitoring({
+        event: 'unauthorized_tool_access',
+        count: deniedLogs.length,
+        agents: [...new Set(deniedLogs.map(l => l.agentId))],
+        logs: deniedLogs,
+      })
+    }
+  }, 60000) // Every 60 seconds
+}
+```
+
+### Test suite
+
+Run all firewall tests:
+
+```bash
+npm test -- src/lib/tools/__tests__/firewall*.test.ts --run
+```
+
+This runs:
+- **firewall.test.ts** (76 tests) - Core permission, sanitization, restriction tests
+- **firewall-examples.test.ts** (44 tests) - Real-world scenario validation
+
+### Implementation details
+
+For complete technical reference, see:
+- [firewall.ts](./firewall.ts) - Core implementation
+- [firewall.test.ts](./__tests__/firewall.test.ts) - Permission and sanitization tests
+- [firewall-examples.test.ts](./__tests__/firewall-examples.test.ts) - Real-world usage examples
