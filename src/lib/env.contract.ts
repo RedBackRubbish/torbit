@@ -48,6 +48,40 @@ const positiveInt = z
   .regex(/^\d+$/, 'Must be a positive integer string')
   .transform(Number)
 
+/**
+ * Normalizes optional secret-like env vars:
+ * - empty/whitespace => undefined
+ * - common placeholder values => undefined
+ */
+function normalizeOptionalSecret(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+
+  const placeholderPatterns = [
+    /^paste_/i,
+    /^replace_/i,
+    /^your_/i,
+    /^example$/i,
+    /^todo$/i,
+    /^changeme$/i,
+    /^<.+>$/i,
+  ]
+
+  if (placeholderPatterns.some((pattern) => pattern.test(trimmed))) {
+    return undefined
+  }
+
+  return trimmed
+}
+
+function optionalPrefixed(prefix: string) {
+  return z.preprocess(
+    normalizeOptionalSecret,
+    z.string().startsWith(prefix).optional()
+  )
+}
+
 // ---------------------------------------------------------------------------
 // 1. PUBLIC — Client-safe (NEXT_PUBLIC_*)
 // ---------------------------------------------------------------------------
@@ -65,7 +99,7 @@ export const publicSchema = z.object({
 
   // ---- Stripe ----
   /** Stripe publishable key — safe to expose, powers <Elements>. */
-  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().startsWith('pk_').optional(),
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: optionalPrefixed('pk_'),
 
   // ---- E2B Sandbox ----
   /** E2B API key exposed client-side (browser → API route → E2B). */
@@ -123,15 +157,15 @@ export const serverSchema = z.object({
 
   // ---- Stripe ----
   /** Stripe secret key — server-side only. */
-  STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
+  STRIPE_SECRET_KEY: optionalPrefixed('sk_'),
   /** Stripe webhook signing secret. */
-  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+  STRIPE_WEBHOOK_SECRET: optionalPrefixed('whsec_'),
   /** Stripe price IDs for subscription tiers and fuel packs. */
-  STRIPE_PRICE_PRO_MONTHLY: z.string().startsWith('price_').optional(),
-  STRIPE_PRICE_TEAM_MONTHLY: z.string().startsWith('price_').optional(),
-  STRIPE_PRICE_FUEL_500: z.string().startsWith('price_').optional(),
-  STRIPE_PRICE_FUEL_2500: z.string().startsWith('price_').optional(),
-  STRIPE_PRICE_FUEL_10000: z.string().startsWith('price_').optional(),
+  STRIPE_PRICE_PRO_MONTHLY: optionalPrefixed('price_'),
+  STRIPE_PRICE_TEAM_MONTHLY: optionalPrefixed('price_'),
+  STRIPE_PRICE_FUEL_500: optionalPrefixed('price_'),
+  STRIPE_PRICE_FUEL_2500: optionalPrefixed('price_'),
+  STRIPE_PRICE_FUEL_10000: optionalPrefixed('price_'),
 
   // ---- Shipping providers ----
   /** GitHub PAT with repo permissions. */
