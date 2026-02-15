@@ -93,14 +93,37 @@ describe('rate-limit', () => {
     expect(warnSpy).toHaveBeenCalledOnce()
   })
 
-  it('extracts IP from common proxy headers', async () => {
+  it('prefers platform-provided IP headers over x-forwarded-for', async () => {
     const module = await import('./rate-limit')
     const request = new Request('https://example.com', {
       headers: {
-        'x-forwarded-for': '203.0.113.2, 10.0.0.1',
+        'x-forwarded-for': '203.0.113.2, 198.51.100.10',
+        'x-vercel-forwarded-for': '198.51.100.4',
       },
     })
 
-    expect(module.getClientIP(request)).toBe('203.0.113.2')
+    expect(module.getClientIP(request)).toBe('198.51.100.4')
+  })
+
+  it('uses last x-forwarded-for hop to reduce spoofing impact', async () => {
+    const module = await import('./rate-limit')
+    const request = new Request('https://example.com', {
+      headers: {
+        'x-forwarded-for': '203.0.113.2, 198.51.100.10',
+      },
+    })
+
+    expect(module.getClientIP(request)).toBe('198.51.100.10')
+  })
+
+  it('normalizes IPv4 addresses with source ports', async () => {
+    const module = await import('./rate-limit')
+    const request = new Request('https://example.com', {
+      headers: {
+        'x-real-ip': '198.51.100.8:443',
+      },
+    })
+
+    expect(module.getClientIP(request)).toBe('198.51.100.8')
   })
 })

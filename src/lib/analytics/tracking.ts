@@ -3,7 +3,7 @@
  * Tracks execution metrics, user behavior, and performance in production
  */
 
-import { useCallback, useRef, useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 
 export interface ExecutionAnalytics {
   runId: string
@@ -139,7 +139,7 @@ class UserAnalyticsCollector {
 
   constructor(private endpoint: string = '/api/analytics/user') {}
 
-  record(event: UserAnalytics) {
+  record(event: Omit<UserAnalytics, 'timestamp'> | UserAnalytics) {
     this.events.push({
       ...event,
       timestamp: Date.now(),
@@ -221,17 +221,13 @@ export function useUserAnalytics() {
  * Tracks when components mount and perform actions
  */
 export function useAnalyticsTracker(componentName: string, userId?: string) {
-  const trackRef = useRef({
-    execution: useExecutionAnalytics(),
-    performance: usePerformanceAnalytics(),
-    user: useUserAnalytics(),
-  })
+  const trackExecution = useExecutionAnalytics()
+  const trackPerformance = usePerformanceAnalytics()
+  const trackEvent = useUserAnalytics()
 
   useEffect(() => {
-    const { user } = trackRef.current
-
     // Track component mount
-    user({
+    trackEvent({
       event: `component_mounted`,
       userId,
       metadata: { componentName },
@@ -239,18 +235,18 @@ export function useAnalyticsTracker(componentName: string, userId?: string) {
 
     return () => {
       // Track component unmount
-      user({
+      trackEvent({
         event: `component_unmounted`,
         userId,
         metadata: { componentName },
       })
     }
-  }, [userId])
+  }, [componentName, trackEvent, userId])
 
   return {
-    trackExecution: trackRef.current.execution,
-    trackPerformance: trackRef.current.performance,
-    trackEvent: trackRef.current.user,
+    trackExecution,
+    trackPerformance,
+    trackEvent,
   }
 }
 

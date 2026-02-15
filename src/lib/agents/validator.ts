@@ -38,8 +38,8 @@ function formatZodError(error: ZodError): ValidationError[] {
     path: issue.path.join('.') || 'root',
     message: formatZodMessage(issue),
     code: issue.code,
-    received: issue.received,
-    expected: issue.expected,
+    received: 'input' in issue ? issue.input : undefined,
+    expected: 'expected' in issue ? String(issue.expected) : undefined,
   }))
 }
 
@@ -49,19 +49,15 @@ function formatZodError(error: ZodError): ValidationError[] {
 function formatZodMessage(issue: z.ZodIssue): string {
   switch (issue.code) {
     case 'invalid_type':
-      return `Expected ${issue.expected} but received ${typeof issue.received}`
-    case 'invalid_enum_value':
-      return `Must be one of: ${issue.options?.join(', ')}`
+      return `Expected ${'expected' in issue ? String(issue.expected) : 'valid type'}`
     case 'too_small':
-      if (issue.type === 'string') return `String must be at least ${issue.minimum} characters`
-      if (issue.type === 'array') return `Array must have at least ${issue.minimum} items`
+      if (issue.origin === 'string') return `String must be at least ${issue.minimum} characters`
+      if (issue.origin === 'array') return `Array must have at least ${issue.minimum} items`
       return `Value must be at least ${issue.minimum}`
     case 'too_big':
-      if (issue.type === 'string') return `String must be at most ${issue.maximum} characters`
-      if (issue.type === 'array') return `Array must have at most ${issue.maximum} items`
+      if (issue.origin === 'string') return `String must be at most ${issue.maximum} characters`
+      if (issue.origin === 'array') return `Array must have at most ${issue.maximum} items`
       return `Value must be at most ${issue.maximum}`
-    case 'invalid_string':
-      return `Invalid ${issue.validation}: ${issue.message}`
     case 'custom':
       return issue.message
     default:

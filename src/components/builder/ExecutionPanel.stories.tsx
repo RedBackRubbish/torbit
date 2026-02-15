@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react'
-import ExecutionPanel from './ExecutionPanel'
+import { ExecutionPanel } from './ExecutionPanel'
 
 const meta: Meta<typeof ExecutionPanel> = {
   title: 'Builder/ExecutionPanel',
@@ -43,7 +43,7 @@ export const Executing: Story = {
     intent: 'Deploy new microservice',
     input: { service: 'api', region: 'us-west-2', replicas: 3 },
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     // Simulate start button click
     const startButton = canvasElement.querySelector('[data-testid="start-button"]') as HTMLButtonElement
     if (startButton) {
@@ -74,7 +74,7 @@ export const Success: Story = {
     intent: 'Deploy new microservice',
     input: { service: 'api', region: 'us-west-2', replicas: 3 },
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const statusElement = canvasElement.querySelector('[data-testid="status"]')
     if (statusElement) {
       statusElement.textContent = 'Status: success'
@@ -92,7 +92,7 @@ export const ErrorState: Story = {
     intent: 'Deploy new microservice',
     input: { service: 'api', region: 'us-west-2', replicas: 3 },
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const errorElement = canvasElement.querySelector('[data-testid="error-message"]')
     if (errorElement) {
       errorElement.textContent = 'Connection timeout: Failed to reach deployment service'

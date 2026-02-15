@@ -3,6 +3,7 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { withAuth } from '@/lib/middleware/auth'
+import { strictRateLimiter, getClientIP, rateLimitResponse } from '@/lib/rate-limit'
 
 export const maxDuration = 60
 
@@ -109,6 +110,12 @@ function buildSupervisorResponse(object: SupervisorResponseObject) {
 }
 
 export const POST = withAuth(async (req, { user }) => {
+  const clientIP = getClientIP(req)
+  const rateLimitResult = await strictRateLimiter.check(`${user.id}:${clientIP}:verify`)
+  if (!rateLimitResult.success) {
+    return rateLimitResponse(rateLimitResult)
+  }
+
   try {
     // ========================================================================
     // REQUEST VALIDATION - Validate and parse request body

@@ -6,6 +6,10 @@ import * as datastore from '../datastore'
 import { getToolFirewall, resetToolFirewall } from '../../tools/firewall'
 import { getCorrelationId } from '../correlation'
 
+declare global {
+  var __TORBIT_CORRELATION_ID: string | undefined
+}
+
 describe('integration: correlation propagation', () => {
   beforeEach(() => {
     // reset firewall and datastore
@@ -26,8 +30,7 @@ describe('integration: correlation propagation', () => {
     const mockFetch = vi.fn(async (_input: any, init?: any) => {
       return { status: 200, json: async () => ({ ok: true }), headers: init?.headers }
     })
-    // @ts-ignore
-    globalThis.fetch = mockFetch
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     // minimal req/res objects
     const req: any = { headers: { 'x-correlation-id': cid }, url: '/api/test', method: 'POST' }
@@ -56,15 +59,13 @@ describe('integration: correlation propagation', () => {
 
     // also set global fallback for environments where ALS might not flow into fetch
     // this keeps the test robust without changing production behavior
-    // @ts-ignore
     globalThis.__TORBIT_CORRELATION_ID = cid
 
     const wrapped = withCorrelation(handler)
     await wrapped(req, res)
 
     // cleanup global
-    // @ts-ignore
-    delete globalThis.__TORBIT_CORRELATION_ID
+    globalThis.__TORBIT_CORRELATION_ID = undefined
 
     // outbound fetch was called and header injected
     expect(mockFetch).toHaveBeenCalled()

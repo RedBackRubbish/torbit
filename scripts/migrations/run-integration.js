@@ -231,6 +231,17 @@ async function verifyConstraintsAndIndexes(client, tableName, tableSpec) {
   }
 }
 
+function restoreSnapshotSafely(databaseUrl, snapshotFile) {
+  if (!snapshotFile) return
+  try {
+    console.log('Attempting to restore pre-migration snapshot from', snapshotFile)
+    snapshot.restoreSnapshot(databaseUrl, snapshotFile)
+    console.log('Snapshot restore succeeded')
+  } catch (restoreErr) {
+    console.error('Automatic snapshot restore failed:', restoreErr.message)
+  }
+}
+
 async function runIntegration() {
   const databaseUrl = process.env.DATABASE_URL
   const allowRun = process.env.RUN_MIGRATION_INTEGRATION === 'true' && process.env.ALLOW_MIGRATION_RUN === 'true'
@@ -241,39 +252,39 @@ async function runIntegration() {
 
   if (!databaseUrl) throw new Error('DATABASE_URL must be set')
 
-    // lazy-require pg to avoid failing module load in environments without pg installed
-    let Client
-    try {
-      ({ Client } = require('pg'))
-    } catch (err) {
-      console.error("The 'pg' module is required to run migrations against a DB. Install it or run in CI where it's available.")
-      throw err
-    }
+  // lazy-require pg to avoid failing module load in environments without pg installed
+  let Client
+  try {
+    ;({ Client } = require('pg'))
+  } catch (err) {
+    console.error("The 'pg' module is required to run migrations against a DB. Install it or run in CI where it's available.")
+    throw err
+  }
 
-    const client = new Client({ connectionString: databaseUrl })
+  const client = new Client({ connectionString: databaseUrl })
   await client.connect()
 
+  let snapshotFile = null
   try {
-    const files = listMigrations().map(f => parseMigrationName(f)).filter(Boolean)
-    const ups = files.filter(f => f.dir === 'up').sort((a,b) => a.version - b.version)
-    const downs = files.filter(f => f.dir === 'down').sort((a,b) => a.version - b.version)
+    const files = listMigrations().map((f) => parseMigrationName(f)).filter(Boolean)
+    const ups = files.filter((f) => f.dir === 'up').sort((a, b) => a.version - b.version)
+    const downs = files.filter((f) => f.dir === 'down').sort((a, b) => a.version - b.version)
 
     // Ensure migration history table exists and is append-only
     await ensureMigrationHistory(client)
 
     // Derive expected schema from .up.sql files (used for drift detection)
-    const expected = deriveExpectedSchema(ups.map(u => path.join(MIGRATIONS_DIR, u.file)))
+    const expected = deriveExpectedSchema(ups.map((u) => path.join(MIGRATIONS_DIR, u.file)))
 
     // Pre-run check: ensure there are no unexpected existing user tables (except our migration history)
     const beforeTablesRes = await client.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")
-    const beforeTables = beforeTablesRes.rows.map(r => r.table_name).filter(t => t !== '_migration_history')
+    const beforeTables = beforeTablesRes.rows.map((r) => r.table_name).filter((t) => t !== '_migration_history')
     if (beforeTables.length) {
       console.error('Unexpected existing tables before running migrations:', beforeTables)
       throw new Error('Database not clean before running integration migrations — aborting to prevent drift')
     }
 
     // Optionally create a pre-migration snapshot (prod safety layer)
-    let snapshotFile = null
     try {
       const enableSnapshot = process.env.ENABLE_PROD_SNAPSHOT === 'true' && process.env.ALLOW_MIGRATION_RUN === 'true'
       const isCI = process.env.CI === 'true'
@@ -304,54 +315,16 @@ async function runIntegration() {
       const sql = fs.readFileSync(filePath, 'utf8')
       try {
         await applySql(client, sql, m.file)
-        // record applied migration (append-only)
-          if (snapshotFile) {
-            try {
-              console.log('Attempting to restore pre-migration snapshot from', snapshotFile)
-              snapshot.restoreSnapshot(databaseUrl, snapshotFile)
-              console.log('Restore succeeded')
-            } catch (restoreErr) {
-              console.error('Automatic restore failed:', restoreErr.message)
-              // prefer to surface original error but ensure non-zero exit later
-            }
-          }
-            console.error('Automatic restore failed:', restoreErr.message)
-            // prefer to surface original error but ensure non-zero exit later
-          }
-
-      // exportable helper: execute given async function with snapshot protection
-  }
-
-  async function executeWithSnapshot(databaseUrl, fn) {
-    let snapshotFile = null
-    try {
-      const enableSnapshot = process.env.ENABLE_PROD_SNAPSHOT === 'true' && process.env.ALLOW_MIGRATION_RUN === 'true'
-      const isCI = process.env.CI === 'true'
-      if (enableSnapshot && !isCI) {
-        snapshotFile = snapshot.createSnapshot(databaseUrl)
-        if (snapshotFile) console.log('Pre-migration snapshot saved to', snapshotFile)
-      }
-      return await fn()
-    } catch (err) {
-      if (snapshotFile) {
-        try {
-          console.log('Attempting automatic restore from', snapshotFile)
-          snapshot.restoreSnapshot(databaseUrl, snapshotFile)
-          console.log('Automatic restore succeeded')
-        } catch (restoreErr) {
-          console.error('Automatic restore failed:', restoreErr.message)
-        }
-      }
-      throw err
-    }
-        }
+        await recordAppliedMigration(client, m.file, checksum)
+      } catch (err) {
+        restoreSnapshotSafely(databaseUrl, snapshotFile)
         throw err
       }
     }
 
     // Query actual schema
     const actualTablesRes = await client.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")
-    const actualTables = actualTablesRes.rows.map(r => r.table_name)
+    const actualTables = actualTablesRes.rows.map((r) => r.table_name)
     console.log('Tables after up:', actualTables)
 
     // Compare expected tables
@@ -390,7 +363,11 @@ async function runIntegration() {
         // NOT NULL check
         const actualNotNull = actualCol.is_nullable === 'NO'
         if ((expectedCol.notnull || false) !== actualNotNull) {
-          throwDiff(`NULL constraint mismatch for ${tableName}.${colName}`, expectedCol.notnull ? 'NOT NULL' : 'NULLABLE', actualNotNull ? 'NOT NULL' : 'NULLABLE')
+          throwDiff(
+            `NULL constraint mismatch for ${tableName}.${colName}`,
+            expectedCol.notnull ? 'NOT NULL' : 'NULLABLE',
+            actualNotNull ? 'NOT NULL' : 'NULLABLE'
+          )
         }
       }
 
@@ -399,7 +376,7 @@ async function runIntegration() {
     }
 
     // Run downs in reverse order of version
-    const downsByVersion = downs.sort((a,b) => b.version - a.version)
+    const downsByVersion = downs.sort((a, b) => b.version - a.version)
     for (const m of downsByVersion) {
       const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, m.file), 'utf8')
       await applySql(client, sql, m.file)
@@ -407,9 +384,11 @@ async function runIntegration() {
 
     // Verify no user tables remain
     const afterDrop = await client.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")
-    console.log('Tables after down:', afterDrop.rows.map(r => r.table_name))
-    if (afterDrop.rows.length !== 0) {
-      throw new Error('Expected zero tables after running down migrations')
+    const afterDropTables = afterDrop.rows.map((r) => r.table_name)
+    console.log('Tables after down:', afterDropTables)
+    const remainingUserTables = afterDropTables.filter((tableName) => tableName !== '_migration_history')
+    if (remainingUserTables.length !== 0) {
+      throw new Error(`Expected zero user tables after running down migrations (found: ${remainingUserTables.join(', ')})`)
     }
 
     // Reapply ups to confirm idempotency
@@ -419,7 +398,7 @@ async function runIntegration() {
     }
 
     const finalTables = await client.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")
-    console.log('Tables after reapply up:', finalTables.rows.map(r => r.table_name))
+    console.log('Tables after reapply up:', finalTables.rows.map((r) => r.table_name))
 
     console.log('Migration integration run completed successfully')
   } finally {
@@ -428,7 +407,7 @@ async function runIntegration() {
 }
 
 if (require.main === module) {
-  runIntegration().catch(err => {
+  runIntegration().catch((err) => {
     console.error('Migration integration failed:', err)
     process.exit(2)
   })

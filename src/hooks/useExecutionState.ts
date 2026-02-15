@@ -96,6 +96,12 @@ export function useExecutionState(options: UseExecutionStateOptions) {
       const endTime = Date.now()
       const startTime = state.startTime || Date.now()
       const duration = endTime - startTime
+      const resolvedMetrics = {
+        cost: metrics?.cost ?? 0,
+        duration,
+        tokensUsed: metrics?.tokensUsed ?? 0,
+        toolCalls: metrics?.toolCalls ?? 0,
+      }
 
       if (mountedRef.current && !abortRef.current) {
         setState((prev) => ({
@@ -103,10 +109,7 @@ export function useExecutionState(options: UseExecutionStateOptions) {
           status: 'success',
           result,
           endTime,
-          metrics: {
-            ...metrics,
-            duration,
-          },
+          metrics: resolvedMetrics,
         }))
 
         // Record to ledger
@@ -121,10 +124,10 @@ export function useExecutionState(options: UseExecutionStateOptions) {
               input: {},
               output: result,
               cost: {
-                total: metrics?.cost || 0,
+                total: resolvedMetrics.cost,
                 breakdown: {
-                  tokens: metrics?.tokensUsed,
-                  toolCalls: metrics?.toolCalls,
+                  tokens: resolvedMetrics.tokensUsed,
+                  toolCalls: resolvedMetrics.toolCalls,
                 },
               },
               execution_trace: {

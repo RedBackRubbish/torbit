@@ -13,7 +13,7 @@ export const InfrastructureResourceSchema = z.object({
   type: z.enum(['compute', 'storage', 'network', 'database', 'cache', 'queue', 'cdn']),
   name: z.string().min(1),
   provider: z.enum(['aws', 'gcp', 'azure', 'heroku', 'vercel', 'netlify', 'custom']),
-  configuration: z.record(z.unknown()).optional(),
+  configuration: z.record(z.string(), z.unknown()).optional(),
 })
 
 /**

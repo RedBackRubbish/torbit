@@ -27,8 +27,8 @@ export const ComponentDefinitionSchema = z.object({
   dependencies: z.array(z.string()).default([]),
   interfaces: z.array(z.object({
     name: z.string(),
-    inputs: z.record(z.string()),
-    outputs: z.record(z.string()),
+    inputs: z.record(z.string(), z.string()),
+    outputs: z.record(z.string(), z.string()),
   })).optional(),
 })
 

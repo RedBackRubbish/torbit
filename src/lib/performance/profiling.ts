@@ -34,7 +34,6 @@ export function usePerformanceMonitor(
   })
 
   const renderStartRef = useRef<number>(0)
-  const previousDepsRef = useRef<any[] | null>(null)
 
   useEffect(() => {
     if (!debugMode) return
@@ -98,7 +97,7 @@ export function useMemoWithTracking<T>(
   const { recordMemoHit, recordMemoMiss, recordDependencyChange } =
     usePerformanceMonitor('memoization', process.env.NODE_ENV === 'development')
 
-  const previousDepsRef = useRef<React.DependencyList | undefined>()
+  const previousDepsRef = useRef<React.DependencyList | undefined>(undefined)
 
   // Check if dependencies changed
   const depsChanged =
@@ -116,6 +115,8 @@ export function useMemoWithTracking<T>(
 
   previousDepsRef.current = deps
 
+  // Deliberately forwards caller-provided deps for diagnostics wrappers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
   return useMemo(() => {
     recordMemoHit()
     return factory()
@@ -126,15 +127,15 @@ export function useMemoWithTracking<T>(
  * Callback tracking wrapper
  * Logs when callbacks are recreated
  */
-export function useCallbackWithTracking<T extends (...args: any[]) => any>(
+export function useCallbackWithTracking<T extends (...args: any[]) => unknown>(
   callback: T,
   deps: React.DependencyList,
   label: string = 'unknown'
 ): T {
-  const { recordMemoHit, recordMemoMiss, recordDependencyChange } =
+  const { recordMemoMiss, recordDependencyChange } =
     usePerformanceMonitor('callback', process.env.NODE_ENV === 'development')
 
-  const previousDepsRef = useRef<React.DependencyList | undefined>()
+  const previousDepsRef = useRef<React.DependencyList | undefined>(undefined)
 
   const depsChanged =
     previousDepsRef.current === undefined ||
@@ -151,7 +152,9 @@ export function useCallbackWithTracking<T extends (...args: any[]) => any>(
 
   previousDepsRef.current = deps
 
-  return useCallback(callback, deps) as T
+  // Deliberately forwards caller-provided deps for diagnostics wrappers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
+  return useCallback((...args: Parameters<T>) => callback(...args), deps) as T
 }
 
 /**
@@ -197,7 +200,7 @@ export function usePerformanceMark(label: string) {
         console.debug(`[PERF] ${label}: ${measure.duration.toFixed(2)}ms`)
       }
     }
-  }, [endTimeMark, label])
+  }, [endTimeMark, label, startTimeMark])
 
   return { start, end }
 }

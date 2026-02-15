@@ -42,7 +42,7 @@ export const AuditorOutputSchema = BaseAgentOutputSchema.extend({
   checksRun: z.array(z.string()).optional(),
   failureDetails: z.object({
     count: z.number().int().nonnegative(),
-    byCategory: z.record(z.number().int().nonnegative()),
+    byCategory: z.record(z.string(), z.number().int().nonnegative()),
   }).optional(),
 })
 

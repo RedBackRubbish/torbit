@@ -516,36 +516,34 @@ interface E2BProviderProps {
   children: ReactNode
 }
 
-export function E2BProvider({ children }: E2BProviderProps) {
-  // ========================================================================
-  // Mock Mode — for local dev without an E2B API key
-  // Set NEXT_PUBLIC_E2B_MOCK=true in .env.local to enable
-  // ========================================================================
-  if (process.env.NEXT_PUBLIC_E2B_MOCK === 'true') {
-    const mockFiles = useRef<Record<string, string>>({})
-    const mockValue: E2BContextValue = {
+function E2BMockProvider({ children }: E2BProviderProps) {
+  const mockFiles = useRef<Record<string, string>>({})
+  const mockValue: E2BContextValue = {
+    sandboxId: 'mock-sandbox',
+    isBooting: false,
+    isReady: true,
+    serverUrl: null,
+    error: null,
+    buildFailure: null,
+    verification: {
+      environmentVerifiedAt: null,
+      runtimeVersion: 'mock',
       sandboxId: 'mock-sandbox',
-      isBooting: false,
-      isReady: true,
-      serverUrl: null,
-      error: null,
-      buildFailure: null,
-      verification: {
-        environmentVerifiedAt: Date.now(),
-        runtimeVersion: 'mock',
-        sandboxId: 'mock-sandbox',
-        dependenciesLockedAt: null,
-        dependencyCount: 0,
-        lockfileHash: null,
-      },
-      writeFile: async (path, content) => { mockFiles.current[path] = content },
-      readFile: async (path) => mockFiles.current[path] ?? null,
-      runCommand: async () => ({ exitCode: 0, stdout: '[mock] command skipped', stderr: '' }),
-      syncFilesToSandbox: async () => {},
-      killSandbox: async () => {},
-    }
-    return <E2BContext.Provider value={mockValue}>{children}</E2BContext.Provider>
+      dependenciesLockedAt: null,
+      dependencyCount: 0,
+      lockfileHash: null,
+    },
+    writeFile: async (path, content) => { mockFiles.current[path] = content },
+    readFile: async (path) => mockFiles.current[path] ?? null,
+    runCommand: async () => ({ exitCode: 0, stdout: '[mock] command skipped', stderr: '' }),
+    syncFilesToSandbox: async () => {},
+    killSandbox: async () => {},
   }
+
+  return <E2BContext.Provider value={mockValue}>{children}</E2BContext.Provider>
+}
+
+function E2BRealProvider({ children }: E2BProviderProps) {
 
   const [sandboxId, setSandboxId] = useState<string | null>(null)
   const [sandboxAccessToken, setSandboxAccessToken] = useState<string | null>(null)
@@ -1203,6 +1201,14 @@ export function E2BProvider({ children }: E2BProviderProps) {
       {children}
     </E2BContext.Provider>
   )
+}
+
+export function E2BProvider({ children }: E2BProviderProps) {
+  if (process.env.NEXT_PUBLIC_E2B_MOCK === 'true') {
+    return <E2BMockProvider>{children}</E2BMockProvider>
+  }
+
+  return <E2BRealProvider>{children}</E2BRealProvider>
 }
 
 // ============================================================================

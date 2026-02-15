@@ -1,3 +1,5 @@
+import { isIP } from 'node:net'
+
 // ============================================================================
 // RATE LIMITER - Distributed-first (Upstash Redis), in-memory fallback
 // ============================================================================
@@ -224,19 +226,60 @@ export const e2bSyncRateLimiter = new RateLimiter({
   refillInterval: 1000,
 })
 
+function normalizeClientIp(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  // IPv6 can include optional brackets and zone id.
+  const withoutBrackets = trimmed.startsWith('[') && trimmed.endsWith(']')
+    ? trimmed.slice(1, -1)
+    : trimmed
+  const withoutZoneId = withoutBrackets.split('%')[0]
+  if (isIP(withoutZoneId)) return withoutZoneId
+
+  // Handle IPv4 with optional source port.
+  const ipv4WithPort = withoutZoneId.match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/)
+  if (ipv4WithPort && isIP(ipv4WithPort[1]) === 4) {
+    return ipv4WithPort[1]
+  }
+
+  return null
+}
+
+function extractClientIpFromHeader(
+  headerValue: string | null,
+  options: { useLastHop?: boolean } = {}
+): string | null {
+  if (!headerValue) return null
+
+  const parts = headerValue.split(',').map((part) => part.trim()).filter(Boolean)
+  const candidates = options.useLastHop ? [...parts].reverse() : parts
+  for (const candidate of candidates) {
+    const normalized = normalizeClientIp(candidate)
+    if (normalized) return normalized
+  }
+
+  return null
+}
+
 export function getClientIP(request: Request): string {
-  const candidates = [
-    request.headers.get('x-forwarded-for'),
-    request.headers.get('cf-connecting-ip'),
+  // Prefer platform-provided single-IP headers.
+  const platformHeaders = [
     request.headers.get('x-vercel-forwarded-for'),
+    request.headers.get('cf-connecting-ip'),
     request.headers.get('x-real-ip'),
   ]
-
-  for (const candidate of candidates) {
-    if (!candidate) continue
-    const ip = candidate.split(',')[0]?.trim()
+  for (const headerValue of platformHeaders) {
+    const ip = extractClientIpFromHeader(headerValue)
     if (ip) return ip
   }
+
+  // X-Forwarded-For is easier to spoof. Prefer the last hop over the first.
+  const forwardedFor = extractClientIpFromHeader(
+    request.headers.get('x-forwarded-for'),
+    { useLastHop: true }
+  )
+  if (forwardedFor) return forwardedFor
 
   return 'unknown'
 }

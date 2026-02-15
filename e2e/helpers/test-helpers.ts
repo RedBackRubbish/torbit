@@ -14,21 +14,21 @@ export const test = base.extend<{
   mockApi: MockApiHelper
   testData: TestDataHelper
 }>({
-  authenticatedPage: async ({ page, context }, use) => {
+  authenticatedPage: async ({ page, context }, fixture) => {
     // Setup authentication for E2E tests
     await setupAuth(page, context)
-    await use(page)
+    await fixture(page)
     await page.close()
   },
 
-  mockApi: async ({ page }, use) => {
+  mockApi: async ({ page }, fixture) => {
     const helper = new MockApiHelper(page)
-    await use(helper)
+    await fixture(helper)
   },
 
-  testData: async ({}, use) => {
+  testData: async ({}, fixture) => {
     const helper = new TestDataHelper()
-    await use(helper)
+    await fixture(helper)
   },
 })
 
@@ -79,8 +79,11 @@ export class MockApiHelper {
       const response = route.request()
 
       if (response.method() === 'POST') {
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay))
+        }
         // Send SSE stream
-        const body = await route.request().postDataJSON()
+        await route.request().postDataJSON()
 
         const sseChunks = chunks
           .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`)

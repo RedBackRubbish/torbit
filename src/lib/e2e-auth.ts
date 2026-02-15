@@ -23,16 +23,16 @@ function isLocalHost(hostname: string): boolean {
 }
 
 function getRequestHost(req: Pick<Request, 'headers'>): string {
-  const forwardedHost = req.headers.get('x-forwarded-host')
-  if (forwardedHost) {
-    return forwardedHost.split(',')[0]?.trim().toLowerCase() || ''
-  }
-
   return (req.headers.get('host') || '').toLowerCase()
 }
 
-function isE2EAllowedForRequest(req: Pick<Request, 'headers'>): boolean {
-  if (isE2EAuthEnabledServer()) return true
+function isE2EAllowedForRequest(
+  req: Pick<Request, 'headers'>,
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  if (isE2EAuthEnabledServer(env)) return true
+  if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test') return false
+
   const host = getRequestHost(req)
   const hostname = host.split(':')[0]
   return isLocalHost(hostname)
@@ -52,8 +52,11 @@ export function hasE2EAuthCookieClient(): boolean {
   return hasE2EAuthCookie(document.cookie)
 }
 
-export function isE2EAuthenticatedRequest(req: Pick<Request, 'headers'>): boolean {
-  if (!isE2EAllowedForRequest(req)) return false
+export function isE2EAuthenticatedRequest(
+  req: Pick<Request, 'headers'>,
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  if (!isE2EAllowedForRequest(req, env)) return false
   return hasE2EAuthCookie(req.headers.get('cookie'))
 }
 

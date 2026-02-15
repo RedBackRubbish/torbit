@@ -34,7 +34,7 @@ export const MiddlewareConfigSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['auth', 'cors', 'logging', 'validation', 'error', 'custom']),
   order: z.number().int().nonnegative(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 })
 
 /**

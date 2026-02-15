@@ -1,11 +1,12 @@
 "use client"
-import React, { createContext, useContext, useMemo, useEffect } from 'react'
+import React, { createContext, useContext, useMemo, useEffect, useId } from 'react'
 import { setClientCorrelationId } from '@/lib/observability/clientCorrelation'
 
 const CorrelationContext = createContext<string | null>(null)
 
 export function CorrelationProvider({ children, correlationId }: { children: React.ReactNode, correlationId?: string }) {
-  const cid = useMemo(() => correlationId || `cid-${Math.random().toString(16).slice(2)}`, [correlationId])
+  const generatedId = useId().replace(/:/g, '')
+  const cid = useMemo(() => correlationId || `cid-${generatedId}`, [correlationId, generatedId])
   useEffect(() => {
     setClientCorrelationId(cid)
     return () => setClientCorrelationId('')
@@ -21,8 +22,7 @@ export function CorrelationProvider({ children, correlationId }: { children: Rea
 export function useCorrelationId() {
   const v = useContext(CorrelationContext)
   if (!v) {
-    // fallback to generated id
-    return `cid-${Math.random().toString(16).slice(2)}`
+    return 'cid-unavailable'
   }
   return v
 }

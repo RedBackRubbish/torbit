@@ -219,7 +219,7 @@ export class CostManager {
         toolCallsCost: 0,
         externalRequestsCost: 0,
         penaltiesCost: 0,
-        costByTool: {},
+        costByTool: {} as Record<ToolName, number>,
         costByProvider: {},
         costByType: {},
       },

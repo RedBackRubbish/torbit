@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react'
 import { useState } from 'react'
-import ErrorBoundary from '../ErrorBoundary'
+import ErrorBoundary from './ErrorBoundary'
 
 const ThrowError = ({ throwError }: { throwError: boolean }) => {
   if (throwError) {
@@ -36,10 +36,10 @@ const ErrorBoundaryStory = ({
       <ErrorBoundary
         level={level}
         resetKeys={[resetKeysValue]}
-        fallback={({ error, reset }) => (
+        fallback={(error: Error, reset: () => void) => (
           <div className="p-4 bg-red-50 border border-red-200 rounded">
             <h3 className="font-semibold text-red-900 mb-2">Error Caught</h3>
-            <p className="text-red-700 text-sm mb-3">{error?.message}</p>
+            <p className="text-red-700 text-sm mb-3">{error.message}</p>
             <button
               onClick={reset}
               className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
@@ -116,7 +116,7 @@ export const ResetKeysDemo: Story = {
     level: 'error',
     resetKeysValue: 1,
   },
-  play: async ({ canvasElement, args }) => {
+  play: async () => {
     // Simulate resetKeys changing
     await new Promise((resolve) => setTimeout(resolve, 500))
     // In real scenario, resetKeysValue would change which triggers reset

@@ -1,10 +1,14 @@
-import fs from 'fs'
-import path from 'path'
 import * as Sentry from '@sentry/node'
 import { getCorrelationId } from './correlation'
 import { appendLog } from './datastore'
 
 type Level = 'info' | 'warn' | 'error' | 'debug'
+const SENTRY_LEVEL_MAP: Record<Level, 'info' | 'warning' | 'error' | 'debug'> = {
+  info: 'info',
+  warn: 'warning',
+  error: 'error',
+  debug: 'debug',
+}
 
 function formatLog(level: Level, msg: string, meta: Record<string, any> = {}) {
   const payload = {
@@ -26,8 +30,8 @@ export function log(level: Level, message: string, meta: Record<string, any> = {
   // Sentry (optional)
   try {
     if (level === 'error') Sentry.captureException(new Error(message))
-    else Sentry.addBreadcrumb({ message, level })
-  } catch (e) {
+    else Sentry.addBreadcrumb({ message, level: SENTRY_LEVEL_MAP[level] })
+  } catch {
     // ignore Sentry failures
   }
 
@@ -36,7 +40,8 @@ export function log(level: Level, message: string, meta: Record<string, any> = {
     appendLog(line)
   } catch (e) {
     // swallow datastore errors to avoid breaking flows
-    console.error('Failed to write log to datastore:', e.message)
+    const reason = e instanceof Error ? e.message : String(e)
+    console.error('Failed to write log to datastore:', reason)
   }
 }
 

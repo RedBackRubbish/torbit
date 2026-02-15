@@ -523,8 +523,6 @@ async function executeActionFlow(input: ExecutionOptions): Promise<AgentResult> 
     const orchestrator = createOrchestrator({
       projectId: input.projectId,
       userId: input.userId,
-      enableKimiRouter: true,
-      fastRouting: true,
     })
 
     const options = {

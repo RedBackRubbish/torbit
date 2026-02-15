@@ -10,6 +10,7 @@ export interface ChatStreamConfig {
   onMessageUpdate?: (msg: Message) => void
   onToolCall?: (toolCall: ToolCall) => void
   onStatusChange?: (status: string) => void
+  onChunk?: (chunk: StreamChunk) => void
   onError?: (error: Error) => void
 }
 
@@ -25,13 +26,16 @@ export interface ChatStreamResult {
  */
 export function useChatExecution(config: ChatStreamConfig = {}) {
   const streaming = useStreamingExecution({
-    onChunk: (chunk: any) => {
-      const streamChunk = chunk as StreamChunk
+    onChunk: (chunk: Record<string, unknown>) => {
+      const streamChunk = chunk as unknown as StreamChunk
 
-      if (streamChunk.type === 'content') {
+      if (streamChunk.type === 'text') {
         config.onStatusChange?.('Receiving content...')
-      } else if (streamChunk.type === 'tool_call') {
-        config.onToolCall?.(streamChunk.data as ToolCall)
+      } else if (streamChunk.type === 'tool-call' && streamChunk.toolCall) {
+        config.onToolCall?.({
+          ...streamChunk.toolCall,
+          status: 'pending',
+        })
         config.onStatusChange?.('Executing tool...')
       } else if (streamChunk.type === 'error') {
         config.onStatusChange?.('Error occurred')
@@ -77,12 +81,15 @@ export function useChatExecution(config: ChatStreamConfig = {}) {
           if (line.startsWith('data: ')) {
             try {
               const chunk: StreamChunk = JSON.parse(line.slice(6))
-              streaming.data.push(chunk)
+              streaming.data.push(chunk as unknown as Record<string, unknown>)
 
-              if (chunk.type === 'content') {
-                fullContent += chunk.data.content || ''
-              } else if (chunk.type === 'tool_call') {
-                const toolCall = chunk.data as ToolCall
+              if (chunk.type === 'text') {
+                fullContent += chunk.content || ''
+              } else if (chunk.type === 'tool-call' && chunk.toolCall) {
+                const toolCall: ToolCall = {
+                  ...chunk.toolCall,
+                  status: 'pending',
+                }
                 toolCalls.push(toolCall)
               }
 
@@ -99,12 +106,15 @@ export function useChatExecution(config: ChatStreamConfig = {}) {
       if (buffer.startsWith('data: ')) {
         try {
           const chunk: StreamChunk = JSON.parse(buffer.slice(6))
-          streaming.data.push(chunk)
+          streaming.data.push(chunk as unknown as Record<string, unknown>)
 
-          if (chunk.type === 'content') {
-            fullContent += chunk.data.content || ''
-          } else if (chunk.type === 'tool_call') {
-            toolCalls.push(chunk.data as ToolCall)
+          if (chunk.type === 'text') {
+            fullContent += chunk.content || ''
+          } else if (chunk.type === 'tool-call' && chunk.toolCall) {
+            toolCalls.push({
+              ...chunk.toolCall,
+              status: 'pending',
+            })
           }
 
           config.onChunk?.(chunk)
@@ -116,7 +126,7 @@ export function useChatExecution(config: ChatStreamConfig = {}) {
       return {
         messages,
         toolCalls,
-        finalContent,
+        finalContent: fullContent,
       }
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {

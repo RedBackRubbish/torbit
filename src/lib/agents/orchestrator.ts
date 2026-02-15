@@ -540,10 +540,10 @@ export class TorbitOrchestrator {
    */
   private getRoutingDecision(
     prompt: string,
-    context?: { intent?: IntentKind }
+    _context?: unknown
   ): RoutingDecision | null {
     try {
-      return routeRequest(prompt, context)
+      return routeRequest(prompt)
     } catch (error) {
       if (error instanceof AmbiguousRoutingError) {
         console.warn('[Orchestrator] Ambiguous routing:', error.message)
