@@ -36,6 +36,8 @@ export const Default: Story = {
     previewTab: 'preview',
     onPreviewTabChange: () => {},
     isWorking: true,
+    workspaceTitle: 'Build a premium workflow app with collaboration and analytics',
+    activeAgentLabel: 'Frontend',
     onlineCollaboratorCount: 2,
     headerActions: (
       <button className="rounded bg-white/10 px-2 py-1 text-[11px] text-white/80">Action</button>

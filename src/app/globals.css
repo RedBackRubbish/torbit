@@ -154,6 +154,26 @@ body::after {
   100% { transform: translateX(-50%); }
 }
 
+@keyframes builderAmbientDrift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translate3d(-1.5%, 1%, 0) scale(1.04);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.42;
+  }
+}
+
+@keyframes builderGlowPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.7; }
+}
+
 .animate-pulse-subtle {
   animation: pulse-subtle 2s ease-in-out infinite;
 }
@@ -164,6 +184,32 @@ body::after {
 
 .animate-scroll {
   animation: scroll 30s linear infinite;
+}
+
+.builder-ambient {
+  background:
+    radial-gradient(980px 460px at 12% -16%, rgba(255, 255, 255, 0.08), transparent 60%),
+    radial-gradient(760px 380px at 96% -10%, rgba(255, 255, 255, 0.06), transparent 62%),
+    linear-gradient(180deg, #050505 0%, #010101 38%, #000000 100%);
+}
+
+.builder-grid {
+  opacity: 0.5;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(120% 100% at 50% 48%, rgba(0, 0, 0, 1), transparent 100%);
+  animation: builderAmbientDrift 24s ease-in-out infinite;
+}
+
+.builder-orbital-glow {
+  filter: blur(36px);
+  opacity: 0.6;
+  background:
+    radial-gradient(300px 240px at 28% 30%, rgba(255, 255, 255, 0.12), transparent 70%),
+    radial-gradient(260px 210px at 68% 64%, rgba(255, 255, 255, 0.08), transparent 72%);
+  animation: builderGlowPulse 10s ease-in-out infinite;
 }
 
 /* ========================================

@@ -12,12 +12,15 @@ interface BuilderLayoutProps {
 export default function BuilderLayout({ children }: BuilderLayoutProps) {
   return (
     <div
-      className="relative h-screen w-screen overflow-hidden bg-[#000000]"
+      className="builder-ambient relative h-screen w-screen overflow-hidden bg-[#000000]"
       role="main"
       data-testid="builder-layout"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_360px_at_10%_-10%,rgba(255,255,255,0.06),transparent_60%),radial-gradient(720px_320px_at_95%_-8%,rgba(255,255,255,0.04),transparent_62%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,transparent_25%,transparent_72%,rgba(255,255,255,0.02)_100%)]" />
+      <div className="builder-grid pointer-events-none absolute inset-0" />
+      <div className="builder-orbital-glow pointer-events-none absolute inset-0" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.06] via-white/[0.01] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 left-[18%] w-px bg-gradient-to-b from-transparent via-white/[0.14] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-[34%] w-px bg-gradient-to-b from-transparent via-white/[0.1] to-transparent" />
       <div className="relative z-10 flex h-full w-full">
         {children}
       </div>

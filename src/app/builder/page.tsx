@@ -155,6 +155,17 @@ function BuilderPageContent() {
 
   const activeAgent = agents.find((agent) => agent.status === 'working' || agent.status === 'thinking')
   const isWorking = isGenerating || Boolean(activeAgent)
+  const projectToken = projectId ? projectId.slice(0, 8) : 'session'
+  const workspaceTitle = useMemo(() => {
+    const normalizedPrompt = prompt.replace(/\s+/g, ' ').trim()
+    if (!normalizedPrompt) return 'Start with a clear build objective'
+    return normalizedPrompt.length > 72 ? `${normalizedPrompt.slice(0, 69)}...` : normalizedPrompt
+  }, [prompt])
+  const collaboratorLabel = onlineCollaboratorCount > 0
+    ? `${onlineCollaboratorCount + 1} online`
+    : 'Solo session'
+  const statusLabel = isWorking ? 'Run in motion' : 'Ready to build'
+  const statusDetail = activeAgent?.currentTask || (isWorking ? `${activeAgent?.name || 'Torbit'} is executing` : 'Waiting for your next direction')
 
   const chatPanel = (
     <ErrorBoundary name="ChatPanel" fallback={<ChatErrorFallback onRetry={handleChatRetry} />}>
@@ -167,6 +178,50 @@ function BuilderPageContent() {
       <PreviewPanel key={previewKey} />
     </ErrorBoundary>
   )
+
+  useEffect(() => {
+    if (isMobileLayout !== false) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName
+      const editable = Boolean(
+        target
+        && (target.isContentEditable
+          || tagName === 'INPUT'
+          || tagName === 'TEXTAREA'
+          || tagName === 'SELECT')
+      )
+
+      if (editable) return
+
+      if ((event.metaKey || event.ctrlKey) && event.key === '1') {
+        event.preventDefault()
+        setPreviewTab('preview')
+        return
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key === '2') {
+        event.preventDefault()
+        setPreviewTab('code')
+        return
+      }
+
+      if (event.key === 'Escape' && showTasks) {
+        event.preventDefault()
+        setShowTasks(false)
+        return
+      }
+
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+        event.preventDefault()
+        setShowTasks((value) => !value)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isMobileLayout, setPreviewTab, showTasks])
 
   if (isMobileLayout === null) {
     return (
@@ -188,13 +243,15 @@ function BuilderPageContent() {
           previewTab={previewTab}
           onPreviewTabChange={setPreviewTab}
           isWorking={isWorking}
+          workspaceTitle={workspaceTitle}
+          activeAgentLabel={activeAgent?.name ?? null}
           onlineCollaboratorCount={onlineCollaboratorCount}
           headerActions={(
             <>
               <Link
                 href="/dashboard"
                 aria-label="Go to dashboard"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-[#525252] transition-colors hover:bg-[#141414] hover:text-[#fafafa]"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[#6b6b6b] transition-colors hover:bg-white/[0.06] hover:text-[#fafafa]"
                 title="Dashboard"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -222,108 +279,137 @@ function BuilderPageContent() {
       {chatPanel}
 
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <header className="flex h-11 items-center justify-between gap-2 overflow-hidden border-b border-[#1f1f1f] bg-[#0a0a0a] px-2 sm:px-4">
-          <div className="relative z-10 flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
-            <span className="hidden text-[13px] font-medium text-[#fafafa] lg:block">App Preview</span>
-            <div className="flex items-center rounded-lg border border-[#1f1f1f] bg-[#141414] p-0.5">
-              <TabButton
-                label="Preview"
-                active={previewTab === 'preview'}
-                onClick={() => setPreviewTab('preview')}
+        <header className="relative border-b border-white/[0.08] bg-[#070707]/95 backdrop-blur-sm">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+
+          <div className="flex h-11 items-center justify-between gap-3 px-3 sm:px-4">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">
+                {isWorking ? <TorbitSpinner size="xs" speed="fast" /> : <span className="h-1.5 w-1.5 rounded-full bg-[#3c3c3c]" />}
+                <span className="text-[11px] font-medium text-[#e5e5e5]">{statusLabel}</span>
+              </div>
+              <div className="hidden min-w-0 items-center gap-1.5 text-[11px] text-[#8b8b8b] xl:flex">
+                <span className="truncate">{statusDetail}</span>
+                <span className="text-[#505050]">•</span>
+                <span>{collaboratorLabel}</span>
+              </div>
+            </div>
+
+            <div className="relative z-0 ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+              <Link
+                href="/dashboard"
+                aria-label="Go to dashboard"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[#676767] transition-all hover:bg-white/[0.05] hover:text-[#fafafa] focus-ring"
+                title="Dashboard"
               >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+                  />
                 </svg>
-              </TabButton>
-              <TabButton
-                label="Code"
-                active={previewTab === 'code'}
-                onClick={() => setPreviewTab('code')}
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-                </svg>
-              </TabButton>
+              </Link>
+              <div className="hidden sm:block">
+                <ScreenshotButton />
+              </div>
+              <div className="hidden lg:block">
+                <SoundToggle />
+              </div>
+              <FuelGauge />
+              <ShipMenu />
+              <PublishPanel />
+              <UserMenu />
             </div>
           </div>
 
-          <div className="relative z-0 ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
-            <Link
-              href="/dashboard"
-              aria-label="Go to dashboard"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[#525252] transition-all hover:bg-[#141414] hover:text-[#fafafa] focus-ring"
-              title="Dashboard"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
-                />
-              </svg>
-            </Link>
-
-            <div className="flex items-center gap-1.5 border-r border-[#1f1f1f] px-2">
-              {isWorking ? <TorbitSpinner size="xs" speed="fast" /> : <div className="h-1.5 w-1.5 rounded-full bg-[#333]" />}
-              <span className="hidden text-[11px] text-[#737373] md:inline">{isWorking ? 'Working' : 'Ready'}</span>
+          <div className="flex h-10 items-center justify-between gap-2 border-t border-white/[0.06] px-3 sm:px-4">
+            <div className="min-w-0">
+              <p className="truncate text-[12px] font-medium text-[#f5f5f5]">{workspaceTitle}</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-[#707070]">Workspace {projectToken}</p>
             </div>
 
-            <div className="hidden items-center gap-1.5 border-r border-[#1f1f1f] px-2 xl:flex">
-              <span className={`h-1.5 w-1.5 rounded-full ${onlineCollaboratorCount > 0 ? 'bg-emerald-500' : 'bg-[#333]'}`} />
-              <span className="text-[11px] text-[#737373]">
-                {onlineCollaboratorCount > 0 ? `${onlineCollaboratorCount + 1} collaborators online` : 'Solo session'}
-              </span>
-            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex items-center rounded-lg border border-white/[0.09] bg-white/[0.03] p-0.5">
+                <PreviewModeButton
+                  label="Preview"
+                  shortcut="⌘1"
+                  active={previewTab === 'preview'}
+                  onClick={() => setPreviewTab('preview')}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </PreviewModeButton>
+                <PreviewModeButton
+                  label="Code"
+                  shortcut="⌘2"
+                  active={previewTab === 'code'}
+                  onClick={() => setPreviewTab('code')}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                  </svg>
+                </PreviewModeButton>
+              </div>
 
-            <div className="hidden sm:block">
-              <ScreenshotButton />
+              <button
+                onClick={() => setShowTasks((value) => !value)}
+                className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 transition-all focus-ring ${
+                  showTasks
+                    ? 'border-white/[0.2] bg-white/[0.1] text-[#f8f8f8]'
+                    : 'border-white/[0.09] bg-white/[0.02] text-[#8d8d8d] hover:border-white/[0.14] hover:text-[#d0d0d0]'
+                }`}
+                title="Tasks (T)"
+                aria-label={showTasks ? 'Close tasks panel' : 'Open tasks panel'}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-[11px] font-medium">Tasks</span>
+                <span className="hidden text-[10px] text-[#7a7a7a] md:inline">T</span>
+              </button>
             </div>
-            <div className="hidden lg:block">
-              <SoundToggle />
-            </div>
-            <FuelGauge />
-            <ShipMenu />
-            <PublishPanel />
-            <UserMenu />
-
-            <button
-              onClick={() => setShowTasks((value) => !value)}
-              className={`flex h-7 w-7 items-center justify-center rounded-md transition-all focus-ring ${
-                showTasks ? 'bg-[#1f1f1f] text-[#fafafa]' : 'text-[#525252] hover:bg-[#141414] hover:text-[#a1a1a1]'
-              }`}
-              title="Tasks"
-              aria-label={showTasks ? 'Close tasks panel' : 'Open tasks panel'}
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
           </div>
         </header>
 
-        {previewPanel}
+        <div className="relative min-h-0 flex-1">
+          {previewPanel}
 
-        <div
-          className={`pointer-events-none absolute bottom-0 right-0 top-11 z-40 w-72 border-l border-[#1f1f1f] bg-[#0a0a0a] shadow-2xl transition-all duration-150 ${
-            showTasks ? 'translate-x-0 opacity-100 pointer-events-auto' : 'translate-x-6 opacity-0'
-          }`}
-          aria-hidden={!showTasks}
-        >
-          <div className="flex h-full flex-col">
-            <div className="flex h-10 items-center justify-between border-b border-[#1f1f1f] px-3">
-              <span className="text-[12px] font-medium text-[#a1a1a1]">Tasks</span>
-              <button
-                onClick={() => setShowTasks(false)}
-                className="flex h-5 w-5 items-center justify-center rounded text-[#525252] transition-colors hover:bg-[#1a1a1a] hover:text-[#fafafa]"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <TasksPanel />
+          {showTasks && (
+            <button
+              type="button"
+              className="absolute inset-0 z-40 bg-black/45 backdrop-blur-[1px]"
+              onClick={() => setShowTasks(false)}
+              aria-label="Close tasks panel backdrop"
+            />
+          )}
+
+          <div
+            className={`absolute bottom-0 right-0 top-0 z-50 w-[320px] border-l border-white/[0.1] bg-[#090909]/95 shadow-2xl backdrop-blur-sm transition-all duration-200 ${
+              showTasks ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-8 opacity-0'
+            }`}
+            aria-hidden={!showTasks}
+          >
+            <div className="flex h-full flex-col">
+              <div className="flex h-11 items-center justify-between border-b border-white/[0.08] px-4">
+                <div>
+                  <p className="text-[12px] font-medium text-[#e8e8e8]">Task Control</p>
+                  <p className="text-[10px] text-[#767676]">Run health and execution details</p>
+                </div>
+                <button
+                  onClick={() => setShowTasks(false)}
+                  className="flex h-6 w-6 items-center justify-center rounded text-[#656565] transition-colors hover:bg-white/[0.06] hover:text-[#fafafa]"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <TasksPanel />
+              </div>
             </div>
           </div>
         </div>
@@ -332,14 +418,16 @@ function BuilderPageContent() {
   )
 }
 
-function TabButton({
+function PreviewModeButton({
   children,
   label,
+  shortcut,
   active,
   onClick,
 }: {
   children: ReactNode
   label: string
+  shortcut: string
   active: boolean
   onClick: () => void
 }) {
@@ -348,11 +436,15 @@ function TabButton({
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
-      className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
-        active ? 'bg-[#1f1f1f] text-[#fafafa]' : 'text-[#525252] hover:text-[#a1a1a1]'
+      className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-all ${
+        active
+          ? 'bg-white/[0.12] text-[#fafafa]'
+          : 'text-[#727272] hover:bg-white/[0.06] hover:text-[#d6d6d6]'
       }`}
     >
       {children}
+      <span className="text-[11px] font-medium">{label}</span>
+      <span className="hidden text-[10px] text-[#6c6c6c] lg:inline">{shortcut}</span>
     </button>
   )
 }
