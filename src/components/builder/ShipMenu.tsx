@@ -8,8 +8,9 @@ import { recordMetric } from '@/lib/metrics/success'
 import { ExecutorService } from '@/services/executor'
 import { useLedger } from '@/store/ledger'
 import { createWebExportZip, downloadWebExportBlob, getWebExportFilename } from '@/lib/web/export'
-import { onPreDeploy, formatHealthSummary } from '@/lib/integrations/health'
+import { checkIntegrationHealth, onPreDeploy, formatHealthSummary } from '@/lib/integrations/health'
 import { enforcePreDeploy } from '@/lib/integrations/policies/enforcement'
+import type { HealthReport } from '@/lib/integrations/health/types'
 
 /**
  * ShipMenu - Premium Deploy Button for Web Apps
@@ -28,6 +29,8 @@ export default function ShipMenu() {
     title: string
     message: string
   } | null>(null)
+  const [healthSnapshot, setHealthSnapshot] = useState<HealthReport | null>(null)
+  const [isHealthLoading, setIsHealthLoading] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   
   const { projectType, files, projectName, setPendingHealRequest } = useBuilderStore()
@@ -67,6 +70,39 @@ export default function ShipMenu() {
     medium: { label: 'Medium', color: 'text-amber-500/70' },
     high: { label: 'High', color: 'text-orange-500/70' }
   }
+
+  useEffect(() => {
+    if (!isOpen || !packageJsonContent) {
+      setHealthSnapshot(null)
+      return
+    }
+
+    let cancelled = false
+    setIsHealthLoading(true)
+
+    void checkIntegrationHealth(packageJsonContent, {
+      trigger: 'manual',
+      includeOrphans: false,
+      checkDeprecations: true,
+      silent: true,
+    }).then((result) => {
+      if (!cancelled) {
+        setHealthSnapshot(result.report)
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setHealthSnapshot(null)
+      }
+    }).finally(() => {
+      if (!cancelled) {
+        setIsHealthLoading(false)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, packageJsonContent])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -512,12 +548,66 @@ export default function ShipMenu() {
               {/* Capabilities banner */}
               {hasCapabilities && (
                 <div className="px-3.5 py-2.5 border-b border-[#1a1a1a]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1 h-1 rounded-full bg-amber-500/60" />
-                    <span className="text-[10px] text-amber-500/70">
-                      {selectedCapabilities.length} {selectedCapabilities.length === 1 ? 'capability' : 'capabilities'} need production credentials
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1 h-1 rounded-full bg-amber-500/60" />
+                      <span className="text-[10px] text-amber-500/70">
+                        {selectedCapabilities.length} {selectedCapabilities.length === 1 ? 'capability' : 'capabilities'} need production credentials
+                      </span>
+                    </div>
+                    <span className={`text-[10px] ${complexityLabels[complexityTier].color}`}>
+                      Complexity {complexityLabels[complexityTier].label}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {packageJsonContent && (
+                <div className="px-3.5 py-2.5 border-b border-[#1a1a1a]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-[#707070] uppercase tracking-widest">Template readiness</span>
+                    <span className="text-[10px] text-[#9a9a9a]">
+                      {isHealthLoading
+                        ? 'Checking...'
+                        : healthSnapshot?.summary.templateCompleteness.checkedIntegrations
+                          ? `${healthSnapshot.summary.templateCompleteness.coveragePercent}%`
+                          : 'N/A'}
+                    </span>
+                  </div>
+
+                  {!isHealthLoading && healthSnapshot?.summary.templateCompleteness && (
+                    <>
+                      <div className="mt-2 h-1.5 w-full rounded-full bg-[#1a1a1a] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-emerald-500/80 transition-all duration-300"
+                          style={{
+                            width: healthSnapshot.summary.templateCompleteness.checkedIntegrations === 0
+                              ? '0%'
+                              : `${healthSnapshot.summary.templateCompleteness.coveragePercent}%`,
+                          }}
+                        />
+                      </div>
+
+                      <p className="mt-1 text-[10px] text-[#505050]">
+                        {healthSnapshot.summary.templateCompleteness.mappedIntegrations}/
+                        {healthSnapshot.summary.templateCompleteness.checkedIntegrations} integrations mapped to production templates
+                      </p>
+                      <p className="mt-1 text-[10px] text-[#4c4c4c]">
+                        {healthSnapshot.summary.templateCompleteness.mappedTemplateFileCount}/
+                        {healthSnapshot.summary.templateCompleteness.requiredTemplateFileCount} template files covered (
+                        {healthSnapshot.summary.templateCompleteness.fileCoveragePercent}%)
+                      </p>
+
+                      {healthSnapshot.summary.templateCompleteness.uncoveredIntegrations.length > 0 && (
+                        <p className="mt-1 text-[10px] text-amber-500/70">
+                          Missing index: {healthSnapshot.summary.templateCompleteness.uncoveredIntegrations.slice(0, 2).join(', ')}
+                          {healthSnapshot.summary.templateCompleteness.uncoveredIntegrations.length > 2
+                            ? ` +${healthSnapshot.summary.templateCompleteness.uncoveredIntegrations.length - 2} more`
+                            : ''}
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 

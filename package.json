@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "validate-env": "npx tsx scripts/validate-env.ts",
     "predev": "npx tsx scripts/validate-env.ts",
     "dev": "next dev",
     "prebuild": "npx tsx scripts/validate-env.ts",

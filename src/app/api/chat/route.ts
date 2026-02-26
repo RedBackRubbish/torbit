@@ -44,6 +44,7 @@ const ChatRequestSchema = z.object({
   projectType: z.enum(['web', 'mobile']).optional(),
   capabilities: z.record(z.string(), z.unknown()).nullable().optional(),
   persistedInvariants: z.string().nullable().optional(),
+  tasteProfilePrompt: z.string().max(5000).nullable().optional(),
   fileManifest: z.object({
     files: z.array(z.object({
       path: z.string().max(500),
@@ -57,6 +58,10 @@ const ChatRequestSchema = z.object({
 
 const VALID_AGENT_IDS = Object.keys(AGENT_TOOLS) as AgentId[]
 const VIBE_AUDIT_ENABLED = process.env.TORBIT_VIBE_AUDIT !== 'false'
+const VIBE_AUTOFIX_MAX_ATTEMPTS = Math.max(
+  1,
+  Number.parseInt(process.env.TORBIT_VIBE_AUTOFIX_MAX_ATTEMPTS || '3', 10) || 3
+)
 
 const MAX_OUTPUT_TOKENS = 16384
 
@@ -258,6 +263,7 @@ const AGENT_PROMPTS: Record<AgentId, string> = {
 function buildSystemPrompt(input: {
   agentId: AgentId
   persistedInvariants?: string | null
+  tasteProfilePrompt?: string | null
   fileManifest?: {
     files: Array<{ path: string; bytes: number }>
     totalFiles: number
@@ -270,6 +276,10 @@ function buildSystemPrompt(input: {
 
   if (input.persistedInvariants) {
     parts.push(input.persistedInvariants)
+  }
+
+  if (input.tasteProfilePrompt) {
+    parts.push(input.tasteProfilePrompt)
   }
 
   if (input.fileManifest && input.fileManifest.files.length > 0) {
@@ -887,53 +897,114 @@ const authedChatHandler = withAuth(async (req, { user }) => {
 
         if (VIBE_AUDIT_ENABLED) {
           emitSupervisor('gate_started', 'vibe_audit', 'Vibe safety audit started.')
+          const projectRoot = process.cwd()
+          let auditReport = await runVibeAudit(projectRoot)
 
-          const initialAudit = await runVibeAudit(process.cwd())
-          if (initialAudit.proof.length > 0) {
-            sendChunk({ type: 'proof', proof: initialAudit.proof })
+          const sendProof = () => {
+            if (auditReport.proof.length > 0) {
+              sendChunk({ type: 'proof', proof: auditReport.proof })
+            }
           }
 
-          const failedFindings = initialAudit.findings.filter((finding) => finding.status !== 'verified')
+          sendProof()
 
-          if (failedFindings.length === 0) {
+          let unresolvedFindings = auditReport.findings.filter((finding) => finding.status !== 'verified')
+          guardrailPrompt = auditReport.guardrailPrompt
+
+          if (unresolvedFindings.length === 0) {
             emitSupervisor('gate_passed', 'vibe_audit', 'Vibe safety audit passed.')
-            guardrailPrompt = initialAudit.guardrailPrompt
           } else {
             emitSupervisor('gate_failed', 'vibe_audit', 'Vibe safety audit reported violations.', {
-              count: failedFindings.length,
-              findings: failedFindings.map((finding) => finding.label),
+              count: unresolvedFindings.length,
+              findings: unresolvedFindings.map((finding) => finding.label),
             })
 
-            emitSupervisor('autofix_started', 'vibe_audit', 'Auto-fix pass started.', {
-              findings: failedFindings.map((finding) => finding.id),
-            })
+            for (
+              let attempt = 1;
+              attempt <= VIBE_AUTOFIX_MAX_ATTEMPTS && unresolvedFindings.length > 0;
+              attempt += 1
+            ) {
+              const previousSignature = unresolvedFindings
+                .map((finding) => `${finding.id}:${finding.detail}`)
+                .sort()
+                .join('|')
 
-            const autofixResult = await runVibeAutofix(process.cwd(), initialAudit)
-            if (autofixResult.applied.length > 0) {
-              emitSupervisor('autofix_succeeded', 'vibe_audit', 'Auto-fix pass applied changes.', {
-                applied: autofixResult.applied,
-                skipped: autofixResult.skipped,
+              emitSupervisor('autofix_started', 'vibe_audit', 'Auto-fix pass started.', {
+                attempt,
+                maxAttempts: VIBE_AUTOFIX_MAX_ATTEMPTS,
+                findings: unresolvedFindings.map((finding) => finding.id),
               })
-            } else {
-              emitSupervisor('autofix_failed', 'vibe_audit', 'Auto-fix could not apply changes.', {
-                skipped: autofixResult.skipped,
-              })
-            }
 
-            const postAutofixAudit = await runVibeAudit(process.cwd())
-            guardrailPrompt = postAutofixAudit.guardrailPrompt
-            if (postAutofixAudit.proof.length > 0) {
-              sendChunk({ type: 'proof', proof: postAutofixAudit.proof })
-            }
+              const autofixResult = await runVibeAutofix(projectRoot, auditReport)
+              if (autofixResult.applied.length > 0) {
+                emitSupervisor('autofix_succeeded', 'vibe_audit', 'Auto-fix pass applied changes.', {
+                  attempt,
+                  maxAttempts: VIBE_AUTOFIX_MAX_ATTEMPTS,
+                  applied: autofixResult.applied,
+                  skipped: autofixResult.skipped,
+                })
+              } else {
+                emitSupervisor('autofix_failed', 'vibe_audit', 'Auto-fix could not apply changes.', {
+                  attempt,
+                  maxAttempts: VIBE_AUTOFIX_MAX_ATTEMPTS,
+                  skipped: autofixResult.skipped,
+                })
+              }
 
-            const remainingFindings = postAutofixAudit.findings.filter((finding) => finding.status !== 'verified')
-            if (remainingFindings.length === 0) {
-              emitSupervisor('gate_passed', 'vibe_audit', 'Post-autofix vibe audit passed.')
-            } else {
-              emitSupervisor('gate_failed', 'vibe_audit', 'Post-autofix vibe audit still has violations.', {
-                count: remainingFindings.length,
-                findings: remainingFindings.map((finding) => finding.label),
-              })
+              auditReport = await runVibeAudit(projectRoot)
+              guardrailPrompt = auditReport.guardrailPrompt
+              sendProof()
+
+              const remainingFindings = auditReport.findings.filter((finding) => finding.status !== 'verified')
+              if (remainingFindings.length === 0) {
+                emitSupervisor(
+                  'gate_passed',
+                  'vibe_audit',
+                  `Vibe safety audit passed after auto-fix attempt ${attempt}.`
+                )
+                unresolvedFindings = remainingFindings
+                break
+              }
+
+              const nextSignature = remainingFindings
+                .map((finding) => `${finding.id}:${finding.detail}`)
+                .sort()
+                .join('|')
+              const progressed = (
+                remainingFindings.length < unresolvedFindings.length ||
+                nextSignature !== previousSignature
+              )
+
+              unresolvedFindings = remainingFindings
+
+              if (!progressed) {
+                emitSupervisor(
+                  'gate_failed',
+                  'vibe_audit',
+                  'Vibe safety audit still has violations with no additional auto-fix progress.',
+                  {
+                    attempt,
+                    maxAttempts: VIBE_AUTOFIX_MAX_ATTEMPTS,
+                    count: unresolvedFindings.length,
+                    findings: unresolvedFindings.map((finding) => finding.label),
+                  }
+                )
+                break
+              }
+
+              if (attempt === VIBE_AUTOFIX_MAX_ATTEMPTS) {
+                emitSupervisor(
+                  'gate_failed',
+                  'vibe_audit',
+                  'Vibe safety audit still has violations after max auto-fix attempts.',
+                  {
+                    attempt,
+                    maxAttempts: VIBE_AUTOFIX_MAX_ATTEMPTS,
+                    count: unresolvedFindings.length,
+                    findings: unresolvedFindings.map((finding) => finding.label),
+                  }
+                )
+              }
             }
           }
         }
@@ -941,6 +1012,7 @@ const authedChatHandler = withAuth(async (req, { user }) => {
         const systemPrompt = buildSystemPrompt({
           agentId: requestedAgentId,
           persistedInvariants: parsedBody.persistedInvariants,
+          tasteProfilePrompt: parsedBody.tasteProfilePrompt,
           fileManifest: parsedBody.fileManifest,
           guardrailPrompt,
         })

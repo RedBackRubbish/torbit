@@ -15,6 +15,7 @@ export type {
   SecurityIssue,
   PeerMismatchIssue,
   HealthIssue,
+  TemplateCompletenessSummary,
   HealthReport,
   IntegrationHealth,
   PackageHealth,

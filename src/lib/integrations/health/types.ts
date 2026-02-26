@@ -78,6 +78,18 @@ export type HealthIssue =
   | SecurityIssue
   | PeerMismatchIssue
 
+export interface TemplateCompletenessSummary {
+  checkedIntegrations: number
+  mappedIntegrations: number
+  partiallyMappedIntegrations: number
+  uncoveredIntegrations: string[]
+  templateFileCount: number
+  requiredTemplateFileCount: number
+  mappedTemplateFileCount: number
+  fileCoveragePercent: number
+  coveragePercent: number
+}
+
 export interface HealthReport {
   status: HealthStatus
   timestamp: string           // ISO timestamp
@@ -89,6 +101,7 @@ export interface HealthReport {
     healthy: number
     warnings: number
     critical: number
+    templateCompleteness: TemplateCompletenessSummary
   }
 }
 

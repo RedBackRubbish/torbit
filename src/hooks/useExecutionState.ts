@@ -261,12 +261,16 @@ export function useAsync<T>(
   })
 
   const mountedRef = useRef(true)
+  const lastDependenciesRef = useRef<unknown[]>(dependencies)
+  const [dependencyVersion, setDependencyVersion] = useState(0)
 
   useEffect(() => {
     return () => {
       mountedRef.current = false
     }
   }, [])
+
+  const { onSuccess, onError, manual = false } = options
 
   const execute = useCallback(async () => {
     if (!mountedRef.current) return
@@ -278,24 +282,36 @@ export function useAsync<T>(
 
       if (mountedRef.current) {
         setState({ status: 'success', data: result, error: null })
-        options.onSuccess?.(result)
+        onSuccess?.(result)
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error))
 
       if (mountedRef.current) {
         setState({ status: 'error', data: null, error: err })
-        options.onError?.(err)
+        onError?.(err)
       }
     }
-  }, [asyncFn, options])
+  }, [asyncFn, onSuccess, onError])
+
+  useEffect(() => {
+    const previous = lastDependenciesRef.current
+    const changed =
+      previous.length !== dependencies.length ||
+      dependencies.some((value, index) => !Object.is(value, previous[index]))
+
+    if (!changed) return
+
+    lastDependenciesRef.current = dependencies
+    setDependencyVersion((current) => current + 1)
+  }, [dependencies])
 
   // Auto-execute on dependency change unless manual
   useEffect(() => {
-    if (!options.manual) {
-      execute()
+    if (!manual) {
+      void execute()
     }
-  }, dependencies)
+  }, [manual, execute, dependencyVersion])
 
   return {
     ...state,
@@ -312,13 +328,14 @@ export function useAsyncCallbacks() {
   const activeRequestsRef = useRef(new Set<AbortController>())
 
   useEffect(() => {
+    const activeRequests = activeRequestsRef.current
     return () => {
       mountedRef.current = false
       // Cancel all active requests
-      for (const controller of activeRequestsRef.current) {
+      for (const controller of activeRequests) {
         controller.abort()
       }
-      activeRequestsRef.current.clear()
+      activeRequests.clear()
     }
   }, [])
 

@@ -71,6 +71,7 @@ export function IntegrationHealthStatus({
   
   const config = statusConfig[report.status]
   const Icon = config.icon
+  const templateSummary = report.summary.templateCompleteness
   
   // Compact mode: just an icon with tooltip
   if (compact) {
@@ -129,6 +130,51 @@ export function IntegrationHealthStatus({
             className="border-t border-neutral-800"
           >
             <div className="px-4 py-3 space-y-3 max-h-64 overflow-y-auto">
+              <div className="p-3 rounded-md bg-neutral-900/70 border border-neutral-800">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-neutral-200">Template completeness</p>
+                  <p className="text-xs text-neutral-400">
+                    {templateSummary.checkedIntegrations === 0
+                      ? 'N/A'
+                      : `${templateSummary.coveragePercent}% integrations`}
+                  </p>
+                </div>
+
+                {templateSummary.checkedIntegrations > 0 ? (
+                  <>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-neutral-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-emerald-400 transition-all duration-300"
+                        style={{ width: `${templateSummary.coveragePercent}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-[11px] text-neutral-400">
+                      {templateSummary.mappedIntegrations}/{templateSummary.checkedIntegrations} integrations mapped to production templates
+                    </p>
+                    <p className="mt-1 text-[11px] text-neutral-500">
+                      {templateSummary.mappedTemplateFileCount}/{templateSummary.requiredTemplateFileCount} template files covered ({templateSummary.fileCoveragePercent}%)
+                    </p>
+                    {templateSummary.partiallyMappedIntegrations > 0 && (
+                      <p className="mt-1 text-[11px] text-neutral-400">
+                        {templateSummary.partiallyMappedIntegrations} integration{templateSummary.partiallyMappedIntegrations > 1 ? 's' : ''} partially mapped
+                      </p>
+                    )}
+                    {templateSummary.uncoveredIntegrations.length > 0 && (
+                      <p className="mt-1 text-[11px] text-amber-400">
+                        Missing template index: {templateSummary.uncoveredIntegrations.slice(0, 2).join(', ')}
+                        {templateSummary.uncoveredIntegrations.length > 2
+                          ? ` +${templateSummary.uncoveredIntegrations.length - 2} more`
+                          : ''}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-2 text-[11px] text-neutral-400">
+                    No integration templates required for this project.
+                  </p>
+                )}
+              </div>
+
               {report.issues.map((issue, index) => (
                 <IssueCard
                   key={`${issue.type}-${index}`}

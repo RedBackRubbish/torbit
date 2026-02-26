@@ -13,6 +13,7 @@ import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuthContext } from '@/providers/AuthProvider'
 import { useBilling } from '@/hooks/useBilling'
+import { useTasteProfileStore } from '@/store/tasteProfile'
 import { 
   User, 
   CreditCard, 
@@ -21,6 +22,9 @@ import {
   Palette,
   Key,
   Mail,
+  Brain,
+  X,
+  Trash2,
   ChevronRight,
   Check,
   Zap
@@ -54,6 +58,11 @@ function SettingsPageContent() {
   const { status: billingStatus, loading: billingLoading, openPortal } = useBilling()
   const [activeTab, setActiveTab] = useState<SettingsTab>('account')
   const [saving, setSaving] = useState(false)
+  const tasteProfiles = useTasteProfileStore((state) => state.profiles)
+  const removeTasteSignal = useTasteProfileStore((state) => state.removeSignal)
+  const resetProjectTasteProfile = useTasteProfileStore((state) => state.resetProjectProfile)
+  const resetAllTasteProfiles = useTasteProfileStore((state) => state.resetAllProfiles)
+  const [selectedTasteProjectId, setSelectedTasteProjectId] = useState('')
   
   // Handle URL query param for tab
   useEffect(() => {
@@ -72,6 +81,24 @@ function SettingsPageContent() {
     editorFontSize: 14,
     autoSave: true,
   })
+
+  const tasteProjectIds = Object.keys(tasteProfiles).sort()
+  const selectedTasteProfile = selectedTasteProjectId
+    ? tasteProfiles[selectedTasteProjectId] || null
+    : null
+
+  useEffect(() => {
+    if (tasteProjectIds.length === 0) {
+      if (selectedTasteProjectId !== '') {
+        setSelectedTasteProjectId('')
+      }
+      return
+    }
+
+    if (!selectedTasteProjectId || !tasteProfiles[selectedTasteProjectId]) {
+      setSelectedTasteProjectId(tasteProjectIds[0])
+    }
+  }, [tasteProfiles, tasteProjectIds, selectedTasteProjectId])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -419,6 +446,95 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
+                {/* Taste Profile Memory */}
+                <div className="p-6 bg-neutral-900 border border-neutral-800 rounded-xl">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Brain className="w-5 h-5 text-cyan-300/80" />
+                    <h2 className="text-lg font-medium text-white">Taste Memory</h2>
+                  </div>
+
+                  {tasteProjectIds.length === 0 ? (
+                    <p className="text-sm text-neutral-400">
+                      No taste memory has been learned yet. Build a few iterations and this will populate automatically.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-neutral-300 mb-2">Project Memory Scope</label>
+                          <select
+                            value={selectedTasteProjectId}
+                            onChange={(event) => setSelectedTasteProjectId(event.target.value)}
+                            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:border-neutral-600"
+                          >
+                            {tasteProjectIds.map((projectId) => (
+                              <option key={projectId} value={projectId}>
+                                {projectId === 'default' ? 'Default Project' : projectId}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {selectedTasteProfile && (
+                          <div className="p-3 bg-neutral-800 rounded-lg">
+                            <p className="text-[11px] uppercase tracking-widest text-neutral-500">Implementation Reliability</p>
+                            <p className="text-xl font-semibold text-white mt-1">
+                              {selectedTasteProfile.runStats.total > 0
+                                ? `${Math.round((selectedTasteProfile.runStats.successful / selectedTasteProfile.runStats.total) * 100)}%`
+                                : 'N/A'}
+                            </p>
+                            <p className="text-xs text-neutral-400 mt-1">
+                              {selectedTasteProfile.runStats.successful}/{selectedTasteProfile.runStats.total} successful runs
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedTasteProfile && (
+                        <>
+                          <TasteSignalSection
+                            title="Preferred Directions"
+                            tone="good"
+                            values={selectedTasteProfile.likes}
+                            onRemove={(value) => removeTasteSignal(selectedTasteProjectId, 'likes', value)}
+                          />
+                          <TasteSignalSection
+                            title="Avoid Directions"
+                            tone="warn"
+                            values={selectedTasteProfile.avoids}
+                            onRemove={(value) => removeTasteSignal(selectedTasteProjectId, 'avoids', value)}
+                          />
+                          <TasteSignalSection
+                            title="Explicit Directives"
+                            tone="neutral"
+                            values={selectedTasteProfile.directives}
+                            onRemove={(value) => removeTasteSignal(selectedTasteProjectId, 'directives', value)}
+                          />
+                        </>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => resetProjectTasteProfile(selectedTasteProjectId)}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-md hover:bg-amber-500/15 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Reset Selected Project Memory
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetAllTasteProfiles}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-red-300/90 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/15 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Reset All Memories
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Save Button */}
                 <div className="flex justify-end">
                   <button
@@ -578,6 +694,52 @@ function ToggleOption({
           }`}
         />
       </button>
+    </div>
+  )
+}
+
+function TasteSignalSection({
+  title,
+  values,
+  onRemove,
+  tone,
+}: {
+  title: string
+  values: string[]
+  onRemove: (value: string) => void
+  tone: 'good' | 'warn' | 'neutral'
+}) {
+  const toneClass = tone === 'good'
+    ? 'text-emerald-300/90 bg-emerald-500/10 border-emerald-500/20'
+    : tone === 'warn'
+      ? 'text-amber-300/90 bg-amber-500/10 border-amber-500/20'
+      : 'text-neutral-200/90 bg-neutral-800 border-neutral-700'
+
+  return (
+    <div>
+      <p className="text-xs text-neutral-400 mb-2">{title}</p>
+      {values.length === 0 ? (
+        <p className="text-xs text-neutral-500">No signals stored.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {values.map((value) => (
+            <span
+              key={`${title}-${value}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md ${toneClass}`}
+            >
+              <span>{value}</span>
+              <button
+                type="button"
+                onClick={() => onRemove(value)}
+                className="text-current/70 hover:text-current transition-colors"
+                aria-label={`Remove ${value}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

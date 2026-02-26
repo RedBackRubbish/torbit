@@ -8,6 +8,7 @@
  */
 
 import { getAllIntegrations, getIntegration } from '../registry'
+import { getProductionTemplatePaths } from '../template-paths'
 import { checkDeprecation } from './deprecations'
 import type {
   HealthCheckOptions,
@@ -22,6 +23,7 @@ import type {
   MissingPackageIssue,
   OrphanPackageIssue,
   DeprecationIssue,
+  TemplateCompletenessSummary,
 } from './types'
 
 /**
@@ -351,6 +353,72 @@ function generateFixes(issues: HealthIssue[]): HealthFix[] {
   return fixes
 }
 
+function calculateTemplateCompleteness(
+  integrations: IntegrationHealth[]
+): TemplateCompletenessSummary {
+  const checkedIntegrations = integrations.filter((integration) => integration.packages.length > 0)
+  let mappedIntegrations = 0
+  let partiallyMappedIntegrations = 0
+  let requiredTemplateFileCount = 0
+  let mappedTemplateFileCount = 0
+  const uncoveredIntegrations: string[] = []
+
+  for (const integration of checkedIntegrations) {
+    const manifest = getIntegration(integration.integrationId)
+    if (!manifest) {
+      uncoveredIntegrations.push(integration.integrationId)
+      continue
+    }
+
+    const requiredPaths = Array.from(new Set([
+      ...(manifest.files.frontend ?? []),
+      ...(manifest.files.backend ?? []),
+      ...(manifest.files.mobile ?? []),
+    ]))
+    const availablePaths = new Set(getProductionTemplatePaths(integration.integrationId))
+
+    requiredTemplateFileCount += requiredPaths.length
+
+    let localMappedFiles = 0
+    for (const filePath of requiredPaths) {
+      if (availablePaths.has(filePath)) {
+        localMappedFiles += 1
+      }
+    }
+    mappedTemplateFileCount += localMappedFiles
+
+    if (requiredPaths.length === 0 || localMappedFiles === requiredPaths.length) {
+      mappedIntegrations += 1
+      continue
+    }
+
+    if (localMappedFiles > 0) {
+      partiallyMappedIntegrations += 1
+    }
+    uncoveredIntegrations.push(integration.integrationId)
+  }
+
+  const templateFileCount = mappedTemplateFileCount
+  const coveragePercent = checkedIntegrations.length === 0
+    ? 100
+    : Math.round((mappedIntegrations / checkedIntegrations.length) * 100)
+  const fileCoveragePercent = requiredTemplateFileCount === 0
+    ? 100
+    : Math.round((mappedTemplateFileCount / requiredTemplateFileCount) * 100)
+
+  return {
+    checkedIntegrations: checkedIntegrations.length,
+    mappedIntegrations,
+    partiallyMappedIntegrations,
+    uncoveredIntegrations,
+    templateFileCount,
+    requiredTemplateFileCount,
+    mappedTemplateFileCount,
+    fileCoveragePercent,
+    coveragePercent,
+  }
+}
+
 /**
  * Run a full health check on project integrations
  */
@@ -396,7 +464,8 @@ export async function checkIntegrationHealth(
   
   // Generate fixes
   const fixes = generateFixes(allIssues)
-  
+  const templateCompleteness = calculateTemplateCompleteness(integrations)
+
   const report: HealthReport = {
     status,
     timestamp: new Date().toISOString(),
@@ -408,6 +477,7 @@ export async function checkIntegrationHealth(
       healthy: integrations.filter((i) => i.status === 'healthy').length,
       warnings: warningCount,
       critical: criticalCount,
+      templateCompleteness,
     },
   }
   
@@ -433,8 +503,13 @@ export async function isHealthy(packageJsonContent: string): Promise<boolean> {
  * Get a human-readable summary of the health report
  */
 export function formatHealthSummary(report: HealthReport): string {
+  const templateSummary = report.summary.templateCompleteness
+  const templateCoverage = templateSummary.checkedIntegrations === 0
+    ? 'Template coverage N/A'
+    : `Template coverage ${templateSummary.coveragePercent}% (${templateSummary.fileCoveragePercent}% files)`
+
   if (report.status === 'healthy') {
-    return `✓ All ${report.summary.total} integrations healthy`
+    return `✓ All ${report.summary.total} integrations healthy • ${templateCoverage}`
   }
   
   const parts: string[] = []
@@ -446,5 +521,5 @@ export function formatHealthSummary(report: HealthReport): string {
     parts.push(`${report.summary.warnings} warnings`)
   }
   
-  return `⚠ Integration issues: ${parts.join(', ')}`
+  return `⚠ Integration issues: ${parts.join(', ')} • ${templateCoverage}`
 }
