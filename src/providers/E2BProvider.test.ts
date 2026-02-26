@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createDependencyFingerprint,
   createRuntimeProbeCommand,
   createFilesFingerprint,
   injectPreviewBridgeIntoNextLayout,
+  isDependencyManifestPath,
   isDependencyResolutionFailure,
   normalizeRuntimePath,
   nextInstallRecoveryCommand,
   resolveRuntimeProfile,
+  shouldDelayPreviewBuildWhileGenerating,
   shouldAllowSoftRuntimeValidationFailure,
 } from './E2BProvider'
 
@@ -91,6 +94,32 @@ describe('createFilesFingerprint', () => {
   })
 })
 
+describe('dependency fingerprinting', () => {
+  it('matches dependency manifest paths only', () => {
+    expect(isDependencyManifestPath('package.json')).toBe(true)
+    expect(isDependencyManifestPath('/apps/web/package-lock.json')).toBe(true)
+    expect(isDependencyManifestPath('src/app/page.tsx')).toBe(false)
+  })
+
+  it('changes only when dependency manifests change', () => {
+    const filesA = [
+      { path: 'package.json', content: '{"dependencies":{"next":"16.1.6"}}' },
+      { path: 'src/app/page.tsx', content: 'export default function Page(){return <main>A</main>}' },
+    ]
+    const filesB = [
+      { path: 'package.json', content: '{"dependencies":{"next":"16.1.6"}}' },
+      { path: 'src/app/page.tsx', content: 'export default function Page(){return <main>B</main>}' },
+    ]
+    const filesC = [
+      { path: 'package.json', content: '{"dependencies":{"next":"16.1.7"}}' },
+      { path: 'src/app/page.tsx', content: 'export default function Page(){return <main>A</main>}' },
+    ]
+
+    expect(createDependencyFingerprint(filesA)).toBe(createDependencyFingerprint(filesB))
+    expect(createDependencyFingerprint(filesA)).not.toBe(createDependencyFingerprint(filesC))
+  })
+})
+
 describe('normalizeRuntimePath', () => {
   it('normalizes leading relative and absolute prefixes', () => {
     expect(normalizeRuntimePath('./src/app/page.tsx')).toBe('src/app/page.tsx')
@@ -140,6 +169,26 @@ describe('shouldAllowSoftRuntimeValidationFailure', () => {
     expect(shouldAllowSoftRuntimeValidationFailure('Module not found: Cannot find module')).toBe(false)
     expect(shouldAllowSoftRuntimeValidationFailure('SyntaxError: Unexpected token')).toBe(false)
     expect(shouldAllowSoftRuntimeValidationFailure('TypeError: Cannot read properties of undefined')).toBe(false)
+  })
+})
+
+describe('shouldDelayPreviewBuildWhileGenerating', () => {
+  it('delays while generation is active and writes are recent', () => {
+    expect(
+      shouldDelayPreviewBuildWhileGenerating(true, 1000, 2500, 2000)
+    ).toBe(true)
+  })
+
+  it('allows build once generation has gone quiet long enough', () => {
+    expect(
+      shouldDelayPreviewBuildWhileGenerating(true, 1000, 3201, 2000)
+    ).toBe(false)
+  })
+
+  it('never delays when generation is not active', () => {
+    expect(
+      shouldDelayPreviewBuildWhileGenerating(false, 1000, 1500, 2000)
+    ).toBe(false)
   })
 })
 

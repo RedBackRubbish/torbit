@@ -56,6 +56,7 @@ interface E2BContextValue {
   runCommand: (cmd: string, args?: string[], timeoutMs?: number) => Promise<{ exitCode: number; stdout: string; stderr: string }>
   syncFilesToSandbox: () => Promise<void>
   killSandbox: () => Promise<void>
+  requestPreviewRebuild: (reason?: string) => void
 }
 
 const E2BContext = createContext<E2BContextValue | null>(null)
@@ -69,6 +70,7 @@ const ROUTE_PROBE_FETCH_TIMEOUT_MS = 8000
 const ROUTE_PROBE_COMMAND_TIMEOUT_MS = 20000
 const ROUTE_PROBE_MAX_ATTEMPTS = 3
 const ROUTE_PROBE_RETRY_DELAY_MS = 1000
+const PREVIEW_BUILD_IDLE_GRACE_MS = 2200
 const DEFAULT_E2B_ACTION_TIMEOUT_MS = 30000
 const E2B_ACTION_TIMEOUT_MS: Record<string, number> = {
   create: 45000,
@@ -134,6 +136,36 @@ export function createFilesFingerprint(files: Array<{ path: string; content: str
     .sort()
 
   return generateHash(entries.join('|'))
+}
+
+const DEPENDENCY_MANIFEST_FILE_PATTERN = /(^|\/)(package\.json|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb)$/i
+
+export function isDependencyManifestPath(path: string): boolean {
+  return DEPENDENCY_MANIFEST_FILE_PATTERN.test(normalizeRuntimePath(path))
+}
+
+export function createDependencyFingerprint(files: Array<{ path: string; content: string }>): string {
+  const entries = files
+    .filter((file) => isDependencyManifestPath(file.path))
+    .map((file) => `${normalizeRuntimePath(file.path)}:${generateHash(file.content)}`)
+    .sort()
+
+  if (entries.length === 0) {
+    return ''
+  }
+
+  return generateHash(entries.join('|'))
+}
+
+export function shouldDelayPreviewBuildWhileGenerating(
+  isGenerating: boolean,
+  lastFileMutationAt: number,
+  now: number = Date.now(),
+  idleGraceMs: number = PREVIEW_BUILD_IDLE_GRACE_MS
+): boolean {
+  if (!isGenerating) return false
+  if (!Number.isFinite(lastFileMutationAt) || lastFileMutationAt <= 0) return true
+  return (now - lastFileMutationAt) < idleGraceMs
 }
 
 export function resolveRuntimeProfile(files: Array<{ path: string; content: string }>): RuntimeProfile {
@@ -538,6 +570,7 @@ function E2BMockProvider({ children }: E2BProviderProps) {
     runCommand: async () => ({ exitCode: 0, stdout: '[mock] command skipped', stderr: '' }),
     syncFilesToSandbox: async () => {},
     killSandbox: async () => {},
+    requestPreviewRebuild: () => {},
   }
 
   return <E2BContext.Provider value={mockValue}>{children}</E2BContext.Provider>
@@ -565,30 +598,101 @@ function E2BRealProvider({ children }: E2BProviderProps) {
   const { addLog, addCommand, setRunning, setExitCode } = useTerminalStore()
   const { files, isGenerating } = useBuilderStore()
   const filesFingerprint = createFilesFingerprint(files)
+  const dependencyFingerprint = createDependencyFingerprint(files)
   
   // Track build state across renders
   const fullBuildInFlightRef = useRef(false)
   const liveSyncInFlightRef = useRef(false)
   const lastBuildAttemptHashRef = useRef<string>('')
   const lastSyncedHashRef = useRef<string>('')
+  const lastFileMutationAtRef = useRef<number>(Date.now())
+  const lastInstalledDependenciesFingerprintRef = useRef<string>('')
   const wasGeneratingRef = useRef(false)
   const autoRecoveryAttemptedRef = useRef(false)
+  const queuedManualRetryRef = useRef(false)
+  const lastFailureSignatureRef = useRef<string>('')
+  const repeatedFailureCountRef = useRef<number>(0)
+  const [manualBuildNonce, setManualBuildNonce] = useState(0)
+  const [generationQuietToken, setGenerationQuietToken] = useState(0)
   
-  // Reset build state when new generation starts
+  // Track last file mutation time so preview can bootstrap once generation
+  // goes quiet (without waiting for stream completion).
+  useEffect(() => {
+    lastFileMutationAtRef.current = Date.now()
+  }, [filesFingerprint])
+
+  useEffect(() => {
+    if (!isGenerating) return
+
+    const elapsedMs = Date.now() - lastFileMutationAtRef.current
+    const remainingMs = PREVIEW_BUILD_IDLE_GRACE_MS - elapsedMs
+    if (remainingMs <= 0) {
+      setGenerationQuietToken((value) => value + 1)
+      return
+    }
+
+    const timeout = setTimeout(() => {
+      setGenerationQuietToken((value) => value + 1)
+    }, remainingMs + 50)
+
+    return () => clearTimeout(timeout)
+  }, [isGenerating, filesFingerprint])
+
+  const resetFailureLogDedup = useCallback(() => {
+    lastFailureSignatureRef.current = ''
+    repeatedFailureCountRef.current = 0
+  }, [])
+
+  const applyBuildFailureState = useCallback((failure: BuildFailure) => {
+    const signature = `${failure.stage}|${failure.command || 'n/a'}|${failure.exactLogLine}`
+    if (signature !== lastFailureSignatureRef.current) {
+      lastFailureSignatureRef.current = signature
+      repeatedFailureCountRef.current = 1
+      addLog(`❌ ${failure.exactLogLine}`, 'error')
+    } else {
+      repeatedFailureCountRef.current += 1
+      if (repeatedFailureCountRef.current === 2 || repeatedFailureCountRef.current % 3 === 0) {
+        addLog(`⚠️ Repeated preview failure (${repeatedFailureCountRef.current}x): ${failure.exactLogLine}`, 'warning')
+      }
+    }
+
+    setBuildFailure(failure)
+    setError(failure.message)
+    setServerUrl(null)
+  }, [addLog])
+
+  const requestPreviewRebuild = useCallback((reason: string = 'manual retry') => {
+    addLog(`🔁 Retrying preview boot (${reason})...`, 'info')
+    setError(null)
+    setBuildFailure(null)
+    setServerUrl(null)
+    autoRecoveryAttemptedRef.current = false
+    lastBuildAttemptHashRef.current = ''
+    lastSyncedHashRef.current = ''
+    resetFailureLogDedup()
+
+    if (fullBuildInFlightRef.current) {
+      queuedManualRetryRef.current = true
+      return
+    }
+
+    setManualBuildNonce((value) => value + 1)
+  }, [addLog, resetFailureLogDedup])
+
+  // Reset build error state when a fresh generation starts.
   useEffect(() => {
     if (isGenerating && !wasGeneratingRef.current) {
-      // New generation starting - reset build state
       fullBuildInFlightRef.current = false
       liveSyncInFlightRef.current = false
       autoRecoveryAttemptedRef.current = false
       lastBuildAttemptHashRef.current = ''
       lastSyncedHashRef.current = ''
-      setServerUrl(null)
       setError(null)
       setBuildFailure(null)
+      resetFailureLogDedup()
     }
     wasGeneratingRef.current = isGenerating
-  }, [isGenerating])
+  }, [isGenerating, resetFailureLogDedup])
   
   // ==========================================================================
   // Boot E2B Sandbox
@@ -838,13 +942,16 @@ function E2BRealProvider({ children }: E2BProviderProps) {
   // Auto-build when files change and preview runtime is not live yet.
   // ==========================================================================
   useEffect(() => {
-    if (!sandboxId || !isReady || isGenerating) return
+    if (!sandboxId || !isReady) return
     if (files.length === 0) return
     if (serverUrl) return
     if (fullBuildInFlightRef.current) return
-    if (filesFingerprint === lastBuildAttemptHashRef.current) return
+    if (shouldDelayPreviewBuildWhileGenerating(isGenerating, lastFileMutationAtRef.current)) return
 
-    lastBuildAttemptHashRef.current = filesFingerprint
+    const buildAttemptKey = `${filesFingerprint}:${manualBuildNonce}`
+    if (buildAttemptKey === lastBuildAttemptHashRef.current) return
+
+    lastBuildAttemptHashRef.current = buildAttemptKey
     fullBuildInFlightRef.current = true
     
     // Run build process
@@ -880,6 +987,7 @@ function E2BRealProvider({ children }: E2BProviderProps) {
             if (installCommand !== INSTALL_COMMAND_PRIMARY) {
               addLog(`✅ Dependency install recovered with ${installCommand}`, 'success')
             }
+            lastInstalledDependenciesFingerprintRef.current = dependencyFingerprint
             break
           }
 
@@ -1029,6 +1137,7 @@ function E2BRealProvider({ children }: E2BProviderProps) {
               setServerUrl(host)
               setError(null)
               setBuildFailure(null)
+              resetFailureLogDedup()
               lastSyncedHashRef.current = filesFingerprint
               addLog(`✅ Preview ready (soft validation): ${host}`, 'success')
               return
@@ -1042,6 +1151,7 @@ function E2BRealProvider({ children }: E2BProviderProps) {
           setServerUrl(host)
           setError(null)
           setBuildFailure(null)
+          resetFailureLogDedup()
           lastSyncedHashRef.current = filesFingerprint
           addLog(`✅ Preview ready: ${host}`, 'success')
           return
@@ -1094,10 +1204,7 @@ function E2BRealProvider({ children }: E2BProviderProps) {
               autoRecoverySucceeded: false,
             })
 
-            addLog(`❌ ${recoveryLogLine}`, 'error')
-            setBuildFailure(failure)
-            setError(failure.message)
-            setServerUrl(null)
+            applyBuildFailureState(failure)
 
             NervousSystem.dispatchPain({
               id: `e2b-build-${Date.now()}`,
@@ -1120,10 +1227,7 @@ function E2BRealProvider({ children }: E2BProviderProps) {
           autoRecoverySucceeded: autoRecoveryAttemptedRef.current ? false : null,
         })
 
-        addLog(`❌ ${failure.exactLogLine}`, 'error')
-        setBuildFailure(failure)
-        setError(failure.message)
-        setServerUrl(null)
+        applyBuildFailureState(failure)
         
         NervousSystem.dispatchPain({
           id: `e2b-build-${Date.now()}`,
@@ -1135,9 +1239,30 @@ function E2BRealProvider({ children }: E2BProviderProps) {
         })
       } finally {
         fullBuildInFlightRef.current = false
+        if (queuedManualRetryRef.current) {
+          queuedManualRetryRef.current = false
+          setManualBuildNonce((value) => value + 1)
+        }
       }
     })()
-  }, [sandboxId, sandboxAccessToken, isReady, isGenerating, files, filesFingerprint, serverUrl, syncFilesToSandbox, runCommand, addLog, recreateSandbox])
+  }, [
+    sandboxId,
+    sandboxAccessToken,
+    isReady,
+    isGenerating,
+    files,
+    filesFingerprint,
+    dependencyFingerprint,
+    serverUrl,
+    manualBuildNonce,
+    generationQuietToken,
+    syncFilesToSandbox,
+    runCommand,
+    addLog,
+    recreateSandbox,
+    applyBuildFailureState,
+    resetFailureLogDedup,
+  ])
 
   // ==========================================================================
   // Hot-sync file mutations after preview is already live.
@@ -1148,6 +1273,15 @@ function E2BRealProvider({ children }: E2BProviderProps) {
     if (fullBuildInFlightRef.current || liveSyncInFlightRef.current) return
     if (filesFingerprint === lastSyncedHashRef.current) return
 
+    if (
+      dependencyFingerprint
+      && dependencyFingerprint !== lastInstalledDependenciesFingerprintRef.current
+    ) {
+      addLog('📦 Dependency manifests changed. Rebuilding preview runtime for a clean install...', 'warning')
+      requestPreviewRebuild('dependency manifests changed')
+      return
+    }
+
     liveSyncInFlightRef.current = true
 
     ;(async () => {
@@ -1157,6 +1291,7 @@ function E2BRealProvider({ children }: E2BProviderProps) {
         lastSyncedHashRef.current = filesFingerprint
         setError(null)
         setBuildFailure(null)
+        resetFailureLogDedup()
         addLog('✅ Live preview updated', 'success')
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Sync failed'
@@ -1169,14 +1304,25 @@ function E2BRealProvider({ children }: E2BProviderProps) {
           autoRecoveryAttempted: autoRecoveryAttemptedRef.current,
           autoRecoverySucceeded: autoRecoveryAttemptedRef.current ? false : null,
         })
-        addLog(`❌ ${failure.exactLogLine}`, 'error')
-        setBuildFailure(failure)
-        setError(failure.message)
+        applyBuildFailureState(failure)
       } finally {
         liveSyncInFlightRef.current = false
       }
     })()
-  }, [sandboxId, isReady, isGenerating, serverUrl, files, filesFingerprint, syncFilesToSandbox, addLog])
+  }, [
+    sandboxId,
+    isReady,
+    isGenerating,
+    serverUrl,
+    files,
+    filesFingerprint,
+    dependencyFingerprint,
+    syncFilesToSandbox,
+    addLog,
+    requestPreviewRebuild,
+    applyBuildFailureState,
+    resetFailureLogDedup,
+  ])
   
   // ==========================================================================
   // Context Value
@@ -1194,6 +1340,7 @@ function E2BRealProvider({ children }: E2BProviderProps) {
     runCommand,
     syncFilesToSandbox,
     killSandbox,
+    requestPreviewRebuild,
   }
   
   return (

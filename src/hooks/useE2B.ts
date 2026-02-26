@@ -31,6 +31,7 @@ export interface UseE2BReturn {
   // Sync & Lifecycle
   syncFilesToSandbox: () => Promise<void>
   killSandbox: () => Promise<void>
+  requestPreviewRebuild: (reason?: string) => void
 }
 
 export function useE2B(): UseE2BReturn {
@@ -49,6 +50,7 @@ export function useE2B(): UseE2BReturn {
     runCommand: context.runCommand,
     syncFilesToSandbox: context.syncFilesToSandbox,
     killSandbox: context.killSandbox,
+    requestPreviewRebuild: context.requestPreviewRebuild,
   }
 }
 

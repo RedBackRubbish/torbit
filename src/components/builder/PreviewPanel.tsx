@@ -173,7 +173,7 @@ export default function PreviewPanel() {
     chatInput,
     isGenerating,
   } = useBuilderStore()
-  const { isBooting, isReady, serverUrl, error, buildFailure } = useE2B()
+  const { isBooting, isReady, serverUrl, error, buildFailure, requestPreviewRebuild } = useE2B()
   const isSupported = true // E2B is always supported (cloud-based)
   const terminalLines = useTerminalStore((s) => s.lines)
   const [showRuntimeLog, setShowRuntimeLog] = useState(false)
@@ -381,6 +381,16 @@ export default function PreviewPanel() {
                 </>
               )}
 
+              {error && !serverUrl && (
+                <button
+                  onClick={() => requestPreviewRebuild('manual retry from preview panel')}
+                  className="rounded-md border border-red-400/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-300 transition-colors hover:bg-red-500/20 hover:text-red-200"
+                  title="Retry preview boot"
+                >
+                  Retry
+                </button>
+              )}
+
               {/* Status pill */}
               <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#050505] border border-white/[0.1]">
                 <div className={`w-1.5 h-1.5 rounded-full ${
@@ -421,6 +431,7 @@ export default function PreviewPanel() {
                 isGenerating={isGenerating}
                 onContinueWithoutExecution={() => setDesignModeActive(true)}
                 designModeActive={designModeActive}
+                onRetryPreview={() => requestPreviewRebuild('manual retry from preview status card')}
               />
               </PreviewErrorBoundary>
             </div>
@@ -468,6 +479,7 @@ interface PreviewContentProps {
   isGenerating: boolean
   onContinueWithoutExecution?: () => void
   designModeActive?: boolean
+  onRetryPreview?: () => void
 }
 
 function PreviewContent({
@@ -486,6 +498,7 @@ function PreviewContent({
   isGenerating,
   onContinueWithoutExecution,
   designModeActive,
+  onRetryPreview,
 }: PreviewContentProps) {
   const [isMounted, setIsMounted] = useState(false)
   const [showVerified, setShowVerified] = useState(false)
@@ -562,11 +575,16 @@ function PreviewContent({
       ? `${buildFailure.command ? `Command: ${buildFailure.command}. ` : ''}${buildFailure.actionableFix}`
       : 'Check runtime log for details'
 
+    const errorDetail = buildFailure?.exactLogLine || error
+
     return (
       <StatusCard 
         icon="error" 
         title={errorTitle}
         subtitle={errorSubtitle}
+        detail={errorDetail}
+        actionLabel="Retry preview"
+        onAction={onRetryPreview}
       />
     )
   }
@@ -785,10 +803,16 @@ function StatusCard({
   icon, 
   title, 
   subtitle,
+  detail,
+  actionLabel,
+  onAction,
 }: { 
   icon: 'loading' | 'error' | 'empty'
   title: string
   subtitle: string
+  detail?: string
+  actionLabel?: string
+  onAction?: () => void
 }) {
   return (
     <div className="text-center max-w-xs">
@@ -820,6 +844,21 @@ function StatusCard({
       
       {/* Subtitle */}
       <p className="text-[12px] text-[#505050] leading-relaxed">{subtitle}</p>
+
+      {detail && (
+        <p className="mt-3 rounded-md border border-white/[0.08] bg-[#0b0b0b] px-3 py-2 text-left font-mono text-[10px] leading-relaxed text-[#8a8a8a]">
+          {detail}
+        </p>
+      )}
+
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          className="mt-4 rounded-md border border-red-400/30 bg-red-500/10 px-3 py-1.5 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/20 hover:text-red-200"
+        >
+          {actionLabel}
+        </button>
+      )}
       
       {/* Loading progress bar */}
       {icon === 'loading' && (
