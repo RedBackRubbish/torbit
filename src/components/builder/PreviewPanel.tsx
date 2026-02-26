@@ -162,18 +162,73 @@ const CodeEditor = dynamic(() => import('./CodeEditor'), {
  * Uses E2B for real Linux environment instead of WebContainer
  */
 export default function PreviewPanel() {
-  const { previewTab, previewDevice, setPreviewDevice, files, devicePreset, chatInput, isGenerating } = useBuilderStore()
+  const {
+    previewTab,
+    previewDevice,
+    setPreviewDevice,
+    files,
+    devicePreset,
+    deviceOrientation,
+    setDeviceOrientation,
+    chatInput,
+    isGenerating,
+  } = useBuilderStore()
   const { isBooting, isReady, serverUrl, error, buildFailure } = useE2B()
   const isSupported = true // E2B is always supported (cloud-based)
   const terminalLines = useTerminalStore((s) => s.lines)
   const [showRuntimeLog, setShowRuntimeLog] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
   const [designModeActive, setDesignModeActive] = useState(false)
+  const [didCopyUrl, setDidCopyUrl] = useState(false)
   const wasBootingRef = useRef(false)
   
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (!isMounted) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName
+      const editable = Boolean(
+        target
+        && (target.isContentEditable
+          || tagName === 'INPUT'
+          || tagName === 'TEXTAREA'
+          || tagName === 'SELECT')
+      )
+
+      if (editable || !event.altKey) return
+
+      if (event.key === '1') {
+        event.preventDefault()
+        setPreviewDevice('desktop')
+        return
+      }
+
+      if (event.key === '2') {
+        event.preventDefault()
+        setPreviewDevice('tablet')
+        return
+      }
+
+      if (event.key === '3') {
+        event.preventDefault()
+        setPreviewDevice('mobile')
+        return
+      }
+
+      if (event.key.toLowerCase() === 'l') {
+        event.preventDefault()
+        setShowRuntimeLog((value) => !value)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isMounted, setPreviewDevice])
 
   const deviceWidths = {
     desktop: '100%',
@@ -207,25 +262,37 @@ export default function PreviewPanel() {
     }
   }, [terminalLines.length, isBooting, isReady])
 
+  const handleCopyUrl = async () => {
+    if (!serverUrl || !navigator?.clipboard) return
+
+    try {
+      await navigator.clipboard.writeText(serverUrl)
+      setDidCopyUrl(true)
+      setTimeout(() => setDidCopyUrl(false), 1200)
+    } catch (copyError) {
+      console.warn('[PreviewPanel] Failed to copy URL:', copyError)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-[#000000] overflow-hidden">
       {previewTab === 'preview' ? (
         <>
           {/* Controls Bar - Pure black + silver */}
-          <div className="h-10 border-b border-[#151515] flex items-center justify-between px-3 bg-[#000000]">
+          <div className="h-11 border-b border-white/[0.08] flex items-center justify-between px-3 bg-[#020202]/95 backdrop-blur-sm">
             {/* Device Switcher */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-0.5 p-0.5 bg-[#050505] rounded-md border border-[#151515]">
+              <div className="flex items-center gap-0.5 p-0.5 bg-[#050505] rounded-md border border-white/[0.1]">
                 {(['desktop', 'tablet', 'mobile'] as const).map((device) => (
                   <button
                     key={device}
                     onClick={() => setPreviewDevice(device)}
                     className={`p-1.5 rounded transition-all ${
                       previewDevice === device
-                        ? 'bg-[#0f0f0f] text-[#c0c0c0]'
-                        : 'text-[#505050] hover:text-[#808080]'
+                        ? 'bg-white/[0.12] text-[#f5f5f5]'
+                        : 'text-[#606060] hover:text-[#b7b7b7]'
                     }`}
-                    title={device.charAt(0).toUpperCase() + device.slice(1)}
+                    title={`${device.charAt(0).toUpperCase() + device.slice(1)} (Alt+${device === 'desktop' ? '1' : device === 'tablet' ? '2' : '3'})`}
                   >
                     {device === 'desktop' && (
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -248,7 +315,19 @@ export default function PreviewPanel() {
 
               {/* Device Preset Selector (only shown when mobile) */}
               {previewDevice === 'mobile' && (
-                <DevicePresetSelector />
+                <>
+                  <DevicePresetSelector />
+                  <button
+                    onClick={() => setDeviceOrientation(deviceOrientation === 'portrait' ? 'landscape' : 'portrait')}
+                    className="flex items-center gap-1.5 rounded-md border border-white/[0.1] bg-[#070707] px-2 py-1 text-[11px] text-[#8a8a8a] transition-colors hover:text-[#d3d3d3]"
+                    title="Toggle orientation"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 16.5v-9a3 3 0 013-3h9m3 3v9a3 3 0 01-3 3h-9m-3-3l3.75-3.75m12 0L15.75 16.5" />
+                    </svg>
+                    {deviceOrientation === 'portrait' ? 'Portrait' : 'Landscape'}
+                  </button>
+                </>
               )}
             </div>
 
@@ -259,9 +338,10 @@ export default function PreviewPanel() {
                 onClick={() => setShowRuntimeLog(!showRuntimeLog)}
                 className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-all ${
                   showRuntimeLog
-                    ? 'bg-[#0f0f0f] text-[#c0c0c0]'
-                    : 'text-[#505050] hover:text-[#808080]'
+                    ? 'bg-white/[0.12] text-[#f5f5f5]'
+                    : 'text-[#666666] hover:text-[#bdbdbd]'
                 }`}
+                title="Toggle runtime log (Alt+L)"
               >
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -271,22 +351,38 @@ export default function PreviewPanel() {
 
               {/* Refresh */}
               {serverUrl && (
-                <button
-                  onClick={() => {
-                    const iframe = document.getElementById('webcontainer-preview') as HTMLIFrameElement
-                    if (iframe) iframe.src = iframe.src
-                  }}
-                  className="w-6 h-6 flex items-center justify-center rounded text-[#505050] hover:text-[#808080] hover:bg-[#0a0a0a] transition-all"
-                  title="Refresh"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                  </svg>
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      const iframe = document.getElementById('webcontainer-preview') as HTMLIFrameElement
+                      if (iframe) iframe.src = iframe.src
+                    }}
+                    className="w-6 h-6 flex items-center justify-center rounded text-[#606060] hover:text-[#bdbdbd] hover:bg-white/[0.06] transition-all"
+                    title="Refresh"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => window.open(serverUrl, '_blank', 'noopener,noreferrer')}
+                    className="rounded-md border border-white/[0.1] bg-[#070707] px-2 py-1 text-[11px] text-[#8a8a8a] transition-colors hover:text-[#d7d7d7]"
+                    title="Open preview in new tab"
+                  >
+                    Open
+                  </button>
+                  <button
+                    onClick={handleCopyUrl}
+                    className="rounded-md border border-white/[0.1] bg-[#070707] px-2 py-1 text-[11px] text-[#8a8a8a] transition-colors hover:text-[#d7d7d7]"
+                    title="Copy preview URL"
+                  >
+                    {didCopyUrl ? 'Copied' : 'Copy URL'}
+                  </button>
+                </>
               )}
 
               {/* Status pill */}
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#050505] border border-[#151515]">
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#050505] border border-white/[0.1]">
                 <div className={`w-1.5 h-1.5 rounded-full ${
                   !isMounted ? 'bg-[#404040]' :
                   isBooting ? 'bg-amber-400 animate-pulse' :
@@ -320,6 +416,7 @@ export default function PreviewPanel() {
                 deviceWidths={deviceWidths}
                 files={files}
                 devicePreset={devicePreset}
+                deviceOrientation={deviceOrientation}
                 isTyping={chatInput.length > 0}
                 isGenerating={isGenerating}
                 onContinueWithoutExecution={() => setDesignModeActive(true)}
@@ -366,6 +463,7 @@ interface PreviewContentProps {
   deviceWidths: Record<string, string>
   files: { path: string; content: string }[]
   devicePreset: string
+  deviceOrientation: 'portrait' | 'landscape'
   isTyping: boolean
   isGenerating: boolean
   onContinueWithoutExecution?: () => void
@@ -383,6 +481,7 @@ function PreviewContent({
   deviceWidths,
   files,
   devicePreset,
+  deviceOrientation,
   isTyping,
   isGenerating,
   onContinueWithoutExecution,
@@ -522,6 +621,7 @@ function PreviewContent({
         previewDevice={previewDevice}
         deviceWidths={deviceWidths}
         devicePreset={devicePreset}
+        deviceOrientation={deviceOrientation}
       />
     )
   }
@@ -745,9 +845,16 @@ interface LivePreviewFrameProps {
   previewDevice: 'desktop' | 'tablet' | 'mobile'
   deviceWidths: Record<string, string>
   devicePreset?: string
+  deviceOrientation?: 'portrait' | 'landscape'
 }
 
-function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths, devicePreset = 'iphone-15-pro-max' }: LivePreviewFrameProps) {
+function LivePreviewFrame({
+  serverUrl,
+  previewDevice,
+  deviceWidths,
+  devicePreset = 'iphone-15-pro-max',
+  deviceOrientation = 'portrait',
+}: LivePreviewFrameProps) {
   const { setPendingHealRequest, isGenerating } = useBuilderStore()
   const lastAutoHealRef = useRef<number>(0)
   const AUTO_HEAL_DEBOUNCE_MS = 10000
@@ -845,17 +952,26 @@ function LivePreviewFrame({ serverUrl, previewDevice, deviceWidths, devicePreset
   // iPhone frame for mobile preview
   if (previewDevice === 'mobile') {
     return (
-      <div data-preview-capture="true">
-        <IPhoneFrame preset={devicePreset}>
-          <iframe 
-            id="webcontainer-preview"
-            src={serverUrl} 
-            className="w-full h-full bg-white"
-            title="Preview"
-            sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
-            onLoad={handleIframeLoad}
-          />
-        </IPhoneFrame>
+      <div data-preview-capture="true" className="flex h-full items-center justify-center">
+        <motion.div
+          animate={{
+            rotate: deviceOrientation === 'landscape' ? 90 : 0,
+            scale: deviceOrientation === 'landscape' ? 0.82 : 1,
+          }}
+          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+          className="origin-center"
+        >
+          <IPhoneFrame preset={devicePreset}>
+            <iframe
+              id="webcontainer-preview"
+              src={serverUrl}
+              className="w-full h-full bg-white"
+              title="Preview"
+              sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+              onLoad={handleIframeLoad}
+            />
+          </IPhoneFrame>
+        </motion.div>
       </div>
     )
   }

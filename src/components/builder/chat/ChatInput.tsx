@@ -14,6 +14,13 @@ interface ChatInputProps {
   hasMessages?: boolean
 }
 
+const QUICK_PROMPTS = [
+  'Design a premium dashboard with real data and polished micro-interactions.',
+  'Implement authentication, role-based access, and secure settings pages.',
+  'Improve mobile responsiveness and make the experience app-like.',
+  'Add tests for core flows and fix the highest-risk issues first.',
+]
+
 /**
  * ChatInput - Minimal, clean input bar
  */
@@ -42,11 +49,22 @@ export function ChatInput({
     textareaRef.current?.focus()
   }, [])
 
+  useEffect(() => {
+    const focusInput = () => textareaRef.current?.focus()
+    window.addEventListener('torbit-focus-chat-input', focusInput)
+    return () => window.removeEventListener('torbit-focus-chat-input', focusInput)
+  }, [])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       onSubmit(e as unknown as React.FormEvent)
     }
+  }
+
+  const insertPrompt = (value: string) => {
+    onInputChange(value)
+    requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
   return (
@@ -56,33 +74,51 @@ export function ChatInput({
       exit={{ opacity: 0, y: 8 }}
       className="p-3 border-t border-[#151515] bg-[#000000]"
     >
-      <div className="mb-2 flex items-center gap-2" role="radiogroup" aria-label="Prompt mode">
-        {([
-          { value: 'auto', label: 'Smart', hint: 'Routes automatically' },
-          { value: 'chat', label: 'Reply', hint: 'Text reply only' },
-          { value: 'action', label: 'Execute', hint: 'Build immediately' },
-        ] as const).map((mode) => (
-          <button
-            key={mode.value}
-            type="button"
-            role="radio"
-            aria-checked={intentMode === mode.value}
-            title={mode.hint}
-            disabled={isLoading}
-            onClick={() => onIntentModeChange(mode.value)}
-            className={`rounded-md px-2.5 py-1 text-[11px] transition-colors ${
-              intentMode === mode.value
-                ? 'bg-[#1d1d1d] text-[#f5f5f5] border border-[#3a3a3a]'
-                : 'bg-[#0a0a0a] text-[#7a7a7a] border border-[#1f1f1f] hover:text-[#b5b5b5]'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            {mode.label}
-          </button>
-        ))}
-        <span className="text-[11px] text-[#737373]">
-          {intentMode === 'chat' ? 'Text reply only' : intentMode === 'action' ? 'Build immediately' : 'Routes automatically'}
+      <div className="mb-2.5 flex items-center justify-between gap-2" role="radiogroup" aria-label="Prompt mode">
+        <div className="flex items-center gap-2">
+          {([
+            { value: 'auto', label: 'Smart', hint: 'Routes automatically' },
+            { value: 'chat', label: 'Reply', hint: 'Text reply only' },
+            { value: 'action', label: 'Execute', hint: 'Build immediately' },
+          ] as const).map((mode) => (
+            <button
+              key={mode.value}
+              type="button"
+              role="radio"
+              aria-checked={intentMode === mode.value}
+              title={mode.hint}
+              disabled={isLoading}
+              onClick={() => onIntentModeChange(mode.value)}
+              className={`rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+                intentMode === mode.value
+                  ? 'bg-[#1d1d1d] text-[#f5f5f5] border border-[#3a3a3a]'
+                  : 'bg-[#0a0a0a] text-[#7a7a7a] border border-[#1f1f1f] hover:text-[#b5b5b5]'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-[10px] text-[#666666]">
+          {isLoading ? 'Running...' : 'Enter send • Shift+Enter newline'}
         </span>
       </div>
+
+      {!hasMessages && !input.trim() && (
+        <div className="mb-2.5 flex flex-wrap gap-1.5">
+          {QUICK_PROMPTS.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              disabled={isLoading}
+              onClick={() => insertPrompt(prompt)}
+              className="rounded-md border border-[#1e1e1e] bg-[#070707] px-2.5 py-1 text-left text-[10px] text-[#8a8a8a] transition-colors hover:border-[#2f2f2f] hover:text-[#c4c4c4] disabled:opacity-50"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      )}
 
       <form onSubmit={onSubmit} className="relative">
         <div className="relative rounded-xl bg-[#0a0a0a] border border-[#1a1a1a] focus-within:border-[#333] transition-all overflow-hidden">

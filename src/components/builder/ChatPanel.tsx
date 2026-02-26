@@ -142,6 +142,30 @@ export default function ChatPanel() {
   const resetTasteProfile = useTasteProfileStore((state) => state.resetProjectProfile)
   const [showTasteProfile, setShowTasteProfile] = useState(false)
 
+  const focusComposer = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('torbit-focus-chat-input'))
+    }
+  }, [])
+
+  const scrollToLatest = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [])
+
+  const chatSessionSummary = runStatusDetail
+    || currentTask
+    || (isLoading
+      ? 'Torbit is actively processing your request.'
+      : messages.length === 0
+        ? 'Pick a starter prompt or describe a production-grade artifact.'
+        : 'Session ready for the next iteration.')
+
+  const runToneClass = runStatus === 'Needs Input'
+    ? 'text-red-300 border-red-500/30 bg-red-500/10'
+    : runStatus === 'Ready'
+      ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+      : 'text-white/80 border-white/15 bg-white/[0.04]'
+
   const normalizeBuilderPath = useCallback((value: string): string => (
     value.replace(/^\/+/, '')
   ), [])
@@ -1462,6 +1486,42 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
     setLiveMessage(isLoading ? `Torbit is responding: ${snippet}` : `Torbit said: ${snippet}`)
   }, [messages, isLoading])
 
+  useEffect(() => {
+    if (chatCollapsed) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName
+      const editable = Boolean(
+        target
+        && (target.isContentEditable
+          || tagName === 'INPUT'
+          || tagName === 'TEXTAREA'
+          || tagName === 'SELECT')
+      )
+
+      if (!editable && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        focusComposer()
+        return
+      }
+
+      if (!editable && !event.metaKey && !event.ctrlKey && !event.altKey && event.key === '/') {
+        event.preventDefault()
+        focusComposer()
+        return
+      }
+
+      if (!editable && event.altKey && event.key.toLowerCase() === 'i') {
+        event.preventDefault()
+        setShowInspector((previous) => !previous)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [chatCollapsed, focusComposer])
+
   return (
     <motion.div
       className="h-full bg-[#000000] border-r border-[#151515] flex flex-col"
@@ -1473,18 +1533,18 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
       </div>
 
       {/* Header - Torbit branding */}
-      <div className="h-11 border-b border-[#151515] flex items-center justify-between px-4 shrink-0">
+      <div className="h-11 border-b border-white/[0.08] bg-[#050505]/95 flex items-center justify-between px-4 shrink-0 backdrop-blur-sm">
         <AnimatePresence mode="wait">
           {!chatCollapsed && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2.5"
             >
-              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-neutral-400 to-neutral-600" />
-              <span className="text-[13px] font-medium text-[#c0c0c0]">
-                Torbit
+              <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-emerald-400 animate-pulse' : 'bg-[#555555]'}`} />
+              <span className="text-[13px] font-medium text-[#dddddd]">
+                Torbit Session
               </span>
             </motion.div>
           )}
@@ -1502,6 +1562,62 @@ Implement these fixes in the existing codebase. Use editFile for existing files,
           </svg>
         </button>
       </div>
+
+      <AnimatePresence mode="wait">
+        {!chatCollapsed && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="border-b border-white/[0.07] bg-[#050505]/90 px-4 py-2.5"
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className={`rounded-md border px-2 py-1 text-[10px] font-medium ${runToneClass}`}>
+                  {runStatus}
+                </div>
+                <div className="text-[10px] text-[#858585]">{files.length} files</div>
+                <div className="hidden text-[10px] text-[#666666] xl:block">
+                  {isLoading ? 'Active run' : 'Idle'}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={focusComposer}
+                  className="rounded-md border border-white/[0.1] bg-white/[0.03] px-2 py-1 text-[10px] text-[#a8a8a8] transition-colors hover:border-white/[0.16] hover:text-[#f2f2f2]"
+                  title="Focus composer ( / or Cmd/Ctrl+K )"
+                >
+                  Compose
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowInspector((previous) => !previous)}
+                  className={`rounded-md border px-2 py-1 text-[10px] transition-colors ${
+                    showInspector
+                      ? 'border-white/[0.24] bg-white/[0.12] text-[#f5f5f5]'
+                      : 'border-white/[0.1] bg-white/[0.03] text-[#a8a8a8] hover:border-white/[0.16] hover:text-[#f2f2f2]'
+                  }`}
+                  title="Toggle inspector (Alt+I)"
+                >
+                  Inspector
+                </button>
+                <button
+                  type="button"
+                  onClick={scrollToLatest}
+                  className="rounded-md border border-white/[0.1] bg-white/[0.03] px-2 py-1 text-[10px] text-[#a8a8a8] transition-colors hover:border-white/[0.16] hover:text-[#f2f2f2]"
+                  title="Jump to latest message"
+                >
+                  Latest
+                </button>
+              </div>
+            </div>
+
+            <p className="truncate text-[11px] text-[#8e8e8e]">{chatSessionSummary}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Messages */}
       <AnimatePresence mode="wait">
@@ -1696,6 +1812,12 @@ function EmptyState({ onSelectTemplate }: { onSelectTemplate?: (prompt: string) 
         <p className="text-[12px] text-white/40 mb-6">
           Choose a governed starting point. Torbit will handle the rest.
         </p>
+
+        <div className="mb-4 flex flex-wrap items-center justify-center gap-1.5">
+          <span className="rounded-md border border-white/[0.1] bg-white/[0.03] px-2 py-1 text-[10px] text-white/45">/ focus composer</span>
+          <span className="rounded-md border border-white/[0.1] bg-white/[0.03] px-2 py-1 text-[10px] text-white/45">Alt+I inspector</span>
+          <span className="rounded-md border border-white/[0.1] bg-white/[0.03] px-2 py-1 text-[10px] text-white/45">Shift+Enter newline</span>
+        </div>
         
         {/* Production Starters - Vertical layout */}
         <div className="space-y-2">
